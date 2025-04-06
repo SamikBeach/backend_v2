@@ -1,0 +1,27 @@
+{
+  "name": "backend_v2",
+  "packageManager": "yarn@4.8.1",
+  "dependencies": {
+    "@nestjs/common": "^11.0.13",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.0.13",
+    "@nestjs/typeorm": "^11.0.0",
+    "mysql2": "^3.14.0",
+    "typeorm": "^0.3.22"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.24.0",
+    "@nestjs/cli": "^11.0.6",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@types/node": "^22.14.0",
+    "@typescript-eslint/eslint-plugin": "^8.29.0",
+    "@typescript-eslint/parser": "^8.29.0",
+    "eslint": "^9.24.0",
+    "eslint-config-prettier": "^10.1.1",
+    "eslint-plugin-prettier": "^5.2.6",
+    "prettier": "^3.5.3",
+    "semantic-release": "^24.2.3",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,49 @@
+name: Add release tag
+
+on:
+  push:
+    branches: ['main']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: classciswalk
+      SENTRY_PROJECT: node-nestjs
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '23.x'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Build
+        run: yarn && yarn build
+
+      - name: Install and configure Sentry CLI
+        run: |
+          curl -sL https://sentry.io/get-cli/ | bash
+          sentry-cli --version
+
+      - name: Create Sentry release and upload sourcemaps
+        run: |
+          # Create new Sentry release
+          sentry-cli releases new ${{ github.sha }}
+          # Upload source maps
+          sentry-cli releases files ${{ github.sha }} upload-sourcemaps ./dist --url-prefix '~/dist'
+          # Finalize the release
+          sentry-cli releases finalize ${{ github.sha }}
+
+      - name: Semantic Release
+        run: yarn run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
