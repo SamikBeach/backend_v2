@@ -20,3 +20,6 @@ node_modules
 .env
 .env.development
 /dist
+
+# AuthKey
+AuthKey_B87FH5JM49.p8

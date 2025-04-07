@@ -135,7 +135,7 @@ export class AuthController {
     });
 
     // 프론트엔드로 리다이렉트 (토큰과 함께)
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    const frontendUrl = this.configService.get<string>('SERVICE_URL');
     res.redirect(
       `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
     );
@@ -156,7 +156,7 @@ export class AuthController {
     });
 
     // 프론트엔드로 리다이렉트 (토큰과 함께)
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+    const frontendUrl = this.configService.get<string>('SERVICE_URL');
     res.redirect(
       `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
     );
