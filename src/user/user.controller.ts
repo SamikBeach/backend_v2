@@ -3,6 +3,7 @@ import { UserService } from './user.service';
 import { User } from './entities/user.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
+import { IsPublic } from '../auth/decorators/is-public.decorator';
 
 @Controller('user')
 export class UserController {
@@ -35,6 +36,7 @@ export class UserController {
   }
 
   @Post('verify')
+  @IsPublic()
   verifyEmail(
     @Body('email') email: string,
     @Body('code') code: string,

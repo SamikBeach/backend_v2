@@ -5,7 +5,6 @@ import {
   Body,
   Param,
   Query,
-  UseGuards,
   ParseIntPipe,
   Patch,
   Delete,
@@ -13,23 +12,26 @@ import {
 import { BookService } from './book.service';
 import { Book } from './entities/book.entity';
 import { CreateBookDto, UpdateBookDto } from './dto/book.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { IsPublic } from '../auth/decorators/is-public.decorator';
 
 @Controller('books')
 export class BookController {
   constructor(private readonly bookService: BookService) {}
 
   @Get()
+  @IsPublic()
   async findAll(): Promise<Book[]> {
     return this.bookService.findAll();
   }
 
   @Get('featured')
+  @IsPublic()
   async findFeaturedBooks() {
     return this.bookService.findFeaturedBooks();
   }
 
   @Get('category/:categoryId')
+  @IsPublic()
   async findByCategoryId(
     @Param('categoryId', ParseIntPipe) categoryId: number,
   ): Promise<Book[]> {
@@ -37,6 +39,7 @@ export class BookController {
   }
 
   @Get('subcategory/:subcategoryId')
+  @IsPublic()
   async findBySubcategoryId(
     @Param('subcategoryId', ParseIntPipe) subcategoryId: number,
   ): Promise<Book[]> {
@@ -44,11 +47,13 @@ export class BookController {
   }
 
   @Get(':id')
+  @IsPublic()
   async findById(@Param('id', ParseIntPipe) id: number): Promise<Book> {
     return this.bookService.findById(id);
   }
 
   @Get('isbn/:isbn')
+  @IsPublic()
   async findByIsbn(@Param('isbn') isbn: string): Promise<Book> {
     const book = await this.bookService.findByIsbn(isbn);
     if (book) {
@@ -61,13 +66,11 @@ export class BookController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard)
   async create(@Body() createBookDto: CreateBookDto): Promise<Book> {
     return this.bookService.create(createBookDto);
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard)
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateBookDto: UpdateBookDto,
@@ -76,7 +79,6 @@ export class BookController {
   }
 
   @Post('initialize-featured')
-  @UseGuards(JwtAuthGuard)
   async initializeFeaturedBooks(
     @Query('categoryId') categoryId?: string,
     @Query('count') count?: number,
@@ -117,5 +119,32 @@ export class BookController {
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.bookService.remove(id);
+  }
+
+  // 분야별 인기 도서 API
+  @Get('popular/category/:categoryId')
+  @IsPublic()
+  async findPopularBooksByCategory(
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+    @Query('subcategoryId') subcategoryId?: string,
+    @Query('sort') sort?: string,
+    @Query('timeRange') timeRange?: string,
+  ): Promise<Book[]> {
+    return this.bookService.findPopularBooksByCategory(
+      categoryId,
+      subcategoryId ? Number(subcategoryId) : undefined,
+      sort,
+      timeRange,
+    );
+  }
+
+  // 모든 분야의 인기 도서 API
+  @Get('popular/all')
+  @IsPublic()
+  async findAllPopularBooks(
+    @Query('sort') sort?: string,
+    @Query('timeRange') timeRange?: string,
+  ): Promise<Book[]> {
+    return this.bookService.findAllPopularBooks(sort, timeRange);
   }
 }

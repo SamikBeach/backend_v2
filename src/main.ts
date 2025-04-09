@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe, VersioningType, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -33,6 +34,9 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+
+  // 전역 가드 적용
+  app.useGlobalGuards(app.get(JwtAuthGuard));
 
   await app.listen(port);
 

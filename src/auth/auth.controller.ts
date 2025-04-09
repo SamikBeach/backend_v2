@@ -22,6 +22,7 @@ import { GetUser } from './decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { SignupDto } from './dto/signup.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { IsPublic } from './decorators/is-public.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -32,11 +33,13 @@ export class AuthController {
   ) {}
 
   @Post('login')
+  @IsPublic()
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
 
   @Post('refresh-token')
+  @IsPublic()
   async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.refreshTokens(refreshTokenDto);
   }
@@ -48,26 +51,31 @@ export class AuthController {
   }
 
   @Post('social-login')
+  @IsPublic()
   async socialLogin(@Body() socialLoginDto: SocialLoginDto) {
     return this.authService.socialLogin(socialLoginDto);
   }
 
   @Post('signup')
+  @IsPublic()
   async signup(@Body() signupDto: SignupDto) {
     return this.authService.signup(signupDto);
   }
 
   @Post('check-email')
+  @IsPublic()
   checkEmail(@Body() checkEmailDto: CheckEmailDto) {
     return this.authService.checkEmail(checkEmailDto.email);
   }
 
   @Post('register')
+  @IsPublic()
   register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
   }
 
   @Post('complete-registration')
+  @IsPublic()
   async completeRegistration(
     @Body() completeRegistrationDto: CompleteRegistrationDto,
   ) {
@@ -75,6 +83,7 @@ export class AuthController {
   }
 
   @Post('verify-email')
+  @IsPublic()
   async verifyEmail(@Body() verifyCodeDto: VerifyCodeDto) {
     return this.authService.verifyEmail(
       verifyCodeDto.email,
@@ -83,11 +92,13 @@ export class AuthController {
   }
 
   @Post('resend-verification')
+  @IsPublic()
   resendVerification(@Body('email') email: string) {
     return this.authService.resendVerificationCode(email);
   }
 
   @Post('request-password-reset')
+  @IsPublic()
   async requestPasswordReset(
     @Body() requestPasswordResetDto: RequestPasswordResetDto,
   ) {
@@ -95,6 +106,7 @@ export class AuthController {
   }
 
   @Post('verify-reset-token')
+  @IsPublic()
   async verifyResetToken(@Body() verifyResetTokenDto: VerifyResetTokenDto) {
     return this.authService.verifyResetToken(
       verifyResetTokenDto.email,
@@ -103,6 +115,7 @@ export class AuthController {
   }
 
   @Post('reset-password')
+  @IsPublic()
   async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(
       resetPasswordDto.email,
@@ -121,12 +134,14 @@ export class AuthController {
   }
 
   @Get('google')
+  @IsPublic()
   @UseGuards(AuthGuard('google'))
   googleAuth() {
     // Google 인증 페이지로 리다이렉트 (Passport가 처리)
   }
 
   @Get('google/callback')
+  @IsPublic()
   @UseGuards(AuthGuard('google'))
   async googleAuthCallback(@GetUser() user: User, @Res() res: Response) {
     const result = await this.authService.socialLogin({
@@ -142,12 +157,14 @@ export class AuthController {
   }
 
   @Get('apple')
+  @IsPublic()
   @UseGuards(AuthGuard('apple'))
   appleAuth() {
     // Apple 인증 페이지로 리다이렉트 (Passport가 처리)
   }
 
   @Get('apple/callback')
+  @IsPublic()
   @UseGuards(AuthGuard('apple'))
   async appleAuthCallback(@GetUser() user: User, @Res() res: Response) {
     const result = await this.authService.socialLogin({

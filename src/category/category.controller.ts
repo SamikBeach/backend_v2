@@ -12,6 +12,7 @@ import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { CreateSubCategoryDto } from './dto/create-subcategory.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { IsPublic } from '../auth/decorators/is-public.decorator';
 
 @Controller('categories')
 export class CategoryController {
@@ -34,16 +35,19 @@ export class CategoryController {
   }
 
   @Get()
+  @IsPublic()
   findAll() {
     return this.categoryService.findAll();
   }
 
   @Get(':id')
+  @IsPublic()
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.categoryService.findOne(id);
   }
 
   @Get(':id/subcategories')
+  @IsPublic()
   findSubcategories(@Param('id', ParseIntPipe) id: number) {
     return this.categoryService.findSubcategoriesByCategoryId(id);
   }
