@@ -148,6 +148,48 @@ export class UserService {
     return this.userRepository.save(user);
   }
 
+  /**
+   * 소셜 로그인 계정에 비밀번호를 설정하고 로컬 로그인 방식을 추가합니다.
+   * 이를 통해 소셜 로그인 계정이 이메일/비밀번호로도 로그인할 수 있게 됩니다.
+   */
+  async resetPasswordAndAddLocalProvider(
+    email: string,
+    token: string,
+    newPassword: string,
+  ): Promise<User> {
+    const user = await this.findByEmail(email);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.resetPasswordToken || user.resetPasswordToken !== token) {
+      throw new ConflictException('Invalid reset token');
+    }
+
+    if (user.resetPasswordExpires < new Date()) {
+      throw new ConflictException('Reset token has expired');
+    }
+
+    // 소셜 로그인 계정이 아니면 일반 비밀번호 재설정 프로세스로 전환
+    if (
+      user.provider !== AuthProvider.GOOGLE &&
+      user.provider !== AuthProvider.APPLE
+    ) {
+      return this.resetPassword(email, token, newPassword);
+    }
+
+    // 비밀번호 해싱 및 저장
+    user.password = await this.hashPassword(newPassword);
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+
+    // 원래 소셜 제공자 정보 보존 (providerId 등)
+    // 이메일이 이미 확인되었기 때문에 status는 변경하지 않음
+
+    return this.userRepository.save(user);
+  }
+
   async updateUserInfo(id: number, username: string): Promise<User> {
     const user = await this.findOne(id);
 

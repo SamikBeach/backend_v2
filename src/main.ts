@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { ValidationPipe, VersioningType, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
 
@@ -10,11 +10,12 @@ async function bootstrap() {
       credentials: true,
       origin: [process.env.SERVICE_URL, process.env.SERVICE_URL_WITH_WWW],
     },
-    logger: ['verbose'],
+    logger: ['error', 'warn', 'log', 'debug', 'verbose'],
     bufferLogs: true,
   });
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3001);
+  const logger = new Logger('Bootstrap');
 
   // Set global prefix
   app.setGlobalPrefix('api');
@@ -35,7 +36,7 @@ async function bootstrap() {
 
   await app.listen(port);
 
-  console.log(`Application is running on: ${await app.getUrl()}`);
+  logger.log(`Application is running on: ${await app.getUrl()}`);
 }
 
 bootstrap();

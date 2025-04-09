@@ -41,11 +41,17 @@ export class AuthService {
   async validateUser(email: string, password: string): Promise<any> {
     const user = await this.userService.findByEmail(email);
 
-    if (!user || user.provider !== AuthProvider.LOCAL) {
+    if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    if (user.password && (await bcrypt.compare(password, user.password))) {
+    // 비밀번호가 없는 경우 로그인 불가
+    if (!user.password) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // 비밀번호 확인
+    if (await bcrypt.compare(password, user.password)) {
       const { password, ...result } = user;
       return result;
     }
@@ -166,21 +172,64 @@ export class AuthService {
   }
 
   async requestPasswordReset(email: string) {
+    const user = await this.userService.findByEmail(email);
+
+    if (!user) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+
     const resetToken = await this.userService.createPasswordResetToken(email);
 
     // Send password reset email
     await this.emailService.sendPasswordResetEmail(email, resetToken);
 
+    // 소셜 로그인 계정인지 확인
+    const isSocialAccount =
+      user.provider === AuthProvider.GOOGLE ||
+      user.provider === AuthProvider.APPLE;
+
     return {
-      message: 'Password reset instructions sent to your email.',
+      message: '비밀번호 재설정 안내가 이메일로 발송되었습니다.',
       email,
+      isSocialAccount,
+      note: isSocialAccount
+        ? '소셜 로그인 계정에 비밀번호를 설정하면 이메일 로그인도 가능해집니다.'
+        : undefined,
     };
   }
 
   async resetPassword(email: string, token: string, newPassword: string) {
-    await this.userService.resetPassword(email, token, newPassword);
+    const user = await this.userService.findByEmail(email);
 
-    return { message: 'Password reset successfully' };
+    if (!user) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+
+    // 소셜 로그인 계정인 경우 로컬 인증 방식 추가
+    if (
+      user.provider === AuthProvider.GOOGLE ||
+      user.provider === AuthProvider.APPLE
+    ) {
+      // 비밀번호 재설정과 함께 로컬 인증 방식 추가
+      await this.userService.resetPasswordAndAddLocalProvider(
+        email,
+        token,
+        newPassword,
+      );
+
+      return {
+        message:
+          '비밀번호가 성공적으로 설정되었습니다. 이제 이메일 로그인을 사용할 수 있습니다.',
+        canUseEmailLogin: true,
+      };
+    } else {
+      // 일반 계정의 비밀번호 재설정
+      await this.userService.resetPassword(email, token, newPassword);
+
+      return {
+        message: '비밀번호가 성공적으로 재설정되었습니다.',
+      };
+    }
   }
 
   async verifyResetToken(email: string, token: string) {
@@ -203,9 +252,15 @@ export class AuthService {
         throw new UnauthorizedException('Reset token has expired');
       }
 
+      // 소셜 로그인 계정인지 확인
+      const isSocialAccount =
+        user.provider === AuthProvider.GOOGLE ||
+        user.provider === AuthProvider.APPLE;
+
       return {
         isValid: true,
         message: 'Token is valid',
+        isSocialAccount, // 소셜 계정 여부를 응답에 포함
       };
     } catch (error) {
       if (
