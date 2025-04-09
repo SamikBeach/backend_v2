@@ -30,13 +30,10 @@ export class EmailService {
       });
 
       this.logger.log(
-        `[이메일 인증] ${email}로 인증 코드가 발송되었습니다: ${verificationCode}`,
+        `[이메일 인증] ${email}로 인증 코드 발송 완료: ${verificationCode}`,
       );
     } catch (error) {
-      this.logger.error(
-        `이메일 발송 실패 (${email}): ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`이메일 발송 실패 (${email}): ${error.message}`);
       throw new Error('Failed to send verification email');
     }
   }
@@ -64,13 +61,10 @@ export class EmailService {
       });
 
       this.logger.log(
-        `[비밀번호 재설정] ${email}로 인증 코드가 발송되었습니다: ${resetToken}`,
+        `[비밀번호 재설정] ${email}로 인증 코드 발송 완료: ${resetToken}`,
       );
     } catch (error) {
-      this.logger.error(
-        `이메일 발송 실패 (${email}): ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`이메일 발송 실패 (${email}): ${error.message}`);
       throw new Error('Failed to send password reset email');
     }
   }

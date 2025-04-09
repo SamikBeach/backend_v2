@@ -141,14 +141,14 @@ async function bootstrap() {
         );
       } catch (error) {
         logger.error(
-          `'${categoryData.name}' 카테고리 생성 중 오류 발생: ${error.message}`,
+          `'${categoryData.name}' 카테고리 생성 중 오류: ${error.message}`,
         );
       }
     }
 
     logger.log('카테고리 데이터 초기화 완료!');
   } catch (error) {
-    logger.error(`카테고리 초기화 중 오류 발생: ${error.message}`);
+    logger.error(`카테고리 초기화 중 오류: ${error.message}`);
   } finally {
     await app.close();
   }

@@ -35,14 +35,14 @@ async function bootstrap() {
         );
       } catch (error) {
         logger.error(
-          `카테고리 ID ${categoryId} 도서 초기화 중 오류 발생: ${error.message}`,
+          `카테고리 ID ${categoryId} 도서 초기화 중 오류: ${error.message}`,
         );
       }
     }
 
     logger.log('모든 카테고리 인기 도서 초기화 완료!');
   } catch (error) {
-    logger.error(`도서 초기화 중 오류 발생: ${error.message}`);
+    logger.error(`도서 초기화 중 오류: ${error.message}`);
   } finally {
     await app.close();
   }

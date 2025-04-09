@@ -49,8 +49,23 @@ export class LoggerMiddleware implements NestMiddleware {
         Object.keys(requestData.body).length > 0;
 
       if (hasRequestData) {
+        // params, query, body를 컴팩트하게 표시
+        const compactData = {};
+
+        if (Object.keys(requestData.params).length > 0) {
+          compactData['params'] = requestData.params;
+        }
+
+        if (Object.keys(requestData.query).length > 0) {
+          compactData['query'] = requestData.query;
+        }
+
+        if (Object.keys(requestData.body).length > 0) {
+          compactData['body'] = requestData.body;
+        }
+
         this.logger.log(
-          `${baseLogFormat}\n${colorCyan}Request:${colorReset} ${JSON.stringify(requestData, null, 2)}`,
+          `${baseLogFormat} | Request: ${JSON.stringify(compactData)}`,
         );
       } else {
         this.logger.log(baseLogFormat);
