@@ -18,7 +18,7 @@ export enum AuthProvider {
   APPLE = 'apple',
 }
 
-@Entity('users')
+@Entity('user')
 export class User {
   @PrimaryGeneratedColumn()
   id: number;

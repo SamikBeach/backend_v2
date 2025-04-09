@@ -7,6 +7,11 @@ import { User } from './user/entities/user.entity';
 import { CommonModule } from './common/common.module';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { LoggerMiddleware } from './common/middlewares/logger.middleware';
+import { CategoryModule } from './category/category.module';
+import { BookModule } from './book/book.module';
+import { Category } from './category/entities/category.entity';
+import { SubCategory } from './category/entities/subcategory.entity';
+import { Book } from './book/entities/book.entity';
 
 @Module({
   imports: [
@@ -24,7 +29,7 @@ import { LoggerMiddleware } from './common/middlewares/logger.middleware';
         username: configService.get('DB_USERNAME'),
         password: configService.get('DB_PASSWORD'),
         database: configService.get('DB_NAME'),
-        entities: [User],
+        entities: [User, Category, SubCategory, Book],
         synchronize: configService.get('NODE_ENV') !== 'production',
         namingStrategy: new SnakeNamingStrategy(),
       }),
@@ -32,6 +37,8 @@ import { LoggerMiddleware } from './common/middlewares/logger.middleware';
     AuthModule,
     UserModule,
     CommonModule,
+    CategoryModule,
+    BookModule,
   ],
 })
 export class AppModule implements NestModule {
