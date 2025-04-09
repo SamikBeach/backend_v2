@@ -8,21 +8,22 @@ async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
   const bookService = app.get(BookService);
 
+  // 카테고리 ID를 숫자로 정의
   const categories = [
-    'philosophy',
-    'literature',
-    'history',
-    'political',
-    'economics',
-    'society',
-    'science',
-    'religion',
+    1, // philosophy
+    2, // literature
+    3, // history
+    4, // political
+    5, // economics
+    6, // society
+    7, // science
+    8, // religion
   ];
 
   try {
     // 각 카테고리별로 인기 도서 초기화
     for (const categoryId of categories) {
-      logger.log(`${categoryId} 카테고리 인기 도서 초기화 중...`);
+      logger.log(`카테고리 ID ${categoryId} 인기 도서 초기화 중...`);
 
       try {
         const books = await bookService.initializeFeaturedBooksByCategory(
@@ -30,11 +31,11 @@ async function bootstrap() {
           10,
         );
         logger.log(
-          `${categoryId} 카테고리: ${books.length}개 도서 초기화 완료`,
+          `카테고리 ID ${categoryId}: ${books.length}개 도서 초기화 완료`,
         );
       } catch (error) {
         logger.error(
-          `${categoryId} 카테고리 도서 초기화 중 오류 발생: ${error.message}`,
+          `카테고리 ID ${categoryId} 도서 초기화 중 오류 발생: ${error.message}`,
         );
       }
     }

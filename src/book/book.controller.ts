@@ -8,6 +8,7 @@ import {
   UseGuards,
   ParseIntPipe,
   Patch,
+  Delete,
 } from '@nestjs/common';
 import { BookService } from './book.service';
 import { Book } from './entities/book.entity';
@@ -30,14 +31,14 @@ export class BookController {
 
   @Get('category/:categoryId')
   async findByCategoryId(
-    @Param('categoryId') categoryId: string,
+    @Param('categoryId', ParseIntPipe) categoryId: number,
   ): Promise<Book[]> {
     return this.bookService.findByCategoryId(categoryId);
   }
 
   @Get('subcategory/:subcategoryId')
   async findBySubcategoryId(
-    @Param('subcategoryId') subcategoryId: string,
+    @Param('subcategoryId', ParseIntPipe) subcategoryId: number,
   ): Promise<Book[]> {
     return this.bookService.findBySubcategoryId(subcategoryId);
   }
@@ -83,7 +84,7 @@ export class BookController {
     if (categoryId) {
       // 특정 카테고리의 인기 도서 초기화
       return this.bookService.initializeFeaturedBooksByCategory(
-        categoryId,
+        Number(categoryId),
         count || 10,
       );
     } else {
@@ -104,12 +105,17 @@ export class BookController {
       for (const category of categories) {
         result[category] =
           await this.bookService.initializeFeaturedBooksByCategory(
-            category,
+            Number(category),
             count || 10,
           );
       }
 
       return result;
     }
+  }
+
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.bookService.remove(id);
   }
 }

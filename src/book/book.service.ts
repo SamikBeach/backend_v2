@@ -5,6 +5,7 @@ import { Book } from './entities/book.entity';
 import { CreateBookDto, UpdateBookDto } from './dto/book.dto';
 import { AladinService } from '../common/services/aladin.service';
 import { CategoryService } from '../category/category.service';
+import { SubCategoryService } from '../category/subcategory.service';
 
 @Injectable()
 export class BookService {
@@ -12,9 +13,10 @@ export class BookService {
 
   constructor(
     @InjectRepository(Book)
-    private bookRepository: Repository<Book>,
+    private readonly bookRepository: Repository<Book>,
     private readonly aladinService: AladinService,
     private readonly categoryService: CategoryService,
+    private readonly subCategoryService: SubCategoryService,
   ) {}
 
   /**
@@ -36,7 +38,7 @@ export class BookService {
     });
 
     if (!book) {
-      throw new NotFoundException(`도서 ID ${id}를 찾을 수 없습니다.`);
+      throw new NotFoundException(`Book with ID ${id} not found`);
     }
 
     return book;
@@ -45,59 +47,72 @@ export class BookService {
   /**
    * 카테고리에 속한 도서 조회
    */
-  async findByCategoryId(categoryId: string): Promise<Book[]> {
+  async findByCategoryId(categoryId: number): Promise<Book[]> {
+    const category = await this.categoryService.findOne(categoryId);
+    if (!category) {
+      throw new NotFoundException(`Category with ID ${categoryId} not found`);
+    }
+
     return this.bookRepository.find({
-      where: { categoryId },
+      where: { category: { id: category.id } },
       relations: ['category', 'subcategory'],
-      order: { rating: 'DESC' }, // 평점 높은 순으로 정렬
     });
   }
 
   /**
    * 서브카테고리에 속한 도서 조회
    */
-  async findBySubcategoryId(subcategoryId: string): Promise<Book[]> {
+  async findBySubcategoryId(subcategoryId: number): Promise<Book[]> {
+    const subcategory = await this.subCategoryService.findOne(subcategoryId);
+    if (!subcategory) {
+      throw new NotFoundException(
+        `Subcategory with ID ${subcategoryId} not found`,
+      );
+    }
+
     return this.bookRepository.find({
-      where: { subcategoryId },
+      where: { subcategory: { id: subcategory.id } },
       relations: ['category', 'subcategory'],
-      order: { rating: 'DESC' }, // 평점 높은 순으로 정렬
     });
   }
 
   /**
    * 모든 카테고리의 인기 도서 조회
    */
-  async findFeaturedBooks(): Promise<Record<string, Book[]>> {
-    // 모든 카테고리 조회
-    const categories = await this.categoryService.findAll();
-
-    // 각 카테고리별로 인기 도서 조회
-    const result: Record<string, Book[]> = {};
-
-    for (const category of categories) {
-      // 해당 카테고리의 인기 도서 조회 (최대 10개)
-      const books = await this.bookRepository.find({
-        where: { categoryId: category.id },
-        relations: ['subcategory'],
-        order: { rating: 'DESC' },
-        take: 10,
-      });
-
-      result[category.id] = books;
-    }
-
-    return result;
+  async findFeaturedBooks(): Promise<Book[]> {
+    return this.bookRepository.find({
+      where: { isFeatured: true },
+      relations: ['category', 'subcategory'],
+    });
   }
 
   /**
    * 새 도서 생성
    */
   async create(createBookDto: CreateBookDto): Promise<Book> {
-    // 카테고리와 서브카테고리 존재하는지 확인
-    await this.categoryService.findById(createBookDto.categoryId);
-    await this.categoryService.findSubcategoryById(createBookDto.subcategoryId);
+    const { categoryId, subcategoryId, ...bookData } = createBookDto;
 
-    const book = this.bookRepository.create(createBookDto);
+    const category = await this.categoryService.findOne(categoryId);
+    if (!category) {
+      throw new NotFoundException(`Category with ID ${categoryId} not found`);
+    }
+
+    let subcategory = null;
+    if (subcategoryId) {
+      subcategory = await this.subCategoryService.findOne(subcategoryId);
+      if (!subcategory) {
+        throw new NotFoundException(
+          `Subcategory with ID ${subcategoryId} not found`,
+        );
+      }
+    }
+
+    const book = this.bookRepository.create({
+      ...bookData,
+      category,
+      subcategory,
+    });
+
     return this.bookRepository.save(book);
   }
 
@@ -105,23 +120,29 @@ export class BookService {
    * 도서 업데이트
    */
   async update(id: number, updateBookDto: UpdateBookDto): Promise<Book> {
-    // 도서 존재하는지 확인
     const book = await this.findById(id);
+    const { categoryId, subcategoryId, ...bookData } = updateBookDto;
 
-    // 카테고리나 서브카테고리가 변경되었다면 존재 여부 확인
-    if (updateBookDto.categoryId) {
-      await this.categoryService.findById(updateBookDto.categoryId);
+    if (categoryId) {
+      const category = await this.categoryService.findOne(categoryId);
+      if (!category) {
+        throw new NotFoundException(`Category with ID ${categoryId} not found`);
+      }
+      book.category = category;
     }
 
-    if (updateBookDto.subcategoryId) {
-      await this.categoryService.findSubcategoryById(
-        updateBookDto.subcategoryId,
-      );
+    if (subcategoryId) {
+      const subcategory = await this.subCategoryService.findOne(subcategoryId);
+      if (!subcategory) {
+        throw new NotFoundException(
+          `Subcategory with ID ${subcategoryId} not found`,
+        );
+      }
+      book.subcategory = subcategory;
     }
 
-    // 업데이트
-    const updatedBook = { ...book, ...updateBookDto };
-    return this.bookRepository.save(updatedBook);
+    Object.assign(book, bookData);
+    return this.bookRepository.save(book);
   }
 
   /**
@@ -129,32 +150,46 @@ export class BookService {
    */
   async findByIsbn(isbn: string): Promise<Book | null> {
     return this.bookRepository.findOne({
-      where: [{ isbn }, { isbn13: isbn }],
+      where: { isbn },
+      relations: ['category', 'subcategory'],
     });
   }
 
   /**
    * 알라딘 API로 도서 정보 가져오기
    */
-  async fetchBookDetailsFromAladin(isbn: string): Promise<any> {
+  async fetchBookDetailsFromAladin(isbn: string): Promise<Book> {
     try {
-      const result = await this.aladinService.getBookDetail({
-        itemId: isbn,
-        itemIdType: isbn.length === 10 ? 'ISBN' : 'ISBN13',
-      });
+      const bookData = await this.aladinService.getBookDetail({ itemId: isbn });
+      const category = await this.categoryService.findOne(
+        Number(bookData.categoryId),
+      );
 
-      if (!result || !result.item || result.item.length === 0) {
+      if (!category) {
         throw new NotFoundException(
-          `ISBN ${isbn}에 해당하는 도서를 찾을 수 없습니다.`,
+          `Category with ID ${bookData.categoryId} not found`,
         );
       }
 
-      return result.item[0];
-    } catch (error) {
-      this.logger.error(
-        `알라딘 API에서 도서 정보 가져오기 실패: ${error.message}`,
+      const book = this.bookRepository.create({
+        title: bookData.title,
+        author: bookData.author,
+        coverImage: bookData.cover,
+        isbn: bookData.isbn,
+        isbn13: bookData.isbn13,
+        publisher: bookData.publisher,
+        publishDate: new Date(bookData.pubDate),
+        rating: parseFloat(bookData.customerReviewRank) || 0,
+        reviews: parseInt(bookData.customerReviewCount) || 0,
+        description: bookData.description,
+        category,
+      });
+
+      return this.bookRepository.save(book);
+    } catch {
+      throw new NotFoundException(
+        `Failed to fetch book details for ISBN ${isbn}`,
       );
-      throw error;
     }
   }
 
@@ -162,78 +197,35 @@ export class BookService {
    * 카테고리별 인기 도서 초기화 (알라딘 API 사용)
    */
   async initializeFeaturedBooksByCategory(
-    categoryId: string,
+    categoryId: number,
     count: number = 10,
   ): Promise<Book[]> {
-    try {
-      // 카테고리 확인
-      const category = await this.categoryService.findById(categoryId);
+    const category = await this.categoryService.findOne(categoryId);
+    if (!category) {
+      throw new NotFoundException(`Category with ID ${categoryId} not found`);
+    }
 
-      // 알라딘 카테고리 ID 매핑 (여기서는 간단한 예시, 실제로는 알라딘 카테고리 ID를 적절히 매핑해야 함)
-      const aladinCategoryIds = {
-        philosophy: 656, // 철학
-        literature: 1, // 문학
-        history: 74, // 역사
-        political: 351, // 정치/사회
-        economics: 170, // 경제/경영
-        society: 798, // 사회학
-        science: 987, // 과학
-        religion: 1237, // 종교
-      };
+    // 해당 카테고리의 모든 도서를 가져옴
+    const books = await this.bookRepository.find({
+      where: { category: { id: category.id } },
+      relations: ['category', 'subcategory'],
+      order: { rating: 'DESC' },
+      take: count,
+    });
 
-      const aladinCategoryId = aladinCategoryIds[categoryId] || 0;
+    // 상위 N개의 도서를 featured로 설정
+    for (const book of books) {
+      book.isFeatured = true;
+      await this.bookRepository.save(book);
+    }
 
-      // 알라딘 API로 베스트셀러 조회
-      const result = await this.aladinService.getBookList({
-        queryType: 'Bestseller',
-        maxResults: count,
-        categoryId: aladinCategoryId,
-      });
+    return books;
+  }
 
-      if (!result || !result.item || result.item.length === 0) {
-        this.logger.warn(
-          `카테고리 ${categoryId}의 베스트셀러를 찾을 수 없습니다.`,
-        );
-        return [];
-      }
-
-      // 기존 도서 확인 및 없으면 생성
-      const books: Book[] = [];
-
-      for (const item of result.item) {
-        // 서브카테고리 결정 로직 필요 (여기서는 첫 번째 서브카테고리 사용)
-        const subcategories =
-          await this.categoryService.findSubcategoriesByCategoryId(categoryId);
-        const subcategoryId = subcategories[0]?.id || '';
-
-        // 이미 존재하는지 확인
-        let book = await this.findByIsbn(item.isbn13 || item.isbn);
-
-        if (!book) {
-          // 새 도서 생성
-          const bookData = this.aladinService.extractBookData(
-            item,
-            categoryId,
-            subcategoryId,
-          );
-          book = await this.create({
-            ...bookData,
-            isFeatured: true,
-          });
-        } else if (!book.isFeatured) {
-          // 이미 존재하지만 인기 도서가 아니라면 업데이트
-          book = await this.update(book.id, { isFeatured: true });
-        }
-
-        books.push(book);
-      }
-
-      return books;
-    } catch (error) {
-      this.logger.error(
-        `카테고리 ${categoryId}의 인기 도서 초기화 실패: ${error.message}`,
-      );
-      throw error;
+  async remove(id: number): Promise<void> {
+    const result = await this.bookRepository.delete(id);
+    if (result.affected === 0) {
+      throw new NotFoundException(`Book with ID ${id} not found`);
     }
   }
 }

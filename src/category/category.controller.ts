@@ -1,49 +1,63 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { CategoryService } from './category.service';
-import { Category } from './entities/category.entity';
-import { SubCategory } from './entities/subcategory.entity';
-import { CreateCategoryDto, CreateSubCategoryDto } from './dto/category.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CreateCategoryDto } from './dto/create-category.dto';
+import { CreateSubCategoryDto } from './dto/create-subcategory.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 
 @Controller('categories')
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
+  @Post()
+  create(@Body() createCategoryDto: CreateCategoryDto) {
+    return this.categoryService.create(createCategoryDto);
+  }
+
+  @Post('subcategory')
+  createSubCategory(
+    @Body('categoryId', ParseIntPipe) categoryId: number,
+    @Body() createSubCategoryDto: CreateSubCategoryDto,
+  ) {
+    return this.categoryService.createSubCategory(
+      categoryId,
+      createSubCategoryDto,
+    );
+  }
+
   @Get()
-  async findAll(): Promise<Category[]> {
+  findAll() {
     return this.categoryService.findAll();
   }
 
   @Get(':id')
-  async findById(@Param('id') id: string): Promise<Category> {
-    return this.categoryService.findById(id);
-  }
-
-  @Post()
-  @UseGuards(JwtAuthGuard)
-  async create(
-    @Body() createCategoryDto: CreateCategoryDto,
-  ): Promise<Category> {
-    return this.categoryService.create(createCategoryDto);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.categoryService.findOne(id);
   }
 
   @Get(':id/subcategories')
-  async findSubcategoriesByCategoryId(
-    @Param('id') categoryId: string,
-  ): Promise<SubCategory[]> {
-    return this.categoryService.findSubcategoriesByCategoryId(categoryId);
+  findSubcategories(@Param('id', ParseIntPipe) id: number) {
+    return this.categoryService.findSubcategoriesByCategoryId(id);
   }
 
-  @Post('subcategories')
-  @UseGuards(JwtAuthGuard)
-  async createSubCategory(
-    @Body() createSubCategoryDto: CreateSubCategoryDto,
-  ): Promise<SubCategory> {
-    return this.categoryService.createSubCategory(createSubCategoryDto);
+  @Patch(':id')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateCategoryDto: UpdateCategoryDto,
+  ) {
+    return this.categoryService.update(id, updateCategoryDto);
   }
 
-  @Get('subcategories/:id')
-  async findSubcategoryById(@Param('id') id: string): Promise<SubCategory> {
-    return this.categoryService.findSubcategoryById(id);
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.categoryService.remove(id);
   }
 }

@@ -2,13 +2,12 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { SubCategory } from '../../category/entities/subcategory.entity';
 import { Category } from '../../category/entities/category.entity';
+import { SubCategory } from '../../category/entities/subcategory.entity';
 
 @Entity('book')
 export class Book {
@@ -42,17 +41,11 @@ export class Book {
   @Column({ default: 0 })
   reviews: number;
 
-  @Column({ nullable: true })
+  @Column()
   description: string;
 
-  @Column()
-  categoryId: string;
-
-  @ManyToOne(() => Category)
+  @ManyToOne(() => Category, (category) => category.books)
   category: Category;
-
-  @Column()
-  subcategoryId: string;
 
   @ManyToOne(() => SubCategory, (subcategory) => subcategory.books)
   subcategory: SubCategory;

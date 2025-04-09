@@ -43,7 +43,7 @@ export class AladinService {
     'http://www.aladin.co.kr/ttb/api/ItemLookUp.aspx';
 
   constructor(private readonly configService: ConfigService) {
-    this.ttbKey = this.configService.get<string>('ALADIN_TTB_KEY');
+    this.ttbKey = this.configService.get<string>('ALADIN_API_KEY');
     if (!this.ttbKey) {
       this.logger.error('알라딘 TTB 키가 설정되지 않았습니다!');
     }

@@ -3,8 +3,8 @@ export class BookDto {
   title: string;
   author: string;
   coverImage: string;
-  categoryId: string;
-  subcategoryId: string;
+  categoryId: number;
+  subcategoryId: number;
   rating?: number;
   reviews?: number;
   description?: string;
@@ -19,8 +19,8 @@ export class CreateBookDto {
   title: string;
   author: string;
   coverImage: string;
-  categoryId: string;
-  subcategoryId: string;
+  categoryId: number;
+  subcategoryId: number;
   rating?: number;
   reviews?: number;
   description?: string;
@@ -35,8 +35,8 @@ export class UpdateBookDto {
   title?: string;
   author?: string;
   coverImage?: string;
-  categoryId?: string;
-  subcategoryId?: string;
+  categoryId?: number;
+  subcategoryId?: number;
   rating?: number;
   reviews?: number;
   description?: string;

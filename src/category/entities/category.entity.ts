@@ -1,14 +1,18 @@
-import { Column, Entity, OneToMany, PrimaryColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { Book } from '../../book/entities/book.entity';
 import { SubCategory } from './subcategory.entity';
 
-@Entity('category')
+@Entity()
 export class Category {
-  @PrimaryColumn()
-  id: string; // philosophy, literature 등
+  @PrimaryGeneratedColumn()
+  id: number;
 
   @Column()
-  name: string; // 철학, 문학 등
+  name: string;
 
-  @OneToMany(() => SubCategory, (subcategory) => subcategory.category)
-  subcategories: SubCategory[];
+  @OneToMany(() => SubCategory, (subCategory) => subCategory.category)
+  subCategories: SubCategory[];
+
+  @OneToMany(() => Book, (book) => book.category)
+  books: Book[];
 }

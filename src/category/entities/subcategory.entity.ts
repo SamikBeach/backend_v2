@@ -3,21 +3,20 @@ import {
   Entity,
   ManyToOne,
   OneToMany,
-  PrimaryColumn,
-  JoinColumn,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Category } from './category.entity';
 import { Book } from '../../book/entities/book.entity';
 
 @Entity('subcategory')
 export class SubCategory {
-  @PrimaryColumn()
-  id: string; // western, eastern 등
+  @PrimaryGeneratedColumn()
+  id: number;
 
   @Column()
   name: string; // 서양철학, 동양철학 등
 
-  @ManyToOne(() => Category, (category) => category.subcategories)
+  @ManyToOne(() => Category, (category) => category.subCategories)
   category: Category;
 
   @OneToMany(() => Book, (book) => book.subcategory)
