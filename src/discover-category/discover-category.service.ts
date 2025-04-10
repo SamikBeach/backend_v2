@@ -206,19 +206,26 @@ export class DiscoverCategoryService {
       const subCategories = category.subCategories
         .filter((subCategory) => subCategory.isActive)
         .sort((a, b) => a.displayOrder - b.displayOrder)
-        .map((subCategory) => ({
-          id: subCategory.id,
-          name: subCategory.name,
-          description: subCategory.description,
-          displayOrder: subCategory.displayOrder,
-          isActive: subCategory.isActive,
-          createdAt: subCategory.createdAt,
-          updatedAt: subCategory.updatedAt,
-          discoverCategoryId: category.id,
-          bookCount: category.books.filter(
-            (book) => book.discoverSubCategoryId === subCategory.id,
-          ).length,
-        }));
+        .map((subCategory) => {
+          // 해당 서브카테고리에 속한 책 찾기
+          const subCategoryBooks = category.books.filter(
+            (book) =>
+              book.discoverSubCategory &&
+              book.discoverSubCategory.id === subCategory.id,
+          );
+
+          return {
+            id: subCategory.id,
+            name: subCategory.name,
+            description: subCategory.description,
+            displayOrder: subCategory.displayOrder,
+            isActive: subCategory.isActive,
+            createdAt: subCategory.createdAt,
+            updatedAt: subCategory.updatedAt,
+            discoverCategoryId: category.id,
+            bookCount: subCategoryBooks.length,
+          };
+        });
 
       return {
         id: category.id,

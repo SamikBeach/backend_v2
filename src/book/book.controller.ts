@@ -152,24 +152,41 @@ export class BookController {
 
   @Get('discover/all')
   @IsPublic()
-  async findAllDiscoverBooks(): Promise<Book[]> {
-    return this.bookService.findAllDiscoverBooks();
+  async findAllDiscoverBooks(
+    @Query('sort') sort?: string,
+    @Query('timeRange') timeRange?: string,
+  ): Promise<Book[]> {
+    return this.bookService.findAllDiscoverBooks(sort, timeRange);
   }
 
   @Get('discover/category/:discoverCategoryId')
   @IsPublic()
   async findByDiscoverCategoryId(
     @Param('discoverCategoryId', ParseIntPipe) discoverCategoryId: number,
+    @Query('discoverSubCategoryId') discoverSubCategoryId?: string,
+    @Query('sort') sort?: string,
+    @Query('timeRange') timeRange?: string,
   ): Promise<Book[]> {
-    return this.bookService.findByDiscoverCategoryId(discoverCategoryId);
+    return this.bookService.findByDiscoverCategoryId(
+      discoverCategoryId,
+      discoverSubCategoryId ? Number(discoverSubCategoryId) : undefined,
+      sort,
+      timeRange,
+    );
   }
 
   @Get('discover/subcategory/:discoverSubCategoryId')
   @IsPublic()
   async findByDiscoverSubCategoryId(
     @Param('discoverSubCategoryId', ParseIntPipe) discoverSubCategoryId: number,
+    @Query('sort') sort?: string,
+    @Query('timeRange') timeRange?: string,
   ): Promise<Book[]> {
-    return this.bookService.findByDiscoverSubCategoryId(discoverSubCategoryId);
+    return this.bookService.findByDiscoverSubCategoryId(
+      discoverSubCategoryId,
+      sort,
+      timeRange,
+    );
   }
 
   @Post('discover/add')

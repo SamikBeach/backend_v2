@@ -26,7 +26,7 @@ async function bootstrap() {
   const bookService = app.get(BookService);
 
   try {
-    logger.log('발견하기 카테고리 데이터 초기화 시작...');
+    logger.log('발견하기 카테고리 및 서브카테고리 데이터 초기화 시작...');
 
     // 카테고리 데이터 정의
     const categories: CategorySeed[] = [
@@ -137,82 +137,75 @@ async function bootstrap() {
       },
     ];
 
-    // 카테고리 및 서브카테고리 생성
+    // DB에 카테고리 및 서브카테고리 저장
+    let categoryIndex = 0;
     for (const categoryData of categories) {
       try {
-        logger.log(`'${categoryData.name}' 카테고리 생성 중...`);
-
         // 카테고리 생성
         const createCategoryDto: CreateDiscoverCategoryDto = {
           name: categoryData.name,
           description: categoryData.description,
           displayOrder: categoryData.displayOrder,
         };
+
         const category =
           await discoverCategoryService.createCategory(createCategoryDto);
 
+        logger.log(
+          `카테고리 '${category.name}' 생성 완료 (ID: ${category.id})`,
+        );
+
         // 서브카테고리 생성
-        for (const subcategoryData of categoryData.subcategories) {
-          try {
-            const createSubCategoryDto: CreateDiscoverSubCategoryDto = {
-              name: subcategoryData.name,
-              description: subcategoryData.description,
-              displayOrder: subcategoryData.displayOrder,
-              discoverCategoryId: category.id,
-            };
+        for (const subCategoryData of categoryData.subcategories) {
+          const createSubCategoryDto: CreateDiscoverSubCategoryDto = {
+            name: subCategoryData.name,
+            description: subCategoryData.description,
+            displayOrder: subCategoryData.displayOrder,
+            discoverCategoryId: category.id,
+          };
+
+          const subCategory =
             await discoverCategoryService.createSubCategory(
               createSubCategoryDto,
             );
-          } catch (error) {
-            logger.error(
-              `서브카테고리 '${subcategoryData.name}' 생성 중 오류: ${error.message}`,
-            );
-          }
+
+          logger.log(
+            `서브카테고리 '${subCategory.name}' 생성 완료 (ID: ${subCategory.id})`,
+          );
         }
 
-        logger.log(
-          `'${categoryData.name}' 카테고리 생성 완료 (서브카테고리: ${categoryData.subcategories.length}개)`,
-        );
-      } catch (error) {
-        logger.error(
-          `'${categoryData.name}' 카테고리 생성 중 오류: ${error.message}`,
-        );
-      }
-    }
-
-    // 예시 도서를 발견하기 카테고리에 추가 (여기서는 처음 5개 도서를 가져와 첫 번째 카테고리에 추가)
-    try {
-      const allBooks = await bookService.findAll();
-      if (allBooks.length > 0) {
-        const firstCategory = await discoverCategoryService.findAllCategories();
-        if (firstCategory.length > 0) {
-          const categoryId = firstCategory[0].id;
-          const subcategories =
-            await discoverCategoryService.findSubCategoriesByCategory(
-              categoryId,
-            );
-
-          // 첫 번째 카테고리의 첫 번째 서브카테고리에 도서 추가
-          if (subcategories.length > 0) {
-            const subcategoryId = subcategories[0].id;
-
-            // 처음 5개 도서 추가
-            for (let i = 0; i < Math.min(5, allBooks.length); i++) {
-              const book = allBooks[i];
-              await bookService.addBookToDiscoverCategory(
-                book.id,
-                categoryId,
-                subcategoryId,
+        // 첫 번째 카테고리의 첫 번째 서브카테고리에 도서 추가 예제
+        if (categoryIndex === 0) {
+          const books = await bookService.findAll();
+          if (books.length > 0) {
+            const firstSubCategory =
+              await discoverCategoryService.findSubCategoriesByCategory(
+                category.id,
               );
-              logger.log(
-                `도서 '${book.title}'를 발견하기 카테고리에 추가했습니다.`,
-              );
+
+            if (firstSubCategory.length > 0) {
+              const book = books[0];
+              try {
+                await bookService.addBookToDiscoverCategory(
+                  book.id,
+                  category.id,
+                  firstSubCategory[0].id,
+                );
+                logger.log(
+                  `도서 '${book.title}'를 첫 번째 발견하기 카테고리/서브카테고리에 추가 완료`,
+                );
+              } catch (error) {
+                logger.error(`도서 연결 중 오류: ${error.message}`);
+              }
             }
           }
         }
+        categoryIndex++;
+      } catch (error) {
+        logger.error(
+          `'${categoryData.name}' 카테고리 시드 중 오류: ${error.message}`,
+        );
       }
-    } catch (error) {
-      logger.error(`도서 추가 중 오류: ${error.message}`);
     }
 
     logger.log('발견하기 카테고리 데이터 초기화 완료!');

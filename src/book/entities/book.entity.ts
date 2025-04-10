@@ -56,23 +56,15 @@ export class Book {
   @ManyToOne(
     () => DiscoverCategory,
     (discoverCategory) => discoverCategory.books,
-    { nullable: true },
   )
   discoverCategory: DiscoverCategory;
-
-  @Column({ nullable: true })
-  discoverCategoryId: number;
 
   // Discover SubCategory 관계
   @ManyToOne(
     () => DiscoverSubCategory,
     (discoverSubCategory) => discoverSubCategory.books,
-    { nullable: true },
   )
   discoverSubCategory: DiscoverSubCategory;
-
-  @Column({ nullable: true })
-  discoverSubCategoryId: number;
 
   @Column({ default: false })
   isFeatured: boolean; // 추천 도서 여부

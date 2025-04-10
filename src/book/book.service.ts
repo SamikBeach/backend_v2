@@ -363,8 +363,17 @@ export class BookService {
 
   /**
    * 특정 DiscoverCategory에 속한 도서 조회
+   * @param discoverCategoryId 발견하기 카테고리 ID
+   * @param discoverSubCategoryId 발견하기 서브카테고리 ID (선택)
+   * @param sort 정렬 방식 (rating-desc, reviews-desc, publishDate-desc)
+   * @param timeRange 기간 필터 (all, month, year)
    */
-  async findByDiscoverCategoryId(discoverCategoryId: number): Promise<Book[]> {
+  async findByDiscoverCategoryId(
+    discoverCategoryId: number,
+    discoverSubCategoryId?: number,
+    sort: string = 'rating-desc',
+    timeRange: string = 'all',
+  ): Promise<Book[]> {
     const discoverCategory =
       await this.discoverCategoryService.findCategoryById(discoverCategoryId);
     if (!discoverCategory) {
@@ -373,22 +382,78 @@ export class BookService {
       );
     }
 
-    return this.bookRepository.find({
-      where: { discoverCategoryId: discoverCategory.id },
-      relations: [
-        'category',
-        'subcategory',
-        'discoverCategory',
-        'discoverSubCategory',
-      ],
-    });
+    // 기본 쿼리 빌더 생성
+    const queryBuilder = this.bookRepository
+      .createQueryBuilder('book')
+      .leftJoinAndSelect('book.category', 'category')
+      .leftJoinAndSelect('book.subcategory', 'subcategory')
+      .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
+      .leftJoinAndSelect('book.discoverSubCategory', 'discoverSubCategory')
+      .where('book.isDiscovered = :isDiscovered', { isDiscovered: true })
+      .andWhere('discoverCategory.id = :discoverCategoryId', {
+        discoverCategoryId,
+      });
+
+    // 서브카테고리 필터링 (있는 경우)
+    if (discoverSubCategoryId) {
+      queryBuilder.andWhere('discoverSubCategory.id = :discoverSubCategoryId', {
+        discoverSubCategoryId,
+      });
+    }
+
+    // 기간 필터링
+    if (timeRange !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+
+      if (timeRange === 'month') {
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth() - 1,
+          now.getDate(),
+        );
+      } else if (timeRange === 'year') {
+        startDate = new Date(
+          now.getFullYear() - 1,
+          now.getMonth(),
+          now.getDate(),
+        );
+      }
+
+      if (startDate) {
+        queryBuilder.andWhere('book.publishDate >= :startDate', { startDate });
+      }
+    }
+
+    // 정렬 적용
+    switch (sort) {
+      case 'rating-desc':
+        queryBuilder.orderBy('book.rating', 'DESC');
+        break;
+      case 'reviews-desc':
+        queryBuilder.orderBy('book.reviews', 'DESC');
+        break;
+      case 'publishDate-desc':
+        queryBuilder.orderBy('book.publishDate', 'DESC');
+        break;
+      default:
+        queryBuilder.orderBy('book.rating', 'DESC');
+    }
+
+    // 결과 반환
+    return queryBuilder.getMany();
   }
 
   /**
    * 특정 DiscoverSubCategory에 속한 도서 조회
+   * @param discoverSubCategoryId 발견하기 서브카테고리 ID
+   * @param sort 정렬 방식 (rating-desc, reviews-desc, publishDate-desc)
+   * @param timeRange 기간 필터 (all, month, year)
    */
   async findByDiscoverSubCategoryId(
     discoverSubCategoryId: number,
+    sort: string = 'rating-desc',
+    timeRange: string = 'all',
   ): Promise<Book[]> {
     const discoverSubCategory =
       await this.discoverCategoryService.findSubCategoryById(
@@ -400,15 +465,59 @@ export class BookService {
       );
     }
 
-    return this.bookRepository.find({
-      where: { discoverSubCategoryId: discoverSubCategory.id },
-      relations: [
-        'category',
-        'subcategory',
-        'discoverCategory',
-        'discoverSubCategory',
-      ],
-    });
+    // 기본 쿼리 빌더 생성
+    const queryBuilder = this.bookRepository
+      .createQueryBuilder('book')
+      .leftJoinAndSelect('book.category', 'category')
+      .leftJoinAndSelect('book.subcategory', 'subcategory')
+      .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
+      .leftJoinAndSelect('book.discoverSubCategory', 'discoverSubCategory')
+      .where('book.isDiscovered = :isDiscovered', { isDiscovered: true })
+      .andWhere('discoverSubCategory.id = :discoverSubCategoryId', {
+        discoverSubCategoryId,
+      });
+
+    // 기간 필터링
+    if (timeRange !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+
+      if (timeRange === 'month') {
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth() - 1,
+          now.getDate(),
+        );
+      } else if (timeRange === 'year') {
+        startDate = new Date(
+          now.getFullYear() - 1,
+          now.getMonth(),
+          now.getDate(),
+        );
+      }
+
+      if (startDate) {
+        queryBuilder.andWhere('book.publishDate >= :startDate', { startDate });
+      }
+    }
+
+    // 정렬 적용
+    switch (sort) {
+      case 'rating-desc':
+        queryBuilder.orderBy('book.rating', 'DESC');
+        break;
+      case 'reviews-desc':
+        queryBuilder.orderBy('book.reviews', 'DESC');
+        break;
+      case 'publishDate-desc':
+        queryBuilder.orderBy('book.publishDate', 'DESC');
+        break;
+      default:
+        queryBuilder.orderBy('book.rating', 'DESC');
+    }
+
+    // 결과 반환
+    return queryBuilder.getMany();
   }
 
   /**
@@ -431,7 +540,7 @@ export class BookService {
         );
 
       // 서브카테고리가 해당 카테고리에 속하는지 확인
-      if (discoverSubCategory.discoverCategoryId !== discoverCategory.id) {
+      if (discoverSubCategory.discoverCategory.id !== discoverCategory.id) {
         throw new NotFoundException(
           `DiscoverSubCategory with ID ${discoverSubCategoryId} does not belong to DiscoverCategory with ID ${discoverCategoryId}`,
         );
@@ -440,12 +549,10 @@ export class BookService {
 
     // 도서 업데이트
     book.discoverCategory = discoverCategory;
-    book.discoverCategoryId = discoverCategory.id;
     book.isDiscovered = true;
 
     if (discoverSubCategory) {
       book.discoverSubCategory = discoverSubCategory;
-      book.discoverSubCategoryId = discoverSubCategory.id;
     }
 
     return this.bookRepository.save(book);
@@ -458,7 +565,7 @@ export class BookService {
     const book = await this.findById(bookId);
 
     // 도서가 Discover에 속하지 않으면 오류
-    if (!book.discoverCategoryId) {
+    if (!book.discoverCategory) {
       throw new NotFoundException(
         `Book with ID ${bookId} is not in any DiscoverCategory`,
       );
@@ -466,9 +573,7 @@ export class BookService {
 
     // 도서 업데이트
     book.discoverCategory = null;
-    book.discoverCategoryId = null;
     book.discoverSubCategory = null;
-    book.discoverSubCategoryId = null;
     book.isDiscovered = false;
 
     return this.bookRepository.save(book);
@@ -476,16 +581,62 @@ export class BookService {
 
   /**
    * 모든 Discover 도서 조회
+   * @param sort 정렬 방식 (rating-desc, reviews-desc, publishDate-desc)
+   * @param timeRange 기간 필터 (all, month, year)
    */
-  async findAllDiscoverBooks(): Promise<Book[]> {
-    return this.bookRepository.find({
-      where: { isDiscovered: true },
-      relations: [
-        'category',
-        'subcategory',
-        'discoverCategory',
-        'discoverSubCategory',
-      ],
-    });
+  async findAllDiscoverBooks(
+    sort: string = 'rating-desc',
+    timeRange: string = 'all',
+  ): Promise<Book[]> {
+    // 기본 쿼리 빌더 생성
+    const queryBuilder = this.bookRepository
+      .createQueryBuilder('book')
+      .leftJoinAndSelect('book.category', 'category')
+      .leftJoinAndSelect('book.subcategory', 'subcategory')
+      .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
+      .leftJoinAndSelect('book.discoverSubCategory', 'discoverSubCategory')
+      .where('book.isDiscovered = :isDiscovered', { isDiscovered: true });
+
+    // 기간 필터링
+    if (timeRange !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+
+      if (timeRange === 'month') {
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth() - 1,
+          now.getDate(),
+        );
+      } else if (timeRange === 'year') {
+        startDate = new Date(
+          now.getFullYear() - 1,
+          now.getMonth(),
+          now.getDate(),
+        );
+      }
+
+      if (startDate) {
+        queryBuilder.andWhere('book.publishDate >= :startDate', { startDate });
+      }
+    }
+
+    // 정렬 적용
+    switch (sort) {
+      case 'rating-desc':
+        queryBuilder.orderBy('book.rating', 'DESC');
+        break;
+      case 'reviews-desc':
+        queryBuilder.orderBy('book.reviews', 'DESC');
+        break;
+      case 'publishDate-desc':
+        queryBuilder.orderBy('book.publishDate', 'DESC');
+        break;
+      default:
+        queryBuilder.orderBy('book.rating', 'DESC');
+    }
+
+    // 결과 반환
+    return queryBuilder.getMany();
   }
 }
