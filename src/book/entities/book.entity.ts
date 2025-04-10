@@ -8,6 +8,8 @@ import {
 } from 'typeorm';
 import { Category } from '../../category/entities/category.entity';
 import { SubCategory } from '../../category/entities/subcategory.entity';
+import { DiscoverCategory } from '../../discover-category/entities/discover-category.entity';
+import { DiscoverSubCategory } from '../../discover-category/entities/discover-subcategory.entity';
 
 @Entity('book')
 export class Book {
@@ -50,8 +52,33 @@ export class Book {
   @ManyToOne(() => SubCategory, (subcategory) => subcategory.books)
   subcategory: SubCategory;
 
+  // Discover Category 관계
+  @ManyToOne(
+    () => DiscoverCategory,
+    (discoverCategory) => discoverCategory.books,
+    { nullable: true },
+  )
+  discoverCategory: DiscoverCategory;
+
+  @Column({ nullable: true })
+  discoverCategoryId: number;
+
+  // Discover SubCategory 관계
+  @ManyToOne(
+    () => DiscoverSubCategory,
+    (discoverSubCategory) => discoverSubCategory.books,
+    { nullable: true },
+  )
+  discoverSubCategory: DiscoverSubCategory;
+
+  @Column({ nullable: true })
+  discoverSubCategoryId: number;
+
   @Column({ default: false })
   isFeatured: boolean; // 추천 도서 여부
+
+  @Column({ default: false })
+  isDiscovered: boolean; // Discover 도서 여부
 
   @CreateDateColumn()
   createdAt: Date;

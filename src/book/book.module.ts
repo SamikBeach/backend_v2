@@ -5,9 +5,15 @@ import { BookService } from './book.service';
 import { BookController } from './book.controller';
 import { CommonModule } from '../common/common.module';
 import { CategoryModule } from '../category/category.module';
+import { DiscoverCategoryModule } from '../discover-category/discover-category.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Book]), CommonModule, CategoryModule],
+  imports: [
+    TypeOrmModule.forFeature([Book]),
+    CommonModule,
+    CategoryModule,
+    DiscoverCategoryModule,
+  ],
   controllers: [BookController],
   providers: [BookService],
   exports: [BookService],

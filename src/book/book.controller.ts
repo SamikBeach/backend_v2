@@ -147,4 +147,48 @@ export class BookController {
   ): Promise<Book[]> {
     return this.bookService.findAllPopularBooks(sort, timeRange);
   }
+
+  // ======= Discover 관련 엔드포인트 =======
+
+  @Get('discover/all')
+  @IsPublic()
+  async findAllDiscoverBooks(): Promise<Book[]> {
+    return this.bookService.findAllDiscoverBooks();
+  }
+
+  @Get('discover/category/:discoverCategoryId')
+  @IsPublic()
+  async findByDiscoverCategoryId(
+    @Param('discoverCategoryId', ParseIntPipe) discoverCategoryId: number,
+  ): Promise<Book[]> {
+    return this.bookService.findByDiscoverCategoryId(discoverCategoryId);
+  }
+
+  @Get('discover/subcategory/:discoverSubCategoryId')
+  @IsPublic()
+  async findByDiscoverSubCategoryId(
+    @Param('discoverSubCategoryId', ParseIntPipe) discoverSubCategoryId: number,
+  ): Promise<Book[]> {
+    return this.bookService.findByDiscoverSubCategoryId(discoverSubCategoryId);
+  }
+
+  @Post('discover/add')
+  async addBookToDiscoverCategory(
+    @Body('bookId', ParseIntPipe) bookId: number,
+    @Body('discoverCategoryId', ParseIntPipe) discoverCategoryId: number,
+    @Body('discoverSubCategoryId', ParseIntPipe) discoverSubCategoryId?: number,
+  ): Promise<Book> {
+    return this.bookService.addBookToDiscoverCategory(
+      bookId,
+      discoverCategoryId,
+      discoverSubCategoryId,
+    );
+  }
+
+  @Delete('discover/remove/:bookId')
+  async removeBookFromDiscoverCategory(
+    @Param('bookId', ParseIntPipe) bookId: number,
+  ): Promise<Book> {
+    return this.bookService.removeBookFromDiscoverCategory(bookId);
+  }
 }

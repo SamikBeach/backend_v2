@@ -45,7 +45,7 @@ export class AladinService {
   constructor(private readonly configService: ConfigService) {
     this.ttbKey = this.configService.get<string>('ALADIN_API_KEY');
     if (!this.ttbKey) {
-      this.logger.error('알라딘 TTB 키가 설정되지 않았습니다!');
+      this.logger.error('알라딘 API 키가 설정되지 않았습니다!');
     }
   }
 

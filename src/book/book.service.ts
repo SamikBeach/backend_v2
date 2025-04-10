@@ -6,6 +6,7 @@ import { CreateBookDto, UpdateBookDto } from './dto/book.dto';
 import { AladinService } from '../common/services/aladin.service';
 import { CategoryService } from '../category/category.service';
 import { SubCategoryService } from '../category/subcategory.service';
+import { DiscoverCategoryService } from '../discover-category/discover-category.service';
 
 @Injectable()
 export class BookService {
@@ -17,6 +18,7 @@ export class BookService {
     private readonly aladinService: AladinService,
     private readonly categoryService: CategoryService,
     private readonly subCategoryService: SubCategoryService,
+    private readonly discoverCategoryService: DiscoverCategoryService,
   ) {}
 
   /**
@@ -357,5 +359,133 @@ export class BookService {
 
     // 결과 반환
     return queryBuilder.getMany();
+  }
+
+  /**
+   * 특정 DiscoverCategory에 속한 도서 조회
+   */
+  async findByDiscoverCategoryId(discoverCategoryId: number): Promise<Book[]> {
+    const discoverCategory =
+      await this.discoverCategoryService.findCategoryById(discoverCategoryId);
+    if (!discoverCategory) {
+      throw new NotFoundException(
+        `DiscoverCategory with ID ${discoverCategoryId} not found`,
+      );
+    }
+
+    return this.bookRepository.find({
+      where: { discoverCategoryId: discoverCategory.id },
+      relations: [
+        'category',
+        'subcategory',
+        'discoverCategory',
+        'discoverSubCategory',
+      ],
+    });
+  }
+
+  /**
+   * 특정 DiscoverSubCategory에 속한 도서 조회
+   */
+  async findByDiscoverSubCategoryId(
+    discoverSubCategoryId: number,
+  ): Promise<Book[]> {
+    const discoverSubCategory =
+      await this.discoverCategoryService.findSubCategoryById(
+        discoverSubCategoryId,
+      );
+    if (!discoverSubCategory) {
+      throw new NotFoundException(
+        `DiscoverSubCategory with ID ${discoverSubCategoryId} not found`,
+      );
+    }
+
+    return this.bookRepository.find({
+      where: { discoverSubCategoryId: discoverSubCategory.id },
+      relations: [
+        'category',
+        'subcategory',
+        'discoverCategory',
+        'discoverSubCategory',
+      ],
+    });
+  }
+
+  /**
+   * 도서를 DiscoverCategory에 추가
+   */
+  async addBookToDiscoverCategory(
+    bookId: number,
+    discoverCategoryId: number,
+    discoverSubCategoryId?: number,
+  ): Promise<Book> {
+    const book = await this.findById(bookId);
+    const discoverCategory =
+      await this.discoverCategoryService.findCategoryById(discoverCategoryId);
+
+    let discoverSubCategory = null;
+    if (discoverSubCategoryId) {
+      discoverSubCategory =
+        await this.discoverCategoryService.findSubCategoryById(
+          discoverSubCategoryId,
+        );
+
+      // 서브카테고리가 해당 카테고리에 속하는지 확인
+      if (discoverSubCategory.discoverCategoryId !== discoverCategory.id) {
+        throw new NotFoundException(
+          `DiscoverSubCategory with ID ${discoverSubCategoryId} does not belong to DiscoverCategory with ID ${discoverCategoryId}`,
+        );
+      }
+    }
+
+    // 도서 업데이트
+    book.discoverCategory = discoverCategory;
+    book.discoverCategoryId = discoverCategory.id;
+    book.isDiscovered = true;
+
+    if (discoverSubCategory) {
+      book.discoverSubCategory = discoverSubCategory;
+      book.discoverSubCategoryId = discoverSubCategory.id;
+    }
+
+    return this.bookRepository.save(book);
+  }
+
+  /**
+   * 도서를 DiscoverCategory에서 제거
+   */
+  async removeBookFromDiscoverCategory(bookId: number): Promise<Book> {
+    const book = await this.findById(bookId);
+
+    // 도서가 Discover에 속하지 않으면 오류
+    if (!book.discoverCategoryId) {
+      throw new NotFoundException(
+        `Book with ID ${bookId} is not in any DiscoverCategory`,
+      );
+    }
+
+    // 도서 업데이트
+    book.discoverCategory = null;
+    book.discoverCategoryId = null;
+    book.discoverSubCategory = null;
+    book.discoverSubCategoryId = null;
+    book.isDiscovered = false;
+
+    return this.bookRepository.save(book);
+  }
+
+  /**
+   * 모든 Discover 도서 조회
+   */
+  async findAllDiscoverBooks(): Promise<Book[]> {
+    return this.bookRepository.find({
+      where: { isDiscovered: true },
+      relations: [
+        'category',
+        'subcategory',
+        'discoverCategory',
+        'discoverSubCategory',
+      ],
+    });
   }
 }

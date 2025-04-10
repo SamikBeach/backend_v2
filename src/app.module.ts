@@ -12,6 +12,9 @@ import { BookModule } from './book/book.module';
 import { Category } from './category/entities/category.entity';
 import { SubCategory } from './category/entities/subcategory.entity';
 import { Book } from './book/entities/book.entity';
+import { DiscoverCategoryModule } from './discover-category/discover-category.module';
+import { DiscoverCategory } from './discover-category/entities/discover-category.entity';
+import { DiscoverSubCategory } from './discover-category/entities/discover-subcategory.entity';
 
 @Module({
   imports: [
@@ -29,7 +32,14 @@ import { Book } from './book/entities/book.entity';
         username: configService.get('DB_USERNAME'),
         password: configService.get('DB_PASSWORD'),
         database: configService.get('DB_NAME'),
-        entities: [User, Category, SubCategory, Book],
+        entities: [
+          User,
+          Category,
+          SubCategory,
+          Book,
+          DiscoverCategory,
+          DiscoverSubCategory,
+        ],
         synchronize: configService.get('NODE_ENV') !== 'production',
         namingStrategy: new SnakeNamingStrategy(),
       }),
@@ -39,6 +49,7 @@ import { Book } from './book/entities/book.entity';
     CommonModule,
     CategoryModule,
     BookModule,
+    DiscoverCategoryModule,
   ],
 })
 export class AppModule implements NestModule {

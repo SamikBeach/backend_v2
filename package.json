@@ -10,7 +10,10 @@
     "seed:categories": "NODE_ENV=development ts-node src/seeds/category.seed.ts",
     "seed:books": "NODE_ENV=development ts-node src/seeds/book.seed.ts",
     "seed:init-featured-books": "NODE_ENV=development ts-node src/seeds/init-featured-books.seed.ts",
-    "seed:populate-books": "NODE_ENV=development ts-node src/seeds/populate-books.seed.ts"
+    "seed:populate-books": "NODE_ENV=development ts-node src/seeds/populate-books.seed.ts",
+    "seed:discover-category": "NODE_ENV=development ts-node src/seeds/discover-category.seed.ts",
+    "seed:all": "yarn seed:categories && yarn seed:books && yarn seed:init-featured-books && yarn seed:discover-category",
+    "seed:run-all": "NODE_ENV=development ts-node src/seeds/seed-all.ts"
   },
   "dependencies": {
     "@nestjs-modules/mailer": "^2.0.2",
