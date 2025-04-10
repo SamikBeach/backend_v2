@@ -29,6 +29,12 @@ async function bootstrap() {
   logger.log('전체 데이터 시드 프로세스를 시작합니다...');
 
   try {
+    // 0. 사용자 데이터 시드 (가장 먼저 실행)
+    await runCommand(
+      'NODE_ENV=development ts-node src/seeds/user.seed.ts',
+      '사용자 시드',
+    );
+
     // 1. 카테고리 데이터 시드
     await runCommand(
       'NODE_ENV=development ts-node src/seeds/category.seed.ts',
@@ -45,6 +51,12 @@ async function bootstrap() {
     await runCommand(
       'NODE_ENV=development ts-node src/seeds/discover-category.seed.ts',
       '발견하기 카테고리 시드',
+    );
+
+    // 4. 라이브러리 시드
+    await runCommand(
+      'NODE_ENV=development ts-node src/seeds/library.seed.ts',
+      '라이브러리 시드',
     );
 
     logger.log('모든 시드 프로세스가 완료되었습니다!');

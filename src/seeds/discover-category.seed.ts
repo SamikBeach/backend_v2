@@ -5,6 +5,9 @@ import { DiscoverCategoryService } from '../discover-category/discover-category.
 import { BookService } from '../book/book.service';
 import { CreateDiscoverCategoryDto } from '../discover-category/dto/create-discover-category.dto';
 import { CreateDiscoverSubCategoryDto } from '../discover-category/dto/discover-subcategory.dto';
+import { DiscoverCategory } from '../discover-category/entities/discover-category.entity';
+import { Repository } from 'typeorm';
+import { getRepositoryToken } from '@nestjs/typeorm';
 
 interface SubCategorySeed {
   name: string;
@@ -24,6 +27,21 @@ async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
   const discoverCategoryService = app.get(DiscoverCategoryService);
   const bookService = app.get(BookService);
+
+  // 데이터 존재 여부 확인을 위한 레포지토리 가져오기
+  const discoverCategoryRepository = app.get<Repository<DiscoverCategory>>(
+    getRepositoryToken(DiscoverCategory),
+  );
+
+  // 기존 발견하기 카테고리 데이터 확인
+  const existingCategories = await discoverCategoryRepository.count();
+  if (existingCategories > 0) {
+    logger.log(
+      `이미 ${existingCategories}개의 발견하기 카테고리가 존재합니다. 시드 작업을 건너뜁니다.`,
+    );
+    await app.close();
+    return;
+  }
 
   try {
     logger.log('발견하기 카테고리 및 서브카테고리 데이터 초기화 시작...');

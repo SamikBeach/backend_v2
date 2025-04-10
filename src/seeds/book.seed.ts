@@ -4,12 +4,28 @@ import { BookService } from '../book/book.service';
 import { DiscoverCategoryService } from '../discover-category/discover-category.service';
 import { Logger } from '@nestjs/common';
 import { CreateBookDto } from '../book/dto/book.dto';
+import { Book } from '../book/entities/book.entity';
+import { Repository } from 'typeorm';
+import { getRepositoryToken } from '@nestjs/typeorm';
 
 async function bootstrap() {
   const logger = new Logger('BookSeed');
   const app = await NestFactory.createApplicationContext(AppModule);
   const bookService = app.get(BookService);
   const discoverCategoryService = app.get(DiscoverCategoryService);
+
+  // 데이터 존재 여부 확인을 위한 레포지토리 가져오기
+  const bookRepository = app.get<Repository<Book>>(getRepositoryToken(Book));
+
+  // 기존 책 데이터 확인
+  const existingBooks = await bookRepository.count();
+  if (existingBooks > 0) {
+    logger.log(
+      `이미 ${existingBooks}권의 책이 존재합니다. 시드 작업을 건너뜁니다.`,
+    );
+    await app.close();
+    return;
+  }
 
   // 샘플 도서 데이터
   const books: CreateBookDto[] = [
@@ -300,13 +316,21 @@ async function bootstrap() {
   try {
     logger.log('도서 데이터 초기화 시작...');
 
-    // 도서 저장
     for (const bookData of books) {
       try {
-        const book = await bookService.create(bookData);
-        logger.log(`도서 '${book.title}' 생성 완료 (ID: ${book.id})`);
+        // 이미 존재하는 ISBN인지 확인
+        const existingBook = await bookService.findByIsbn(bookData.isbn);
+        if (existingBook) {
+          logger.log(
+            `ISBN ${bookData.isbn}의 도서가 이미 존재합니다. 건너뜁니다.`,
+          );
+          continue;
+        }
+
+        const newBook = await bookService.create(bookData);
+        logger.log(`도서 '${newBook.title}' 생성 완료 (ID: ${newBook.id})`);
       } catch (error) {
-        logger.error(`도서 생성 중 오류: ${error.message}`);
+        logger.error(`도서 '${bookData.title}' 생성 중 오류: ${error.message}`);
       }
     }
 

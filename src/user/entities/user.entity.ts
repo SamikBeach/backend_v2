@@ -4,7 +4,9 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
+import { Library } from '../../library/entities/library.entity';
 
 export enum UserStatus {
   ACTIVE = 'active',
@@ -66,6 +68,9 @@ export class User {
 
   @Column({ nullable: true })
   refreshToken: string;
+
+  @OneToMany(() => Library, (library) => library.owner)
+  libraries: Library[];
 
   @CreateDateColumn()
   createdAt: Date;

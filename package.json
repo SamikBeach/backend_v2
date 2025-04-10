@@ -10,7 +10,9 @@
     "seed:categories": "NODE_ENV=development ts-node src/seeds/category.seed.ts",
     "seed:books": "NODE_ENV=development ts-node src/seeds/book.seed.ts",
     "seed:discover-category": "NODE_ENV=development ts-node src/seeds/discover-category.seed.ts",
-    "seed:all": "yarn seed:categories && yarn seed:books && yarn seed:discover-category",
+    "seed:library": "NODE_ENV=development ts-node src/seeds/library.seed.ts",
+    "seed:users": "NODE_ENV=development ts-node src/seeds/user.seed.ts",
+    "seed:all": "yarn seed:users && yarn seed:categories && yarn seed:books && yarn seed:discover-category && yarn seed:library",
     "seed:run-all": "NODE_ENV=development ts-node src/seeds/seed-all.ts"
   },
   "dependencies": {

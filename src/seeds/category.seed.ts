@@ -4,6 +4,9 @@ import { CategoryService } from '../category/category.service';
 import { AppModule } from '../app.module';
 import { CreateCategoryDto } from '../category/dto/create-category.dto';
 import { CreateSubCategoryDto } from '../category/dto/create-subcategory.dto';
+import { Category } from '../category/entities/category.entity';
+import { Repository } from 'typeorm';
+import { getRepositoryToken } from '@nestjs/typeorm';
 
 interface CategorySeed {
   name: string;
@@ -17,11 +20,22 @@ async function bootstrap() {
   const categoryService = app.get(CategoryService);
   const logger = new Logger('CategorySeed');
 
+  // 데이터 존재 여부 확인을 위한 레포지토리 가져오기
+  const categoryRepository = app.get<Repository<Category>>(
+    getRepositoryToken(Category),
+  );
+
+  // 기존 카테고리 데이터 확인
+  const existingCategories = await categoryRepository.count();
+  if (existingCategories > 0) {
+    logger.log(
+      `이미 ${existingCategories}개의 카테고리가 존재합니다. 시드 작업을 건너뜁니다.`,
+    );
+    await app.close();
+    return;
+  }
+
   const categories: CategorySeed[] = [
-    {
-      name: '전체',
-      subcategories: [],
-    },
     {
       name: '철학',
       subcategories: [

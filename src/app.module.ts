@@ -15,6 +15,11 @@ import { Book } from './book/entities/book.entity';
 import { DiscoverCategoryModule } from './discover-category/discover-category.module';
 import { DiscoverCategory } from './discover-category/entities/discover-category.entity';
 import { DiscoverSubCategory } from './discover-category/entities/discover-subcategory.entity';
+import { LibraryModule } from './library/library.module';
+import { Library } from './library/entities/library.entity';
+import { LibraryBook } from './library/entities/library-book.entity';
+import { LibraryTag } from './library/entities/library-tag.entity';
+import { LibrarySubscription } from './library/entities/library-subscription.entity';
 
 @Module({
   imports: [
@@ -39,6 +44,10 @@ import { DiscoverSubCategory } from './discover-category/entities/discover-subca
           Book,
           DiscoverCategory,
           DiscoverSubCategory,
+          Library,
+          LibraryBook,
+          LibraryTag,
+          LibrarySubscription,
         ],
         synchronize: configService.get('NODE_ENV') !== 'production',
         namingStrategy: new SnakeNamingStrategy(),
@@ -50,6 +59,7 @@ import { DiscoverSubCategory } from './discover-category/entities/discover-subca
     CategoryModule,
     BookModule,
     DiscoverCategoryModule,
+    LibraryModule,
   ],
 })
 export class AppModule implements NestModule {
