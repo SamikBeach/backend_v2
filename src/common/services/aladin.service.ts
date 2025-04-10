@@ -134,7 +134,7 @@ export class AladinService {
     return {
       title: item.title,
       author: item.author,
-      coverImage: item.cover,
+      coverImage: item.cover || null,
       isbn: item.isbn,
       isbn13: item.isbn13,
       publisher: item.publisher,

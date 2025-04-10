@@ -174,7 +174,7 @@ export class BookService {
       const book = this.bookRepository.create({
         title: bookData.title,
         author: bookData.author,
-        coverImage: bookData.cover,
+        coverImage: bookData.cover || null,
         isbn: bookData.isbn,
         isbn13: bookData.isbn13,
         publisher: bookData.publisher,

@@ -20,7 +20,7 @@ export class Book {
   @Column()
   author: string;
 
-  @Column()
+  @Column({ nullable: true })
   coverImage: string;
 
   @Column()
