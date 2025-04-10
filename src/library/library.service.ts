@@ -22,8 +22,10 @@ import {
   LibraryBookResponseDto,
   LibraryTagResponseDto,
   SubscriberResponseDto,
+  LibraryDetailResponseDto,
 } from './dto/library-response.dto';
 import { UserService } from '../user/user.service';
+import { In } from 'typeorm';
 
 @Injectable()
 export class LibraryService {
@@ -61,45 +63,71 @@ export class LibraryService {
 
   // 모든 서재 목록 조회 (공개된 서재만)
   async findAll(userId?: number): Promise<LibraryListResponseDto[]> {
-    const libraries = await this.libraryRepository.find({
-      where: { isPublic: true },
-      relations: ['owner', 'tags', 'libraryBooks'],
-      order: { createdAt: 'DESC' },
-    });
+    // 공개 서재만 가져오거나, 사용자 ID가 제공된 경우 해당 사용자의 서재까지 가져옴
+    let qb = this.libraryRepository
+      .createQueryBuilder('library')
+      .leftJoinAndSelect('library.owner', 'owner')
+      .leftJoinAndSelect('library.tags', 'tags')
+      .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
+      .leftJoinAndSelect('libraryBooks.book', 'book')
+      .where('library.isPublic = :isPublic', { isPublic: true });
 
-    const libraryResponses: LibraryListResponseDto[] = [];
-
-    for (const library of libraries) {
-      const isSubscribed = userId
-        ? await this.isUserSubscribed(userId, library.id)
-        : false;
-
-      libraryResponses.push({
-        id: library.id,
-        name: library.name,
-        description: library.description,
-        isPublic: library.isPublic,
-        subscriberCount: library.subscriberCount,
-        bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
-        owner: {
-          id: library.owner.id,
-          username: library.owner.username,
-          email: library.owner.email,
-        },
-        tags: library.tags
-          ? library.tags.map((tag) => ({
-              id: tag.id,
-              name: tag.name,
-              libraryId: tag.libraryId,
-              createdAt: tag.createdAt,
-            }))
-          : [],
-        isSubscribed,
-        createdAt: library.createdAt,
+    if (userId) {
+      qb = qb.orWhere('library.ownerId = :ownerId', {
+        ownerId: userId,
       });
     }
 
-    return libraryResponses;
+    const libraries = await qb.getMany();
+
+    return Promise.all(
+      libraries.map(async (library) => {
+        const isSubscribed = userId
+          ? await this.isUserSubscribed(userId, library.id)
+          : false;
+
+        // 미리보기용 책 - 최근 추가된 3권으로 제한
+        const previewBooks = library.libraryBooks
+          ? library.libraryBooks
+              .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+              .slice(0, 3)
+              .map((libraryBook) => ({
+                id: libraryBook.book.id,
+                title: libraryBook.book.title,
+                author: libraryBook.book.author,
+                coverImage: libraryBook.book.coverImage,
+                isbn: libraryBook.book.isbn,
+                publisher: libraryBook.book.publisher,
+              }))
+          : [];
+
+        return {
+          id: library.id,
+          name: library.name,
+          description: library.description,
+          isPublic: library.isPublic,
+          subscriberCount: library.subscriberCount,
+          owner: {
+            id: library.owner.id,
+            username: library.owner.username,
+            email: library.owner.email,
+          },
+          tags: library.tags
+            ? library.tags.map((tag) => ({
+                id: tag.id,
+                name: tag.name,
+                libraryId: tag.libraryId,
+                createdAt: tag.createdAt,
+              }))
+            : [],
+          bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
+          previewBooks,
+          isSubscribed,
+          createdAt: library.createdAt,
+          updatedAt: library.updatedAt,
+        };
+      }),
+    );
   }
 
   // 특정 사용자의 서재 목록 조회
@@ -107,150 +135,227 @@ export class LibraryService {
     userId: number,
     requestingUserId?: number,
   ): Promise<LibraryListResponseDto[]> {
-    const libraries = await this.libraryRepository.find({
-      where: [
-        { ownerId: userId, isPublic: true },
-        // 자신의 서재는 공개/비공개 모두 조회 가능
-        userId === requestingUserId ? { ownerId: userId } : null,
-      ].filter(Boolean),
-      relations: ['owner', 'tags', 'libraryBooks'],
-      order: { createdAt: 'DESC' },
-    });
+    const user = await this.userService.findOne(userId);
 
-    const libraryResponses: LibraryListResponseDto[] = [];
-
-    for (const library of libraries) {
-      const isSubscribed = requestingUserId
-        ? await this.isUserSubscribed(requestingUserId, library.id)
-        : false;
-
-      libraryResponses.push({
-        id: library.id,
-        name: library.name,
-        description: library.description,
-        isPublic: library.isPublic,
-        subscriberCount: library.subscriberCount,
-        bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
-        owner: {
-          id: library.owner.id,
-          username: library.owner.username,
-          email: library.owner.email,
-        },
-        tags: library.tags
-          ? library.tags.map((tag) => ({
-              id: tag.id,
-              name: tag.name,
-              libraryId: tag.libraryId,
-              createdAt: tag.createdAt,
-            }))
-          : [],
-        isSubscribed,
-        createdAt: library.createdAt,
-      });
+    if (!user) {
+      throw new NotFoundException(`사용자 ID ${userId}를 찾을 수 없습니다.`);
     }
 
-    return libraryResponses;
+    // 해당 사용자의 공개 서재 + (본인 요청시 비공개 서재도)
+    const isOwn = requestingUserId === userId;
+    const qb = this.libraryRepository
+      .createQueryBuilder('library')
+      .leftJoinAndSelect('library.owner', 'owner')
+      .leftJoinAndSelect('library.tags', 'tags')
+      .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
+      .leftJoinAndSelect('libraryBooks.book', 'book')
+      .where('library.ownerId = :ownerId', { ownerId: userId });
+
+    if (!isOwn) {
+      qb.andWhere('library.isPublic = :isPublic', { isPublic: true });
+    }
+
+    const libraries = await qb.getMany();
+
+    return Promise.all(
+      libraries.map(async (library) => {
+        const isSubscribed = requestingUserId
+          ? await this.isUserSubscribed(requestingUserId, library.id)
+          : false;
+
+        // 미리보기용 책 - 최근 추가된 3권으로 제한
+        const previewBooks = library.libraryBooks
+          ? library.libraryBooks
+              .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+              .slice(0, 3)
+              .map((libraryBook) => ({
+                id: libraryBook.book.id,
+                title: libraryBook.book.title,
+                author: libraryBook.book.author,
+                coverImage: libraryBook.book.coverImage,
+                isbn: libraryBook.book.isbn,
+                publisher: libraryBook.book.publisher,
+              }))
+          : [];
+
+        return {
+          id: library.id,
+          name: library.name,
+          description: library.description,
+          isPublic: library.isPublic,
+          subscriberCount: library.subscriberCount,
+          owner: {
+            id: library.owner.id,
+            username: library.owner.username,
+            email: library.owner.email,
+          },
+          tags: library.tags
+            ? library.tags.map((tag) => ({
+                id: tag.id,
+                name: tag.name,
+                libraryId: tag.libraryId,
+                createdAt: tag.createdAt,
+              }))
+            : [],
+          bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
+          previewBooks,
+          isSubscribed,
+          createdAt: library.createdAt,
+          updatedAt: library.updatedAt,
+        };
+      }),
+    );
   }
 
   // 사용자가 구독한 서재 목록 조회
   async findSubscribedLibraries(
     userId: number,
   ): Promise<LibraryListResponseDto[]> {
+    const user = await this.userService.findOne(userId);
+
+    if (!user) {
+      throw new NotFoundException(`사용자 ID ${userId}를 찾을 수 없습니다.`);
+    }
+
+    // 구독 중인 라이브러리 ID 목록 가져오기
     const subscriptions = await this.librarySubscriptionRepository.find({
       where: { subscriberId: userId },
-      relations: [
-        'library',
-        'library.owner',
-        'library.tags',
-        'library.libraryBooks',
-      ],
+      relations: ['library'],
     });
 
-    return subscriptions.map((subscription) => {
-      const library = subscription.library;
-      return {
-        id: library.id,
-        name: library.name,
-        description: library.description,
-        isPublic: library.isPublic,
-        subscriberCount: library.subscriberCount,
-        bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
-        owner: {
-          id: library.owner.id,
-          username: library.owner.username,
-          email: library.owner.email,
-        },
-        tags: library.tags
-          ? library.tags.map((tag) => ({
-              id: tag.id,
-              name: tag.name,
-              libraryId: tag.libraryId,
-              createdAt: tag.createdAt,
-            }))
-          : [],
-        isSubscribed: true,
-        createdAt: library.createdAt,
-      };
-    });
-  }
+    // 구독 중인 서재가 없으면 빈 배열 반환
+    if (!subscriptions || subscriptions.length === 0) {
+      return [];
+    }
 
-  // 특정 서재 상세 조회
-  async findOne(id: number, userId?: number): Promise<LibraryResponseDto> {
-    const library = await this.libraryRepository.findOne({
-      where: { id },
+    // 서재 ID 목록
+    const libraryIds = subscriptions.map((sub) => sub.libraryId);
+
+    // 서재 정보 가져오기 (공개 서재만)
+    const libraries = await this.libraryRepository.find({
+      where: {
+        id: In(libraryIds),
+        isPublic: true,
+      },
       relations: ['owner', 'tags', 'libraryBooks', 'libraryBooks.book'],
     });
 
+    return Promise.all(
+      libraries.map(async (library) => {
+        // 미리보기용 책 - 최근 추가된 3권으로 제한
+        const previewBooks = library.libraryBooks
+          ? library.libraryBooks
+              .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+              .slice(0, 3)
+              .map((libraryBook) => ({
+                id: libraryBook.book.id,
+                title: libraryBook.book.title,
+                author: libraryBook.book.author,
+                coverImage: libraryBook.book.coverImage,
+                isbn: libraryBook.book.isbn,
+                publisher: libraryBook.book.publisher,
+              }))
+          : [];
+
+        return {
+          id: library.id,
+          name: library.name,
+          description: library.description,
+          isPublic: library.isPublic,
+          subscriberCount: library.subscriberCount,
+          owner: {
+            id: library.owner.id,
+            username: library.owner.username,
+            email: library.owner.email,
+          },
+          tags: library.tags
+            ? library.tags.map((tag) => ({
+                id: tag.id,
+                name: tag.name,
+                libraryId: tag.libraryId,
+                createdAt: tag.createdAt,
+              }))
+            : [],
+          bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
+          previewBooks,
+          isSubscribed: true, // 구독 중인 서재들이므로 true
+          createdAt: library.createdAt,
+          updatedAt: library.updatedAt,
+        };
+      }),
+    );
+  }
+
+  // 특정 서재 상세 조회
+  async findOne(
+    id: number,
+    userId?: number,
+  ): Promise<LibraryDetailResponseDto> {
+    const library = await this.libraryRepository.findOne({
+      where: { id },
+      relations: [
+        'owner',
+        'libraryBooks',
+        'libraryBooks.book',
+        'tags',
+        'subscriptions',
+        'subscriptions.subscriber',
+      ],
+    });
+
     if (!library) {
-      throw new NotFoundException(`서재 ID ${id}를 찾을 수 없습니다.`);
+      throw new NotFoundException(`Library with ID ${id} not found`);
     }
 
-    // 비공개 서재일 경우 소유자만 접근 가능
-    if (!library.isPublic && (!userId || library.ownerId !== userId)) {
-      throw new ForbiddenException('이 서재에 접근할 권한이 없습니다.');
+    // Check if the user is subscribed to this library
+    let isSubscribed = false;
+    if (userId) {
+      const subscription = await this.librarySubscriptionRepository.findOne({
+        where: {
+          libraryId: id,
+          subscriberId: userId,
+        },
+      });
+      isSubscribed = !!subscription;
     }
 
-    const isSubscribed = userId
-      ? await this.isUserSubscribed(userId, id)
-      : false;
+    const libraryBooks = library.libraryBooks.map((libraryBook) => {
+      return {
+        id: libraryBook.id,
+        bookId: libraryBook.bookId,
+        libraryId: libraryBook.libraryId,
+        note: libraryBook.note,
+        book: {
+          id: libraryBook.book.id,
+          title: libraryBook.book.title,
+          author: libraryBook.book.author,
+          isbn: libraryBook.book.isbn,
+          coverImage: libraryBook.book.coverImage,
+          publisher: libraryBook.book.publisher,
+        },
+        createdAt: libraryBook.createdAt,
+      };
+    });
 
     return {
       id: library.id,
       name: library.name,
       description: library.description,
       isPublic: library.isPublic,
-      subscriberCount: library.subscriberCount,
       owner: {
         id: library.owner.id,
         username: library.owner.username,
         email: library.owner.email,
       },
-      books: library.libraryBooks
-        ? library.libraryBooks.map((libraryBook) => ({
-            id: libraryBook.id,
-            bookId: libraryBook.bookId,
-            libraryId: libraryBook.libraryId,
-            note: libraryBook.note,
-            book: {
-              id: libraryBook.book.id,
-              title: libraryBook.book.title,
-              author: libraryBook.book.author,
-              coverImage: libraryBook.book.coverImage,
-              isbn: libraryBook.book.isbn,
-              publisher: libraryBook.book.publisher,
-            },
-            createdAt: libraryBook.createdAt,
-          }))
-        : [],
-      tags: library.tags
-        ? library.tags.map((tag) => ({
-            id: tag.id,
-            name: tag.name,
-            libraryId: tag.libraryId,
-            createdAt: tag.createdAt,
-          }))
-        : [],
+      books: libraryBooks,
+      tags: library.tags?.map((tag) => ({
+        id: tag.id,
+        name: tag.name,
+        libraryId: tag.libraryId,
+        createdAt: tag.createdAt,
+      })),
       isSubscribed,
+      subscriberCount: library.subscriptions?.length || 0,
       createdAt: library.createdAt,
       updatedAt: library.updatedAt,
     };
@@ -558,23 +663,17 @@ export class LibraryService {
   }
 
   // 서재의 구독자 목록 조회
-  async getLibrarySubscribers(
-    libraryId: number,
-  ): Promise<SubscriberResponseDto[]> {
+  async getLibrarySubscribers(id: number): Promise<SubscriberResponseDto[]> {
     const library = await this.libraryRepository.findOne({
-      where: { id: libraryId },
+      where: { id },
+      relations: ['subscriptions', 'subscriptions.subscriber'],
     });
 
     if (!library) {
-      throw new NotFoundException(`서재 ID ${libraryId}를 찾을 수 없습니다.`);
+      throw new NotFoundException(`Library with ID ${id} not found`);
     }
 
-    const subscriptions = await this.librarySubscriptionRepository.find({
-      where: { libraryId },
-      relations: ['subscriber'],
-    });
-
-    return subscriptions.map((subscription) => ({
+    return library.subscriptions.map((subscription) => ({
       id: subscription.subscriber.id,
       username: subscription.subscriber.username,
       email: subscription.subscriber.email,

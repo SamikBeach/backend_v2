@@ -22,6 +22,5 @@ import { UserModule } from '../user/user.module';
   ],
   controllers: [LibraryController],
   providers: [LibraryService],
-  exports: [LibraryService],
 })
 export class LibraryModule {}

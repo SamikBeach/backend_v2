@@ -7,7 +7,6 @@ import {
   Param,
   Delete,
   Query,
-  UseGuards,
   ParseIntPipe,
 } from '@nestjs/common';
 import { LibraryService } from './library.service';
@@ -15,7 +14,6 @@ import { CreateLibraryDto } from './dto/create-library.dto';
 import { UpdateLibraryDto } from './dto/update-library.dto';
 import { AddBookToLibraryDto } from './dto/add-book-to-library.dto';
 import { AddTagToLibraryDto } from './dto/add-tag-to-library.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
@@ -25,7 +23,6 @@ export class LibraryController {
   constructor(private readonly libraryService: LibraryService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
   create(@GetUser() user: User, @Body() createLibraryDto: CreateLibraryDto) {
     return this.libraryService.create(user.id, createLibraryDto);
   }
@@ -49,7 +46,6 @@ export class LibraryController {
   }
 
   @Get('subscribed')
-  @UseGuards(JwtAuthGuard)
   findSubscribedLibraries(@GetUser() user: User) {
     return this.libraryService.findSubscribedLibraries(user.id);
   }
@@ -64,7 +60,6 @@ export class LibraryController {
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard)
   update(
     @Param('id', ParseIntPipe) id: number,
     @GetUser() user: User,
@@ -74,13 +69,11 @@ export class LibraryController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
   remove(@Param('id', ParseIntPipe) id: number, @GetUser() user: User) {
     return this.libraryService.remove(id, user.id);
   }
 
   @Post(':id/books')
-  @UseGuards(JwtAuthGuard)
   addBookToLibrary(
     @Param('id', ParseIntPipe) id: number,
     @GetUser() user: User,
@@ -94,7 +87,6 @@ export class LibraryController {
   }
 
   @Delete(':id/books/:bookId')
-  @UseGuards(JwtAuthGuard)
   removeBookFromLibrary(
     @Param('id', ParseIntPipe) id: number,
     @Param('bookId', ParseIntPipe) bookId: number,
@@ -104,7 +96,6 @@ export class LibraryController {
   }
 
   @Post(':id/tags')
-  @UseGuards(JwtAuthGuard)
   addTagToLibrary(
     @Param('id', ParseIntPipe) id: number,
     @GetUser() user: User,
@@ -114,7 +105,6 @@ export class LibraryController {
   }
 
   @Delete(':id/tags/:tagId')
-  @UseGuards(JwtAuthGuard)
   removeTagFromLibrary(
     @Param('id', ParseIntPipe) id: number,
     @Param('tagId', ParseIntPipe) tagId: number,
@@ -124,7 +114,6 @@ export class LibraryController {
   }
 
   @Post(':id/subscribe')
-  @UseGuards(JwtAuthGuard)
   subscribeToLibrary(
     @Param('id', ParseIntPipe) id: number,
     @GetUser() user: User,
@@ -133,7 +122,6 @@ export class LibraryController {
   }
 
   @Delete(':id/subscribe')
-  @UseGuards(JwtAuthGuard)
   unsubscribeFromLibrary(
     @Param('id', ParseIntPipe) id: number,
     @GetUser() user: User,

@@ -13,14 +13,14 @@ export class LibraryTag {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  name: string;
-
   @ManyToOne(() => Library, (library) => library.tags)
   library: Library;
 
   @Column()
   libraryId: number;
+
+  @Column()
+  name: string;
 
   @CreateDateColumn()
   createdAt: Date;
