@@ -235,8 +235,8 @@ export class BookService {
    * 특정 카테고리의 인기 도서 조회
    * @param categoryId 카테고리 ID
    * @param subcategoryId 서브카테고리 ID (선택)
-   * @param sort 정렬 방식 (rating-desc, reviews-desc, publishDate-desc)
-   * @param timeRange 기간 필터 (all, month, year)
+   * @param sort 정렬 방식 (rating-desc, reviews-desc, publishDate-desc, publishDate-asc, title-asc)
+   * @param timeRange 기간 필터 (all: 전체 기간, today: 오늘, week: 이번 주, month: 이번 달, year: 올해)
    */
   async findPopularBooksByCategory(
     categoryId: number,
@@ -265,18 +265,26 @@ export class BookService {
       const now = new Date();
       let startDate: Date;
 
-      if (timeRange === 'month') {
+      if (timeRange === 'today') {
         startDate = new Date(
           now.getFullYear(),
-          now.getMonth() - 1,
-          now.getDate(),
-        );
-      } else if (timeRange === 'year') {
-        startDate = new Date(
-          now.getFullYear() - 1,
           now.getMonth(),
           now.getDate(),
+          0,
+          0,
+          0,
         );
+      } else if (timeRange === 'week') {
+        // 이번 주의 시작일(월요일)을 계산
+        const dayOfWeek = now.getDay(); // 0: 일요일, 1: 월요일, ..., 6: 토요일
+        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 일요일이면 6, 아니면 현재 요일 - 1
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - diff);
+        startDate.setHours(0, 0, 0, 0);
+      } else if (timeRange === 'month') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (timeRange === 'year') {
+        startDate = new Date(now.getFullYear(), 0, 1);
       }
 
       if (startDate) {
@@ -295,6 +303,12 @@ export class BookService {
       case 'publishDate-desc':
         queryBuilder.orderBy('book.publishDate', 'DESC');
         break;
+      case 'publishDate-asc':
+        queryBuilder.orderBy('book.publishDate', 'ASC');
+        break;
+      case 'title-asc':
+        queryBuilder.orderBy('book.title', 'ASC');
+        break;
       default:
         queryBuilder.orderBy('book.rating', 'DESC');
     }
@@ -305,8 +319,8 @@ export class BookService {
 
   /**
    * 모든 카테고리의 인기 도서 조회
-   * @param sort 정렬 방식 (rating-desc, reviews-desc, publishDate-desc)
-   * @param timeRange 기간 필터 (all, month, year)
+   * @param sort 정렬 방식 (rating-desc, reviews-desc, publishDate-desc, publishDate-asc, title-asc)
+   * @param timeRange 기간 필터 (all: 전체 기간, today: 오늘, week: 이번 주, month: 이번 달, year: 올해)
    */
   async findAllPopularBooks(
     sort: string = 'rating-desc',
@@ -323,18 +337,26 @@ export class BookService {
       const now = new Date();
       let startDate: Date;
 
-      if (timeRange === 'month') {
+      if (timeRange === 'today') {
         startDate = new Date(
           now.getFullYear(),
-          now.getMonth() - 1,
-          now.getDate(),
-        );
-      } else if (timeRange === 'year') {
-        startDate = new Date(
-          now.getFullYear() - 1,
           now.getMonth(),
           now.getDate(),
+          0,
+          0,
+          0,
         );
+      } else if (timeRange === 'week') {
+        // 이번 주의 시작일(월요일)을 계산
+        const dayOfWeek = now.getDay(); // 0: 일요일, 1: 월요일, ..., 6: 토요일
+        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 일요일이면 6, 아니면 현재 요일 - 1
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - diff);
+        startDate.setHours(0, 0, 0, 0);
+      } else if (timeRange === 'month') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (timeRange === 'year') {
+        startDate = new Date(now.getFullYear(), 0, 1);
       }
 
       if (startDate) {
@@ -353,6 +375,12 @@ export class BookService {
       case 'publishDate-desc':
         queryBuilder.orderBy('book.publishDate', 'DESC');
         break;
+      case 'publishDate-asc':
+        queryBuilder.orderBy('book.publishDate', 'ASC');
+        break;
+      case 'title-asc':
+        queryBuilder.orderBy('book.title', 'ASC');
+        break;
       default:
         queryBuilder.orderBy('book.rating', 'DESC');
     }
@@ -365,8 +393,8 @@ export class BookService {
    * 특정 DiscoverCategory에 속한 도서 조회
    * @param discoverCategoryId 발견하기 카테고리 ID
    * @param discoverSubCategoryId 발견하기 서브카테고리 ID (선택)
-   * @param sort 정렬 방식 (rating-desc, reviews-desc, publishDate-desc)
-   * @param timeRange 기간 필터 (all, month, year)
+   * @param sort 정렬 방식 (rating-desc, reviews-desc, publishDate-desc, publishDate-asc, title-asc)
+   * @param timeRange 기간 필터 (all: 전체 기간, today: 오늘, week: 이번 주, month: 이번 달, year: 올해)
    */
   async findByDiscoverCategoryId(
     discoverCategoryId: number,
@@ -406,18 +434,26 @@ export class BookService {
       const now = new Date();
       let startDate: Date;
 
-      if (timeRange === 'month') {
+      if (timeRange === 'today') {
         startDate = new Date(
           now.getFullYear(),
-          now.getMonth() - 1,
-          now.getDate(),
-        );
-      } else if (timeRange === 'year') {
-        startDate = new Date(
-          now.getFullYear() - 1,
           now.getMonth(),
           now.getDate(),
+          0,
+          0,
+          0,
         );
+      } else if (timeRange === 'week') {
+        // 이번 주의 시작일(월요일)을 계산
+        const dayOfWeek = now.getDay(); // 0: 일요일, 1: 월요일, ..., 6: 토요일
+        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 일요일이면 6, 아니면 현재 요일 - 1
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - diff);
+        startDate.setHours(0, 0, 0, 0);
+      } else if (timeRange === 'month') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (timeRange === 'year') {
+        startDate = new Date(now.getFullYear(), 0, 1);
       }
 
       if (startDate) {
@@ -436,6 +472,12 @@ export class BookService {
       case 'publishDate-desc':
         queryBuilder.orderBy('book.publishDate', 'DESC');
         break;
+      case 'publishDate-asc':
+        queryBuilder.orderBy('book.publishDate', 'ASC');
+        break;
+      case 'title-asc':
+        queryBuilder.orderBy('book.title', 'ASC');
+        break;
       default:
         queryBuilder.orderBy('book.rating', 'DESC');
     }
@@ -447,8 +489,8 @@ export class BookService {
   /**
    * 특정 DiscoverSubCategory에 속한 도서 조회
    * @param discoverSubCategoryId 발견하기 서브카테고리 ID
-   * @param sort 정렬 방식 (rating-desc, reviews-desc, publishDate-desc)
-   * @param timeRange 기간 필터 (all, month, year)
+   * @param sort 정렬 방식 (rating-desc, reviews-desc, publishDate-desc, publishDate-asc, title-asc)
+   * @param timeRange 기간 필터 (all: 전체 기간, today: 오늘, week: 이번 주, month: 이번 달, year: 올해)
    */
   async findByDiscoverSubCategoryId(
     discoverSubCategoryId: number,
@@ -482,18 +524,26 @@ export class BookService {
       const now = new Date();
       let startDate: Date;
 
-      if (timeRange === 'month') {
+      if (timeRange === 'today') {
         startDate = new Date(
           now.getFullYear(),
-          now.getMonth() - 1,
-          now.getDate(),
-        );
-      } else if (timeRange === 'year') {
-        startDate = new Date(
-          now.getFullYear() - 1,
           now.getMonth(),
           now.getDate(),
+          0,
+          0,
+          0,
         );
+      } else if (timeRange === 'week') {
+        // 이번 주의 시작일(월요일)을 계산
+        const dayOfWeek = now.getDay(); // 0: 일요일, 1: 월요일, ..., 6: 토요일
+        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 일요일이면 6, 아니면 현재 요일 - 1
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - diff);
+        startDate.setHours(0, 0, 0, 0);
+      } else if (timeRange === 'month') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (timeRange === 'year') {
+        startDate = new Date(now.getFullYear(), 0, 1);
       }
 
       if (startDate) {
@@ -511,6 +561,12 @@ export class BookService {
         break;
       case 'publishDate-desc':
         queryBuilder.orderBy('book.publishDate', 'DESC');
+        break;
+      case 'publishDate-asc':
+        queryBuilder.orderBy('book.publishDate', 'ASC');
+        break;
+      case 'title-asc':
+        queryBuilder.orderBy('book.title', 'ASC');
         break;
       default:
         queryBuilder.orderBy('book.rating', 'DESC');
@@ -581,8 +637,8 @@ export class BookService {
 
   /**
    * 모든 Discover 도서 조회
-   * @param sort 정렬 방식 (rating-desc, reviews-desc, publishDate-desc)
-   * @param timeRange 기간 필터 (all, month, year)
+   * @param sort 정렬 방식 (rating-desc, reviews-desc, publishDate-desc, publishDate-asc, title-asc)
+   * @param timeRange 기간 필터 (all: 전체 기간, today: 오늘, week: 이번 주, month: 이번 달, year: 올해)
    */
   async findAllDiscoverBooks(
     sort: string = 'rating-desc',
@@ -602,18 +658,26 @@ export class BookService {
       const now = new Date();
       let startDate: Date;
 
-      if (timeRange === 'month') {
+      if (timeRange === 'today') {
         startDate = new Date(
           now.getFullYear(),
-          now.getMonth() - 1,
-          now.getDate(),
-        );
-      } else if (timeRange === 'year') {
-        startDate = new Date(
-          now.getFullYear() - 1,
           now.getMonth(),
           now.getDate(),
+          0,
+          0,
+          0,
         );
+      } else if (timeRange === 'week') {
+        // 이번 주의 시작일(월요일)을 계산
+        const dayOfWeek = now.getDay(); // 0: 일요일, 1: 월요일, ..., 6: 토요일
+        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 일요일이면 6, 아니면 현재 요일 - 1
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - diff);
+        startDate.setHours(0, 0, 0, 0);
+      } else if (timeRange === 'month') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (timeRange === 'year') {
+        startDate = new Date(now.getFullYear(), 0, 1);
       }
 
       if (startDate) {
@@ -631,6 +695,12 @@ export class BookService {
         break;
       case 'publishDate-desc':
         queryBuilder.orderBy('book.publishDate', 'DESC');
+        break;
+      case 'publishDate-asc':
+        queryBuilder.orderBy('book.publishDate', 'ASC');
+        break;
+      case 'title-asc':
+        queryBuilder.orderBy('book.title', 'ASC');
         break;
       default:
         queryBuilder.orderBy('book.rating', 'DESC');

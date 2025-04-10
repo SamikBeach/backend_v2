@@ -208,4 +208,12 @@ export class BookController {
   ): Promise<Book> {
     return this.bookService.removeBookFromDiscoverCategory(bookId);
   }
+
+  @Patch('discover/:id')
+  async setBookDiscoverStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('isDiscovered') isDiscovered: boolean,
+  ): Promise<Book> {
+    return this.bookService.setBookAsDiscovered(id, isDiscovered);
+  }
 }

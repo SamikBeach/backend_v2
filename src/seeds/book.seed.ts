@@ -29,6 +29,7 @@ async function bootstrap() {
       categoryId: 1, // 철학
       subcategoryId: 1, // 서양철학
       isFeatured: true,
+      isDiscovered: true, // Discovered 도서로 설정
     },
     {
       title: '논어',
@@ -46,6 +47,7 @@ async function bootstrap() {
       categoryId: 1, // 철학
       subcategoryId: 2, // 동양철학
       isFeatured: true,
+      isDiscovered: true, // Discovered 도서로 설정
     },
     {
       title: '홍길동전',
@@ -63,6 +65,7 @@ async function bootstrap() {
       categoryId: 2, // 문학
       subcategoryId: 3, // 한국문학
       isFeatured: true,
+      isDiscovered: true, // Discovered 도서로 설정
     },
     {
       title: '1984',
@@ -80,6 +83,7 @@ async function bootstrap() {
       categoryId: 2, // 문학
       subcategoryId: 4, // 외국문학
       isFeatured: true,
+      isDiscovered: true, // Discovered 도서로 설정
     },
     {
       title: '조선왕조실록',
@@ -97,6 +101,7 @@ async function bootstrap() {
       categoryId: 3, // 역사
       subcategoryId: 5, // 한국사
       isFeatured: true,
+      isDiscovered: true, // Discovered 도서로 설정
     },
     {
       title: '로마인의 이야기',
@@ -114,6 +119,7 @@ async function bootstrap() {
       categoryId: 3, // 역사
       subcategoryId: 6, // 서양사
       isFeatured: true,
+      isDiscovered: true, // Discovered 도서로 설정
     },
     {
       title: '민주주의론',
@@ -131,6 +137,7 @@ async function bootstrap() {
       categoryId: 4, // 정치
       subcategoryId: 7, // 정치학
       isFeatured: true,
+      isDiscovered: true, // Discovered 도서로 설정
     },
     {
       title: '국부론',
@@ -148,6 +155,7 @@ async function bootstrap() {
       categoryId: 5, // 경제
       subcategoryId: 8, // 경제이론
       isFeatured: true,
+      isDiscovered: true, // Discovered 도서로 설정
     },
     {
       title: '사회계약론',
@@ -165,6 +173,7 @@ async function bootstrap() {
       categoryId: 4, // 정치
       subcategoryId: 9, // 정치철학
       isFeatured: true,
+      isDiscovered: true, // Discovered 도서로 설정
     },
     {
       title: '자본론',
@@ -182,6 +191,7 @@ async function bootstrap() {
       categoryId: 5, // 경제
       subcategoryId: 8, // 경제이론
       isFeatured: true,
+      isDiscovered: true, // Discovered 도서로 설정
     },
     {
       title: '사회학적 상상력',
