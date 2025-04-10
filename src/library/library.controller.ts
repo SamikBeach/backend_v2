@@ -134,4 +134,13 @@ export class LibraryController {
   getLibrarySubscribers(@Param('id', ParseIntPipe) id: number) {
     return this.libraryService.getLibrarySubscribers(id);
   }
+
+  @Get(':id/updates')
+  @IsPublic()
+  getLibraryUpdates(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('limit') limit?: string,
+  ) {
+    return this.libraryService.getRecentUpdates(id, limit ? +limit : 5);
+  }
 }

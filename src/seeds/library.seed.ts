@@ -1,25 +1,25 @@
 import { NestFactory } from '@nestjs/core';
-import { Logger } from '@nestjs/common';
 import { AppModule } from '../app.module';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { Library } from '../library/entities/library.entity';
-import { LibraryTag } from '../library/entities/library-tag.entity';
 import { LibraryBook } from '../library/entities/library-book.entity';
+import { LibraryTag } from '../library/entities/library-tag.entity';
 import { LibrarySubscription } from '../library/entities/library-subscription.entity';
 import { User } from '../user/entities/user.entity';
 import { Book } from '../book/entities/book.entity';
-import { Repository } from 'typeorm';
-import { getRepositoryToken } from '@nestjs/typeorm';
-
-interface TagSeed {
-  name: string;
-}
+import { Logger } from '@nestjs/common';
+import { LibraryService } from '../library/library.service';
+import { CreateLibraryDto } from '../library/dto/create-library.dto';
+import { AddBookToLibraryDto } from '../library/dto/add-book-to-library.dto';
+import { AddTagToLibraryDto } from '../library/dto/add-tag-to-library.dto';
 
 interface LibrarySeed {
   name: string;
   description: string;
   isPublic: boolean;
-  tags: TagSeed[];
-  bookCount: number; // 시드에 추가할 책 수
+  tags: string[];
+  bookIds: number[];
 }
 
 async function bootstrap() {
@@ -27,173 +27,129 @@ async function bootstrap() {
   const logger = new Logger('LibrarySeed');
 
   try {
-    logger.log('라이브러리 초기 데이터 생성 시작...');
-
-    // 라이브러리를 생성하기 위해 필요한 데이터 가져오기
-    const userRepository = app.get<Repository<User>>(getRepositoryToken(User));
-    const bookRepository = app.get<Repository<Book>>(getRepositoryToken(Book));
+    // Get repositories
     const libraryRepository = app.get<Repository<Library>>(
       getRepositoryToken(Library),
     );
-    const libraryTagRepository = app.get<Repository<LibraryTag>>(
-      getRepositoryToken(LibraryTag),
-    );
-    const libraryBookRepository = app.get<Repository<LibraryBook>>(
-      getRepositoryToken(LibraryBook),
-    );
-    const librarySubscriptionRepository = app.get<
-      Repository<LibrarySubscription>
-    >(getRepositoryToken(LibrarySubscription));
+    const userRepository = app.get<Repository<User>>(getRepositoryToken(User));
+    const bookRepository = app.get<Repository<Book>>(getRepositoryToken(Book));
+    const libraryService = app.get(LibraryService);
 
-    // 기존 라이브러리 데이터 확인
+    // Check if there are already libraries
     const existingLibraries = await libraryRepository.count();
     if (existingLibraries > 0) {
-      logger.log(
-        `이미 ${existingLibraries}개의 라이브러리가 존재합니다. 시드 작업을 건너뜁니다.`,
-      );
+      logger.log('Libraries already exist. Skipping seed.');
       await app.close();
       return;
     }
 
-    // 라이브러리 생성에 사용할 사용자 조회 (첫 번째 사용자)
-    const users = await userRepository.find({ take: 3 });
+    // Check if there are users
+    const users = await userRepository.find({ take: 5 });
     if (users.length === 0) {
-      logger.error(
-        '시드 데이터를 생성할 사용자가 없습니다. 먼저 사용자를 생성해주세요.',
-      );
+      logger.log('No users found. Please seed users first.');
       await app.close();
       return;
     }
 
-    // 라이브러리에 추가할 책 조회
-    const books = await bookRepository.find({ take: 30 });
+    // Check if there are books
+    const books = await bookRepository.find();
     if (books.length === 0) {
-      logger.error(
-        '시드 데이터를 생성할 책이 없습니다. 먼저 책을 생성해주세요.',
-      );
+      logger.log('No books found. Please seed books first.');
       await app.close();
       return;
     }
 
-    // 라이브러리 샘플 데이터
-    const libraries: LibrarySeed[] = [
-      {
-        name: '철학 명저 모음',
-        description: '철학 분야의 고전적인 명저들을 모아둔 라이브러리입니다.',
-        isPublic: true,
-        tags: [
-          { name: '철학' },
-          { name: '고전' },
-          { name: '서양철학' },
-          { name: '동양철학' },
-        ],
-        bookCount: 5,
-      },
-      {
-        name: '문학 컬렉션',
-        description: '세계 문학의 주요 작품들을 모아둔 개인 컬렉션입니다.',
-        isPublic: true,
-        tags: [
-          { name: '문학' },
-          { name: '소설' },
-          { name: '시' },
-          { name: '고전문학' },
-        ],
-        bookCount: 7,
-      },
-      {
-        name: '역사 탐구',
-        description: '역사 관련 주요 도서들을 정리해 둔 라이브러리입니다.',
-        isPublic: false,
-        tags: [{ name: '역사' }, { name: '세계사' }, { name: '한국사' }],
-        bookCount: 4,
-      },
-      {
-        name: '과학 교양서',
-        description: '과학 관련 교양서적을 모아둔 컬렉션입니다.',
-        isPublic: true,
-        tags: [
-          { name: '과학' },
-          { name: '물리학' },
-          { name: '생물학' },
-          { name: '교양' },
-        ],
-        bookCount: 6,
-      },
-    ];
+    logger.log('Starting library seed...');
 
-    // 각 사용자별로 라이브러리 생성
-    for (let i = 0; i < Math.min(users.length, libraries.length); i++) {
-      const user = users[i];
-      const librarySeed = libraries[i];
+    const bookIds = books.map((book) => book.id);
+    const getRandomBookIds = (count: number): number[] => {
+      const shuffled = [...bookIds].sort(() => 0.5 - Math.random());
+      return shuffled.slice(0, count);
+    };
+
+    // Create library seeds for the first 5 users
+    for (const user of users) {
+      const libraryCount = Math.floor(Math.random() * 2) + 2; // 2-3 libraries per user
 
       logger.log(
-        `${user.email} 사용자를 위한 '${librarySeed.name}' 라이브러리 생성 중...`,
+        `Creating ${libraryCount} libraries for user ${user.username || user.email}`,
       );
 
-      // 1. 라이브러리 생성
-      const library = libraryRepository.create({
-        name: librarySeed.name,
-        description: librarySeed.description,
-        isPublic: librarySeed.isPublic,
-        owner: user,
-        ownerId: user.id,
-      });
+      for (let i = 0; i < libraryCount; i++) {
+        // Create a library
+        const isPublic = Math.random() > 0.3; // 70% chance of being public
+        const libraryData: CreateLibraryDto = {
+          name: `${user.username || 'User'}'s Library ${i + 1}`,
+          description: `A collection of books curated by ${user.username || user.email}`,
+          isPublic,
+        };
 
-      const savedLibrary = await libraryRepository.save(library);
+        // Create library with correct parameter order: userId, createLibraryDto
+        const library = await libraryService.create(user.id, libraryData);
+        logger.log(`Created library: ${library.name}`);
 
-      // 2. 라이브러리 태그 생성
-      for (const tagSeed of librarySeed.tags) {
-        const tag = libraryTagRepository.create({
-          name: tagSeed.name,
-          library: savedLibrary,
-          libraryId: savedLibrary.id,
-        });
-        await libraryTagRepository.save(tag);
-      }
+        // Add random tags (1-3 tags)
+        const tagCount = Math.floor(Math.random() * 3) + 1;
+        const tags = [
+          'Fiction',
+          'Non-Fiction',
+          'Fantasy',
+          'Science',
+          'History',
+          'Biography',
+          'Self-Help',
+          'Business',
+        ];
+        const shuffledTags = [...tags].sort(() => 0.5 - Math.random());
+        const selectedTags = shuffledTags.slice(0, tagCount);
 
-      // 3. 라이브러리에 책 추가
-      const booksToAdd = books.slice(0, librarySeed.bookCount);
-      for (const book of booksToAdd) {
-        const libraryBook = libraryBookRepository.create({
-          library: savedLibrary,
-          libraryId: savedLibrary.id,
-          book,
-          bookId: book.id,
-          note: `${book.title}에 대한 메모입니다.`,
-        });
-        await libraryBookRepository.save(libraryBook);
-      }
-
-      // 4. 다른 사용자가 이 라이브러리를 구독하도록 설정
-      if (librarySeed.isPublic) {
-        // 주인을 제외한 다른 사용자들을 구독자로 추가
-        for (const otherUser of users.filter((u) => u.id !== user.id)) {
-          const subscription = librarySubscriptionRepository.create({
-            library: savedLibrary,
-            libraryId: savedLibrary.id,
-            subscriber: otherUser,
-            subscriberId: otherUser.id,
-          });
-          await librarySubscriptionRepository.save(subscription);
-
-          // 구독자 수 업데이트
-          savedLibrary.subscriberCount += 1;
+        for (const tag of selectedTags) {
+          const tagDto: AddTagToLibraryDto = { name: tag };
+          // Add tag with correct parameter order: libraryId, userId, tagDto
+          await libraryService.addTagToLibrary(library.id, user.id, tagDto);
+          logger.log(`Added tag ${tag} to library ${library.name}`);
         }
 
-        // 구독자 수 저장
-        await libraryRepository.save(savedLibrary);
-      }
+        // Add random books (3-8 books)
+        const randomBookCount = Math.floor(Math.random() * 6) + 3;
+        const randomBookIds = getRandomBookIds(randomBookCount);
 
-      logger.log(
-        `'${librarySeed.name}' 라이브러리 생성 완료 (책: ${librarySeed.bookCount}권, 태그: ${librarySeed.tags.length}개)`,
-      );
+        for (const bookId of randomBookIds) {
+          const bookDto: AddBookToLibraryDto = {
+            bookId: bookId,
+            note: Math.random() > 0.5 ? `Note for book ${bookId}` : undefined,
+          };
+          // Add book with correct parameter order: libraryId, userId, bookDto
+          await libraryService.addBookToLibrary(library.id, user.id, bookDto);
+          logger.log(`Added book ${bookId} to library ${library.name}`);
+        }
+
+        // If public, add random subscribers (0-3 subscribers, excluding owner)
+        if (isPublic) {
+          const potentialSubscribers = users.filter((u) => u.id !== user.id);
+          const subscriberCount = Math.min(
+            Math.floor(Math.random() * 4),
+            potentialSubscribers.length,
+          );
+          const shuffledUsers = [...potentialSubscribers].sort(
+            () => 0.5 - Math.random(),
+          );
+          const subscribers = shuffledUsers.slice(0, subscriberCount);
+
+          for (const subscriber of subscribers) {
+            // Subscribe with correct parameter order: libraryId, userId
+            await libraryService.subscribeToLibrary(subscriber.id, library.id);
+            logger.log(
+              `User ${subscriber.username || subscriber.email} subscribed to library ${library.name}`,
+            );
+          }
+        }
+      }
     }
 
-    logger.log('라이브러리 초기 데이터 생성 완료!');
+    logger.log('Library seed completed successfully!');
   } catch (error) {
-    logger.error(`라이브러리 초기화 중 오류: ${error.message}`);
-    logger.error(error.stack);
+    logger.error('Error during library seed:', error);
   } finally {
     await app.close();
   }

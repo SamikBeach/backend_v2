@@ -11,6 +11,7 @@ import { Library } from './entities/library.entity';
 import { LibraryBook } from './entities/library-book.entity';
 import { LibraryTag } from './entities/library-tag.entity';
 import { LibrarySubscription } from './entities/library-subscription.entity';
+import { LibraryUpdateHistory } from './entities/library-update-history.entity';
 import { CreateLibraryDto } from './dto/create-library.dto';
 import { UpdateLibraryDto } from './dto/update-library.dto';
 import { AddBookToLibraryDto } from './dto/add-book-to-library.dto';
@@ -23,6 +24,7 @@ import {
   LibraryTagResponseDto,
   SubscriberResponseDto,
   LibraryDetailResponseDto,
+  UpdateHistoryItem,
 } from './dto/library-response.dto';
 import { UserService } from '../user/user.service';
 import { In } from 'typeorm';
@@ -40,6 +42,8 @@ export class LibraryService {
     private readonly libraryTagRepository: Repository<LibraryTag>,
     @InjectRepository(LibrarySubscription)
     private readonly librarySubscriptionRepository: Repository<LibrarySubscription>,
+    @InjectRepository(LibraryUpdateHistory)
+    private readonly libraryUpdateHistoryRepository: Repository<LibraryUpdateHistory>,
     private readonly bookService: BookService,
     private readonly userService: UserService,
   ) {}
@@ -58,6 +62,13 @@ export class LibraryService {
     });
 
     const savedLibrary = await this.libraryRepository.save(library);
+
+    // 서재 생성 이력 추가
+    await this.addUpdateHistory(
+      savedLibrary.id,
+      `서재 "${savedLibrary.name}"가 생성되었습니다.`,
+    );
+
     return this.mapToLibraryResponseDto(savedLibrary);
   }
 
@@ -300,6 +311,7 @@ export class LibraryService {
         'tags',
         'subscriptions',
         'subscriptions.subscriber',
+        'updateHistory',
       ],
     });
 
@@ -337,6 +349,17 @@ export class LibraryService {
       };
     });
 
+    // 최근 업데이트 이력
+    const recentUpdates = library.updateHistory
+      ? library.updateHistory
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+          .slice(0, 5) // 최근 5개만 가져오기
+          .map((update) => ({
+            date: update.createdAt,
+            message: update.message,
+          }))
+      : [];
+
     return {
       id: library.id,
       name: library.name,
@@ -356,6 +379,14 @@ export class LibraryService {
       })),
       isSubscribed,
       subscriberCount: library.subscriptions?.length || 0,
+      subscribers:
+        library.subscriptions?.map((subscription) => ({
+          id: subscription.subscriber.id,
+          username: subscription.subscriber.username,
+          email: subscription.subscriber.email,
+          profileImage: null, // 프로필 이미지가 있다면 추가
+        })) || [],
+      recentUpdates,
       createdAt: library.createdAt,
       updatedAt: library.updatedAt,
     };
@@ -380,8 +411,16 @@ export class LibraryService {
       throw new ForbiddenException('이 서재를 수정할 권한이 없습니다.');
     }
 
+    const oldName = library.name;
     Object.assign(library, updateLibraryDto);
     const updatedLibrary = await this.libraryRepository.save(library);
+
+    // 서재 정보 업데이트 이력 추가
+    let updateMessage = `서재 정보가 업데이트되었습니다.`;
+    if (oldName !== updatedLibrary.name) {
+      updateMessage = `서재 이름이 "${oldName}"에서 "${updatedLibrary.name}"로 변경되었습니다.`;
+    }
+    await this.addUpdateHistory(id, updateMessage);
 
     return this.mapToLibraryResponseDto(updatedLibrary);
   }
@@ -400,10 +439,11 @@ export class LibraryService {
       throw new ForbiddenException('이 서재를 삭제할 권한이 없습니다.');
     }
 
-    // 관련된 libraryBooks, tags, subscriptions 먼저 삭제
+    // 관련된 libraryBooks, tags, subscriptions, updateHistory 먼저 삭제
     await this.libraryBookRepository.delete({ libraryId: id });
     await this.libraryTagRepository.delete({ libraryId: id });
     await this.librarySubscriptionRepository.delete({ libraryId: id });
+    await this.libraryUpdateHistoryRepository.delete({ libraryId: id });
 
     await this.libraryRepository.remove(library);
   }
@@ -450,6 +490,12 @@ export class LibraryService {
 
     const savedLibraryBook = await this.libraryBookRepository.save(libraryBook);
 
+    // 책 추가 이력
+    await this.addUpdateHistory(
+      libraryId,
+      `"${book.title}" 책이 서재에 추가되었습니다.`,
+    );
+
     return {
       id: savedLibraryBook.id,
       bookId: savedLibraryBook.bookId,
@@ -490,13 +536,21 @@ export class LibraryService {
         libraryId,
         bookId,
       },
+      relations: ['book'],
     });
 
     if (!libraryBook) {
       throw new NotFoundException(`해당 책을 서재에서 찾을 수 없습니다.`);
     }
 
+    const bookTitle = libraryBook.book.title;
     await this.libraryBookRepository.remove(libraryBook);
+
+    // 책 제거 이력
+    await this.addUpdateHistory(
+      libraryId,
+      `"${bookTitle}" 책이 서재에서 제거되었습니다.`,
+    );
   }
 
   // 서재에 태그 추가
@@ -536,6 +590,12 @@ export class LibraryService {
     });
 
     const savedLibraryTag = await this.libraryTagRepository.save(libraryTag);
+
+    // 태그 추가 이력
+    await this.addUpdateHistory(
+      libraryId,
+      `"${addTagToLibraryDto.name}" 태그가 서재에 추가되었습니다.`,
+    );
 
     return {
       id: savedLibraryTag.id,
@@ -578,7 +638,14 @@ export class LibraryService {
       );
     }
 
+    const tagName = tag.name;
     await this.libraryTagRepository.remove(tag);
+
+    // 태그 제거 이력
+    await this.addUpdateHistory(
+      libraryId,
+      `"${tagName}" 태그가 서재에서 제거되었습니다.`,
+    );
   }
 
   // 서재 구독하기
@@ -627,6 +694,12 @@ export class LibraryService {
     // 구독자 수 증가
     library.subscriberCount += 1;
     await this.libraryRepository.save(library);
+
+    // 구독 이력
+    await this.addUpdateHistory(
+      libraryId,
+      `${user.username}님이 서재를 구독했습니다.`,
+    );
   }
 
   // 서재 구독 취소하기
@@ -647,12 +720,14 @@ export class LibraryService {
         libraryId,
         subscriberId: userId,
       },
+      relations: ['subscriber'],
     });
 
     if (!subscription) {
       throw new NotFoundException('구독 정보를 찾을 수 없습니다.');
     }
 
+    const userName = subscription.subscriber.username;
     await this.librarySubscriptionRepository.remove(subscription);
 
     // 구독자 수 감소
@@ -660,6 +735,12 @@ export class LibraryService {
       library.subscriberCount -= 1;
       await this.libraryRepository.save(library);
     }
+
+    // 구독 취소 이력
+    await this.addUpdateHistory(
+      libraryId,
+      `${userName}님이 서재 구독을 취소했습니다.`,
+    );
   }
 
   // 서재의 구독자 목록 조회
@@ -677,7 +758,35 @@ export class LibraryService {
       id: subscription.subscriber.id,
       username: subscription.subscriber.username,
       email: subscription.subscriber.email,
+      profileImage: null, // 프로필 이미지가 있다면 추가
     }));
+  }
+
+  // 최근 업데이트 이력 조회
+  async getRecentUpdates(
+    libraryId: number,
+    limit: number = 5,
+  ): Promise<UpdateHistoryItem[]> {
+    const updates = await this.libraryUpdateHistoryRepository.find({
+      where: { libraryId },
+      order: { createdAt: 'DESC' },
+      take: limit,
+    });
+
+    return updates.map((update) => ({
+      date: update.createdAt,
+      message: update.message,
+    }));
+  }
+
+  // 업데이트 이력 추가
+  async addUpdateHistory(libraryId: number, message: string): Promise<void> {
+    const updateHistory = this.libraryUpdateHistoryRepository.create({
+      libraryId,
+      message,
+    });
+
+    await this.libraryUpdateHistoryRepository.save(updateHistory);
   }
 
   // 사용자가 서재를 구독 중인지 확인

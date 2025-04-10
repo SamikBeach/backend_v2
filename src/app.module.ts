@@ -20,6 +20,7 @@ import { Library } from './library/entities/library.entity';
 import { LibraryBook } from './library/entities/library-book.entity';
 import { LibraryTag } from './library/entities/library-tag.entity';
 import { LibrarySubscription } from './library/entities/library-subscription.entity';
+import { LibraryUpdateHistory } from './library/entities/library-update-history.entity';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { LibrarySubscription } from './library/entities/library-subscription.ent
           LibraryBook,
           LibraryTag,
           LibrarySubscription,
+          LibraryUpdateHistory,
         ],
         synchronize: configService.get('NODE_ENV') !== 'production',
         namingStrategy: new SnakeNamingStrategy(),

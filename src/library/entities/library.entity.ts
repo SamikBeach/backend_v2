@@ -11,6 +11,7 @@ import { User } from '../../user/entities/user.entity';
 import { LibraryBook } from './library-book.entity';
 import { LibraryTag } from './library-tag.entity';
 import { LibrarySubscription } from './library-subscription.entity';
+import { LibraryUpdateHistory } from './library-update-history.entity';
 
 @Entity()
 export class Library {
@@ -46,6 +47,12 @@ export class Library {
     (librarySubscription) => librarySubscription.library,
   )
   subscriptions: LibrarySubscription[];
+
+  @OneToMany(
+    () => LibraryUpdateHistory,
+    (updateHistory) => updateHistory.library,
+  )
+  updateHistory: LibraryUpdateHistory[];
 
   @CreateDateColumn()
   createdAt: Date;

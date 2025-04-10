@@ -6,6 +6,7 @@ import { Library } from './entities/library.entity';
 import { LibraryBook } from './entities/library-book.entity';
 import { LibraryTag } from './entities/library-tag.entity';
 import { LibrarySubscription } from './entities/library-subscription.entity';
+import { LibraryUpdateHistory } from './entities/library-update-history.entity';
 import { BookModule } from '../book/book.module';
 import { UserModule } from '../user/user.module';
 
@@ -16,6 +17,7 @@ import { UserModule } from '../user/user.module';
       LibraryBook,
       LibraryTag,
       LibrarySubscription,
+      LibraryUpdateHistory,
     ]),
     BookModule,
     UserModule,

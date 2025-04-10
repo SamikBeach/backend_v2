@@ -33,6 +33,12 @@ export interface SubscriberResponseDto {
   id: number;
   username: string;
   email: string;
+  profileImage?: string;
+}
+
+export interface UpdateHistoryItem {
+  date: Date;
+  message: string;
 }
 
 export interface LibraryResponseDto {
@@ -59,4 +65,6 @@ export interface LibraryDetailResponseDto
   tags: LibraryTagResponseDto[];
   isSubscribed: boolean;
   subscriberCount: number;
+  subscribers: SubscriberResponseDto[];
+  recentUpdates: UpdateHistoryItem[];
 }
