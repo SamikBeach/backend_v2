@@ -41,13 +41,7 @@ async function bootstrap() {
       '도서 데이터 시드',
     );
 
-    // 3. 추천 도서 초기화
-    await runCommand(
-      'NODE_ENV=development ts-node src/seeds/init-featured-books.seed.ts',
-      '추천 도서 초기화',
-    );
-
-    // 4. 발견하기 카테고리 시드
+    // 3. 발견하기 카테고리 시드
     await runCommand(
       'NODE_ENV=development ts-node src/seeds/discover-category.seed.ts',
       '발견하기 카테고리 시드',

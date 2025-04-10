@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { BookService } from '../book/book.service';
+import { DiscoverCategoryService } from '../discover-category/discover-category.service';
 import { Logger } from '@nestjs/common';
 import { CreateBookDto } from '../book/dto/book.dto';
 
@@ -8,6 +9,7 @@ async function bootstrap() {
   const logger = new Logger('BookSeed');
   const app = await NestFactory.createApplicationContext(AppModule);
   const bookService = app.get(BookService);
+  const discoverCategoryService = app.get(DiscoverCategoryService);
 
   // 샘플 도서 데이터
   const books: CreateBookDto[] = [
@@ -288,21 +290,188 @@ async function bootstrap() {
   try {
     logger.log('도서 데이터 초기화 시작...');
 
+    // 도서 저장
     for (const bookData of books) {
       try {
-        logger.log(`'${bookData.title}' 도서 생성 중...`);
-        await bookService.create(bookData);
-        logger.log(`'${bookData.title}' 도서 생성 완료`);
+        const book = await bookService.create(bookData);
+        logger.log(`도서 '${book.title}' 생성 완료 (ID: ${book.id})`);
       } catch (error) {
-        logger.error(
-          `'${bookData.title}' 도서 생성 중 오류 발생: ${error.message}`,
-        );
+        logger.error(`도서 생성 중 오류: ${error.message}`);
       }
     }
 
     logger.log('도서 데이터 초기화 완료!');
+
+    // ==== Featured Books 30개 설정 ====
+    logger.log('Featured 도서 설정 시작...');
+
+    // 모든 카테고리에 대해 featured 도서 설정
+    const categories = [1, 2, 3, 4, 5, 6, 7, 8]; // 철학, 문학, 역사, 정치, 경제, 사회, 과학, 종교
+
+    let featuredCount = 0;
+    for (const categoryId of categories) {
+      try {
+        // 각 카테고리별로 상위 도서를 featured로 설정 (총 30개가 될 때까지)
+        const booksToFeature = await bookService.findByCategoryId(categoryId);
+
+        // 각 카테고리에서 필요한 만큼만 선택
+        const booksNeeded = Math.min(
+          booksToFeature.length,
+          Math.ceil(
+            (30 - featuredCount) /
+              (categories.length - categories.indexOf(categoryId)),
+          ),
+        );
+
+        if (booksNeeded <= 0) break;
+
+        // 선택된 도서를 featured로 설정
+        for (let i = 0; i < booksNeeded && featuredCount < 30; i++) {
+          const book = booksToFeature[i];
+          if (!book.isFeatured) {
+            book.isFeatured = true;
+            await bookService.update(book.id, { isFeatured: true });
+            featuredCount++;
+            logger.log(
+              `도서 '${book.title}'를 Featured로 설정 (${featuredCount}/30)`,
+            );
+          }
+        }
+
+        logger.log(`카테고리 ID ${categoryId}: Featured 도서 설정 완료`);
+      } catch (error) {
+        logger.error(
+          `카테고리 ID ${categoryId} Featured 도서 설정 중 오류: ${error.message}`,
+        );
+      }
+    }
+
+    logger.log(`총 ${featuredCount}개의 Featured 도서 설정 완료!`);
+
+    // ==== isDiscovered만 true인 책 20개 설정 ====
+    logger.log('isDiscovered 도서 설정 시작...');
+
+    // 모든 도서를 가져옴 (Featured가 아닌 도서 우선)
+    const allBooksForDiscovered = await bookService.findAll();
+    const nonFeaturedBooksForDiscovered = allBooksForDiscovered.filter(
+      (book) => !book.isFeatured,
+    );
+    const booksPool = [
+      ...nonFeaturedBooksForDiscovered,
+      ...allBooksForDiscovered.filter((book) => book.isFeatured),
+    ];
+
+    let isDiscoveredCount = 0;
+    // 20개의 도서를 isDiscovered=true로 설정
+    for (let i = 0; i < booksPool.length && isDiscoveredCount < 20; i++) {
+      try {
+        const book = booksPool[i];
+        // 이미 isDiscovered가 true인 경우 스킵
+        if (book.isDiscovered) continue;
+
+        await bookService.setBookAsDiscovered(book.id, true);
+        isDiscoveredCount++;
+        logger.log(
+          `도서 '${book.title}'를 isDiscovered=true로 설정 (${isDiscoveredCount}/20)`,
+        );
+      } catch (error) {
+        logger.error(`도서 isDiscovered 설정 중 오류: ${error.message}`);
+      }
+    }
+
+    logger.log(`총 ${isDiscoveredCount}개의 isDiscovered 도서 설정 완료!`);
+
+    // ==== Discover Books 30개 설정 ====
+    logger.log('Discover 도서 설정 시작...');
+
+    // 발견하기 카테고리 가져오기
+    const discoverCategories =
+      await discoverCategoryService.findAllCategories();
+
+    if (discoverCategories.length === 0) {
+      logger.warn(
+        '발견하기 카테고리가 없습니다. discover-category.seed.ts를 먼저 실행해주세요.',
+      );
+    } else {
+      let discoveredCount = 0;
+
+      // 모든 카테고리의 도서 가져오기 (featured가 아닌 도서 우선)
+      const allBooks = await bookService.findAll();
+      const nonFeaturedBooks = allBooks.filter((book) => !book.isFeatured);
+      const booksToDiscover = [
+        ...nonFeaturedBooks,
+        ...allBooks.filter((book) => book.isFeatured),
+      ];
+
+      // 발견하기 카테고리별로 도서 분배
+      for (
+        let i = 0;
+        i < discoverCategories.length && discoveredCount < 30;
+        i++
+      ) {
+        const discoverCategory = discoverCategories[i];
+
+        // 서브카테고리 가져오기
+        const subCategories =
+          await discoverCategoryService.findSubCategoriesByCategory(
+            discoverCategory.id,
+          );
+
+        // 각 카테고리에 할당할 도서 수 (마지막 카테고리는 나머지 모두)
+        const booksPerCategory =
+          i === discoverCategories.length - 1
+            ? 30 - discoveredCount
+            : Math.ceil(
+                (30 - discoveredCount) / (discoverCategories.length - i),
+              );
+
+        if (booksPerCategory <= 0) break;
+
+        // 각 서브카테고리별로 도서 할당
+        for (let j = 0; j < subCategories.length && discoveredCount < 30; j++) {
+          const subCategory = subCategories[j];
+
+          // 각 서브카테고리에 할당할 도서 수
+          const booksPerSubCategory =
+            j === subCategories.length - 1
+              ? booksPerCategory -
+                Math.floor(discoveredCount % booksPerCategory)
+              : Math.ceil(booksPerCategory / subCategories.length);
+
+          // 도서 할당
+          for (
+            let k = 0;
+            k < booksPerSubCategory && discoveredCount < 30;
+            k++
+          ) {
+            const bookIndex = discoveredCount % booksToDiscover.length;
+            const book = booksToDiscover[bookIndex];
+
+            try {
+              await bookService.addBookToDiscoverCategory(
+                book.id,
+                discoverCategory.id,
+                subCategory.id,
+              );
+              discoveredCount++;
+              logger.log(
+                `도서 '${book.title}'를 Discover 카테고리 '${discoverCategory.name}' > '${subCategory.name}'에 추가 (${discoveredCount}/30)`,
+              );
+            } catch (error) {
+              logger.error(
+                `도서 '${book.title}'를 Discover에 추가 중 오류: ${error.message}`,
+              );
+            }
+          }
+        }
+      }
+
+      logger.log(`총 ${discoveredCount}개의 Discover 도서 설정 완료!`);
+    }
+
+    logger.log('모든 도서 데이터 초기화 및 설정 완료!');
   } catch (error) {
-    logger.error(`도서 초기화 중 오류 발생: ${error.message}`);
+    logger.error(`도서 초기화 중 오류: ${error.message}`);
   } finally {
     await app.close();
   }

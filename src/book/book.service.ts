@@ -639,4 +639,16 @@ export class BookService {
     // 결과 반환
     return queryBuilder.getMany();
   }
+
+  /**
+   * isDiscovered 도서 설정 - 검색/조회를 위한 메서드
+   */
+  async setBookAsDiscovered(
+    id: number,
+    isDiscovered: boolean = true,
+  ): Promise<Book> {
+    const book = await this.findById(id);
+    book.isDiscovered = isDiscovered;
+    return this.bookRepository.save(book);
+  }
 }

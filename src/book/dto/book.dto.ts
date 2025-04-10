@@ -13,6 +13,7 @@ export class BookDto {
   isbn: string;
   isbn13?: string;
   isFeatured?: boolean;
+  isDiscovered?: boolean;
 }
 
 export class CreateBookDto {
@@ -29,6 +30,7 @@ export class CreateBookDto {
   isbn: string;
   isbn13?: string;
   isFeatured?: boolean;
+  isDiscovered?: boolean;
 }
 
 export class UpdateBookDto {
@@ -45,4 +47,5 @@ export class UpdateBookDto {
   isbn?: string;
   isbn13?: string;
   isFeatured?: boolean;
+  isDiscovered?: boolean;
 }

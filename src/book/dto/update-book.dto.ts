@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsNumber } from 'class-validator';
+import { IsOptional, IsString, IsNumber, IsBoolean } from 'class-validator';
 
 export class UpdateBookDto {
   @IsOptional()
@@ -32,4 +32,12 @@ export class UpdateBookDto {
   @IsOptional()
   @IsNumber()
   subcategoryId?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isFeatured?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isDiscovered?: boolean;
 }
