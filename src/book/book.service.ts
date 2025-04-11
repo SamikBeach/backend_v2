@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Book } from './entities/book.entity';
 import { CreateBookDto, UpdateBookDto } from './dto/book.dto';
 import { AladinService } from '../common/services/aladin.service';
@@ -44,6 +44,20 @@ export class BookService {
     }
 
     return book;
+  }
+
+  /**
+   * ID 배열로 여러 도서 조회
+   */
+  async findByIds(ids: number[]): Promise<Book[]> {
+    if (!ids || ids.length === 0) {
+      return [];
+    }
+
+    return this.bookRepository.find({
+      where: { id: In(ids) },
+      relations: ['category', 'subcategory'],
+    });
   }
 
   /**

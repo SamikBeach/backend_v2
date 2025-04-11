@@ -23,6 +23,12 @@ import { LibrarySubscription } from './library/entities/library-subscription.ent
 import { LibraryUpdateHistory } from './library/entities/library-update-history.entity';
 import { TagModule } from './tag/tag.module';
 import { Tag } from './library/entities/tag.entity';
+import { PostModule } from './post/post.module';
+import { Post } from './post/entities/post.entity';
+import { PostImage } from './post/entities/post-image.entity';
+import { PostBook } from './post/entities/post-book.entity';
+import { PostLike } from './post/entities/post-like.entity';
+import { Comment } from './post/entities/comment.entity';
 
 @Module({
   imports: [
@@ -53,6 +59,11 @@ import { Tag } from './library/entities/tag.entity';
           LibrarySubscription,
           LibraryUpdateHistory,
           Tag,
+          Post,
+          PostImage,
+          PostBook,
+          PostLike,
+          Comment,
         ],
         synchronize: true,
         namingStrategy: new SnakeNamingStrategy(),
@@ -66,6 +77,7 @@ import { Tag } from './library/entities/tag.entity';
     DiscoverCategoryModule,
     LibraryModule,
     TagModule,
+    PostModule,
   ],
 })
 export class AppModule implements NestModule {

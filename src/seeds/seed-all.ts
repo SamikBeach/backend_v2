@@ -1,6 +1,5 @@
-import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
-import { AppModule } from '../app.module';
+
 import * as childProcess from 'child_process';
 import * as util from 'util';
 
@@ -40,6 +39,11 @@ async function bootstrap() {
     logger.log('라이브러리 데이터 시드 작업 시작...');
     await exec('yarn seed:library');
     logger.log('라이브러리 데이터 시드 작업 완료!');
+
+    // 7. 게시물 데이터 시드 (사용자 및 책 이후에 실행)
+    logger.log('게시물 데이터 시드 작업 시작...');
+    await exec('yarn seed:post');
+    logger.log('게시물 데이터 시드 작업 완료!');
 
     logger.log('모든 시드 작업이 성공적으로 완료되었습니다! 🎉');
   } catch (error) {
