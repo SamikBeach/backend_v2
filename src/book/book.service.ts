@@ -3,10 +3,19 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Book } from './entities/book.entity';
 import { CreateBookDto, UpdateBookDto } from './dto/book.dto';
-import { AladinService } from '../common/services/aladin.service';
+import {
+  AladinService,
+  AladinBookSearchParams,
+  AladinQueryType,
+  AladinSort,
+  AladinSearchTarget,
+  AladinCover,
+} from '../common/services/aladin.service';
 import { CategoryService } from '../category/category.service';
 import { SubCategoryService } from '../category/subcategory.service';
 import { DiscoverCategoryService } from '../discover-category/discover-category.service';
+import { SearchBookDto } from './dto/search-book.dto';
+import { SearchService } from '../search/search.service';
 
 @Injectable()
 export class BookService {
@@ -19,6 +28,7 @@ export class BookService {
     private readonly categoryService: CategoryService,
     private readonly subCategoryService: SubCategoryService,
     private readonly discoverCategoryService: DiscoverCategoryService,
+    private readonly searchService: SearchService,
   ) {}
 
   /**
@@ -176,33 +186,40 @@ export class BookService {
    */
   async fetchBookDetailsFromAladin(isbn: string): Promise<Book> {
     try {
-      const bookData = await this.aladinService.getBookDetail({ itemId: isbn });
-      const category = await this.categoryService.findOne(
-        Number(bookData.categoryId),
-      );
-
-      if (!category) {
+      const result = await this.aladinService.getBookDetail({ itemId: isbn });
+      if (!result || !result.item || result.item.length === 0) {
         throw new NotFoundException(
-          `Category with ID ${bookData.categoryId} not found`,
+          `Failed to fetch book details for ISBN ${isbn}`,
         );
       }
 
-      const book = this.bookRepository.create({
-        title: bookData.title,
-        author: bookData.author,
-        coverImage: bookData.cover || null,
-        isbn: bookData.isbn,
-        isbn13: bookData.isbn13,
-        publisher: bookData.publisher,
-        publishDate: new Date(bookData.pubDate),
-        rating: parseFloat(bookData.customerReviewRank) || 0,
-        reviews: parseInt(bookData.customerReviewCount) || 0,
-        description: bookData.description,
-        category,
-      });
+      // 첫 번째 아이템 선택
+      const bookItem = result.item[0];
 
-      return this.bookRepository.save(book);
-    } catch {
+      // 기본 카테고리 사용 (추후 매핑 로직 추가 가능)
+      const category = await this.categoryService.findOne(1);
+      if (!category) {
+        throw new NotFoundException(`Category with ID 1 not found`);
+      }
+
+      // 책 데이터 추출
+      const bookData = this.aladinService.extractBookData(bookItem);
+
+      // 새 Book 엔티티 생성
+      const newBook = this.bookRepository.create({
+        ...bookData,
+        category,
+      }) as unknown as Book;
+
+      // 단일 엔티티 저장 시 첫 번째 결과값 반환
+      const savedBook = await (this.bookRepository.save(
+        newBook,
+      ) as unknown as Promise<Book>);
+      return savedBook;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch book details for ISBN ${isbn}: ${error.message}`,
+      );
       throw new NotFoundException(
         `Failed to fetch book details for ISBN ${isbn}`,
       );
@@ -824,5 +841,424 @@ export class BookService {
 
     // 결과에서 빈 카테고리 제외
     return result.filter((item) => item.books.length > 0);
+  }
+
+  /**
+   * 키워드로 도서 검색
+   * @param query 검색 쿼리
+   * @param type 검색 타입 (all, title, author, publisher, isbn)
+   * @param page 페이지 번호
+   * @param limit 페이지당 결과 수
+   */
+  async searchBooks(
+    query: string,
+    type: string = 'Keyword',
+    page: number = 1,
+    limit: number = 10,
+    searchParams: Partial<SearchBookDto> = {},
+  ): Promise<{
+    books: Book[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    try {
+      this.logger.log(`알라딘 API로 도서 검색: ${query}, 타입: ${type}`);
+
+      // 알라딘 API 호출 파라미터 구성
+      const aladinParams: AladinBookSearchParams = {
+        query,
+        queryType: type as AladinQueryType,
+        start: page,
+        maxResults: limit,
+        sort: searchParams.sort as AladinSort,
+        searchTarget: searchParams.searchTarget as AladinSearchTarget,
+        cover: searchParams.cover as AladinCover,
+        categoryId: searchParams.categoryId,
+        outofStockfilter: searchParams.outOfStockFilter ? 1 : 0,
+        recentPublishFilter: searchParams.recentPublishFilter || 0,
+        optResult: searchParams.optResult || ['toc', 'fulldescription'],
+      };
+
+      // 알라딘 API 호출
+      const result = await this.aladinService.searchBooks(aladinParams);
+
+      // 결과가 없는 경우 빈 결과 반환
+      if (!result || !result.item || result.item.length === 0) {
+        return {
+          books: [],
+          total: 0,
+          page,
+          totalPages: 0,
+        };
+      }
+
+      // 검색 결과 처리
+      const books = await Promise.all(
+        result.item.map(async (item) => {
+          // 이미 등록된 책인지 확인
+          let book = await this.findByIsbn(item.isbn13 || item.isbn);
+
+          if (!book) {
+            // 새 책 정보 생성
+            const bookData = this.aladinService.extractBookData(item);
+
+            // 카테고리 처리 (알라딘 카테고리 ID와 매핑 필요)
+            let categoryId = 1; // 기본 카테고리
+            let subcategoryId = null;
+
+            try {
+              const category = await this.categoryService.findOne(categoryId);
+              let subcategory = null;
+
+              if (subcategoryId) {
+                subcategory =
+                  await this.subCategoryService.findOne(subcategoryId);
+              }
+
+              // 새 Book 엔티티 생성
+              const newBook = this.bookRepository.create({
+                ...bookData,
+                category,
+                subcategory,
+              }) as unknown as Book;
+
+              // 단일 엔티티 저장 시 첫 번째 결과값 반환
+              book = await (this.bookRepository.save(
+                newBook,
+              ) as unknown as Promise<Book>);
+            } catch (error) {
+              this.logger.error(`도서 저장 오류: ${error.message}`);
+              // 오류 발생 시 임시 Book 객체 생성
+              const tempBook = this.bookRepository.create(
+                bookData,
+              ) as unknown as Book;
+              book = tempBook;
+            }
+          }
+
+          return book;
+        }),
+      );
+
+      return {
+        books,
+        total: result.totalResults,
+        page,
+        totalPages: Math.ceil(result.totalResults / limit),
+      };
+    } catch (error) {
+      this.logger.error(`도서 검색 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 베스트셀러 도서 검색
+   */
+  async findBestsellers(
+    categoryId?: number,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{
+    books: Book[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    try {
+      // 알라딘 API 호출 파라미터 구성
+      const aladinParams = {
+        queryType: 'Bestseller' as const,
+        start: page,
+        maxResults: limit,
+        cover: 'Big' as const,
+        categoryId: categoryId || 0,
+        searchTarget: 'Book' as const,
+      };
+
+      // 알라딘 API 호출
+      const result = await this.aladinService.getBookList(aladinParams);
+
+      // 결과가 없는 경우 빈 결과 반환
+      if (!result || !result.item || result.item.length === 0) {
+        return {
+          books: [],
+          total: 0,
+          page,
+          totalPages: 0,
+        };
+      }
+
+      // 베스트셀러 처리
+      const books = await Promise.all(
+        result.item.map(async (item) => {
+          // 이미 등록된 책인지 확인
+          let book = await this.findByIsbn(item.isbn13 || item.isbn);
+
+          if (!book) {
+            // 새 책 정보 생성
+            const bookData = this.aladinService.extractBookData(item);
+
+            // 카테고리 처리
+            let categoryId = 1; // 기본 카테고리
+            let subcategoryId = null;
+
+            try {
+              const category = await this.categoryService.findOne(categoryId);
+              let subcategory = null;
+
+              if (subcategoryId) {
+                subcategory =
+                  await this.subCategoryService.findOne(subcategoryId);
+              }
+
+              // 베스트셀러 표시
+              const newBook = this.bookRepository.create({
+                ...bookData,
+                category,
+                subcategory,
+                isFeatured: true,
+              }) as unknown as Book;
+
+              // 단일 엔티티 저장 시 첫 번째 결과값 반환
+              book = await (this.bookRepository.save(
+                newBook,
+              ) as unknown as Promise<Book>);
+            } catch (error) {
+              this.logger.error(`베스트셀러 도서 저장 오류: ${error.message}`);
+              const tempBook = this.bookRepository.create(
+                bookData,
+              ) as unknown as Book;
+              book = tempBook;
+            }
+          }
+
+          return book;
+        }),
+      );
+
+      return {
+        books,
+        total: result.totalResults,
+        page,
+        totalPages: Math.ceil(result.totalResults / limit),
+      };
+    } catch (error) {
+      this.logger.error(`베스트셀러 검색 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 신간 도서 검색
+   */
+  async findNewBooks(
+    categoryId?: number,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{
+    books: Book[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    try {
+      // 알라딘 API 호출 파라미터 구성
+      const aladinParams = {
+        queryType: 'ItemNewAll' as const,
+        start: page,
+        maxResults: limit,
+        cover: 'Big' as const,
+        categoryId: categoryId || 0,
+        searchTarget: 'Book' as const,
+      };
+
+      // 알라딘 API 호출
+      const result = await this.aladinService.getBookList(aladinParams);
+
+      // 결과 처리 (베스트셀러와 유사)
+      if (!result || !result.item || result.item.length === 0) {
+        return {
+          books: [],
+          total: 0,
+          page,
+          totalPages: 0,
+        };
+      }
+
+      const books = await Promise.all(
+        result.item.map(async (item) => {
+          // 이미 등록된 책인지 확인
+          let book = await this.findByIsbn(item.isbn13 || item.isbn);
+
+          if (!book) {
+            // 새 책 정보 생성 및 저장
+            const bookData = this.aladinService.extractBookData(item);
+
+            try {
+              const category = await this.categoryService.findOne(1); // 기본 카테고리
+
+              const newBook = this.bookRepository.create({
+                ...bookData,
+                category,
+              }) as unknown as Book;
+
+              // 단일 엔티티 저장 시 첫 번째 결과값 반환
+              book = await (this.bookRepository.save(
+                newBook,
+              ) as unknown as Promise<Book>);
+            } catch (error) {
+              this.logger.error(`신간 도서 저장 오류: ${error.message}`);
+              const tempBook = this.bookRepository.create(
+                bookData,
+              ) as unknown as Book;
+              book = tempBook;
+            }
+          }
+
+          return book;
+        }),
+      );
+
+      return {
+        books,
+        total: result.totalResults,
+        page,
+        totalPages: Math.ceil(result.totalResults / limit),
+      };
+    } catch (error) {
+      this.logger.error(`신간 도서 검색 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * ISBN으로 도서 상세 정보 조회
+   */
+  async getBookDetailByIsbn(isbn: string): Promise<Book> {
+    // 이미 DB에 있는지 확인
+    let book = await this.findByIsbn(isbn);
+
+    if (book) {
+      return book;
+    }
+
+    try {
+      // 알라딘 API로 도서 정보 가져오기
+      const result = await this.aladinService.getBookDetail({
+        itemId: isbn,
+        itemIdType: isbn.length === 13 ? 'ISBN13' : 'ISBN',
+        cover: 'Big',
+        optResult: [
+          'toc',
+          'authors',
+          'fulldescription',
+          'fullDescription2',
+          'categoryIdList',
+        ],
+      });
+
+      if (!result || !result.item || result.item.length === 0) {
+        throw new NotFoundException(
+          `ISBN ${isbn}으로 도서를 찾을 수 없습니다.`,
+        );
+      }
+
+      const item = result.item[0];
+      const bookData = this.aladinService.extractBookData(item);
+
+      // 카테고리 처리 (기본값 사용)
+      const category = await this.categoryService.findOne(1);
+
+      // 새 Book 엔티티 생성 및 저장
+      const newBook = this.bookRepository.create({
+        ...bookData,
+        category,
+      }) as unknown as Book;
+
+      // 단일 엔티티 저장 시 첫 번째 결과값 반환
+      return await (this.bookRepository.save(
+        newBook,
+      ) as unknown as Promise<Book>);
+    } catch (error) {
+      this.logger.error(`도서 상세 정보 조회 오류: ${error.message}`);
+      throw new NotFoundException(`ISBN ${isbn}으로 도서를 찾을 수 없습니다.`);
+    }
+  }
+
+  /**
+   * 실시간 인기 검색어 조회
+   * @param limit 결과 수
+   */
+  async getPopularSearchTerms(
+    limit: number = 10,
+  ): Promise<{ term: string; count: number }[]> {
+    // 실제 구현에서는 Redis나 DB에서 인기 검색어를 집계해야 합니다.
+    // 현재는 샘플 데이터를 반환합니다.
+    return [
+      { term: '고전문학', count: 2450 },
+      { term: '플라톤', count: 1823 },
+      { term: '논어', count: 1654 },
+      { term: '니체', count: 1342 },
+      { term: '소크라테스', count: 1265 },
+      { term: '도스토예프스키', count: 1132 },
+      { term: '국가', count: 987 },
+      { term: '맹자', count: 854 },
+    ].slice(0, limit);
+  }
+
+  /**
+   * 최근 검색어 조회
+   * @param userId 사용자 ID
+   * @param limit 결과 수
+   */
+  async getRecentSearchTerms(
+    userId: number,
+    limit: number = 5,
+  ): Promise<string[]> {
+    // 실제 구현에서는 Redis나 DB에서 사용자별 최근 검색어를 가져와야 합니다.
+    // 현재는 샘플 데이터를 반환합니다.
+    return ['논어', '국가', '도덕경', '플라톤', '소크라테스'].slice(0, limit);
+  }
+
+  /**
+   * 검색어 저장
+   * @param term 검색어
+   * @param userId 사용자 ID (선택적)
+   * @param bookId 책 ID (선택적)
+   */
+  async saveSearchTerm(
+    term: string,
+    userId?: number,
+    bookId?: number,
+  ): Promise<void> {
+    this.logger.log(
+      `검색어 저장: "${term}" (userId: ${userId || 'anonymous'}, bookId: ${bookId || 'none'})`,
+    );
+
+    if (bookId) {
+      try {
+        // 책 ID가 제공된 경우 해당 책 정보 가져오기
+        const book = await this.findById(bookId);
+
+        // 검색 서비스에 책 정보와 함께 검색어 저장
+        await this.searchService.saveSearchTerm(term, userId, {
+          bookId: book.id,
+          title: book.title,
+          author: book.author,
+          coverImage: book.coverImage,
+          publisher: book.publisher,
+          description: book.description,
+        });
+      } catch (error) {
+        this.logger.error(`책 정보 조회 중 오류: ${error.message}`);
+        // 오류가 발생해도 검색어만이라도 저장
+        await this.searchService.saveSearchTerm(term, userId);
+      }
+    } else {
+      // 책 ID가 없는 경우 검색어만 저장
+      await this.searchService.saveSearchTerm(term, userId);
+    }
   }
 }

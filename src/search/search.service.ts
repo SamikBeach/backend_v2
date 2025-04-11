@@ -1,0 +1,293 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, LessThan } from 'typeorm';
+import { PopularSearch, RecentSearch, SearchLog } from './search.entity';
+
+@Injectable()
+export class SearchService {
+  private readonly logger = new Logger(SearchService.name);
+  private readonly RECENT_SEARCH_MAX_PER_USER = 10; // 사용자당 최대 최근 검색어 수
+
+  constructor(
+    @InjectRepository(SearchLog)
+    private readonly searchLogRepository: Repository<SearchLog>,
+    @InjectRepository(PopularSearch)
+    private readonly popularSearchRepository: Repository<PopularSearch>,
+    @InjectRepository(RecentSearch)
+    private readonly recentSearchRepository: Repository<RecentSearch>,
+  ) {}
+
+  /**
+   * 검색어 저장 (로그, 인기 검색어, 최근 검색어)
+   * @param term 검색어
+   * @param userId 사용자 ID (옵션)
+   * @param bookInfo 선택된 책 정보 (옵션)
+   */
+  async saveSearchTerm(
+    term: string,
+    userId?: number,
+    bookInfo?: {
+      bookId: number;
+      title: string;
+      author: string;
+      coverImage?: string;
+      publisher?: string;
+      description?: string;
+    },
+  ): Promise<void> {
+    try {
+      // 검색어 로그 저장
+      const searchLog = {
+        term,
+        userId,
+      };
+
+      // 책 정보가 있으면 추가
+      if (bookInfo) {
+        Object.assign(searchLog, {
+          bookId: bookInfo.bookId,
+          title: bookInfo.title,
+          author: bookInfo.author,
+          coverImage: bookInfo.coverImage,
+          publisher: bookInfo.publisher,
+          description: bookInfo.description,
+        });
+      }
+
+      await this.searchLogRepository.save(searchLog);
+
+      // 인기 검색어 업데이트
+      await this.updatePopularSearchTerm(term);
+
+      // 로그인한 사용자인 경우 최근 검색어에 추가
+      if (userId) {
+        await this.addRecentSearchTerm(term, userId, bookInfo);
+      }
+    } catch (error) {
+      this.logger.error(`검색어 저장 오류: ${error.message}`);
+    }
+  }
+
+  /**
+   * 인기 검색어 업데이트
+   */
+  private async updatePopularSearchTerm(term: string): Promise<void> {
+    const popularSearch = await this.popularSearchRepository.findOne({
+      where: { term },
+    });
+
+    if (popularSearch) {
+      // 기존 검색어의 카운트 증가
+      popularSearch.count += 1;
+      await this.popularSearchRepository.save(popularSearch);
+    } else {
+      // 새 검색어 추가
+      await this.popularSearchRepository.save({
+        term,
+        count: 1,
+      });
+    }
+  }
+
+  /**
+   * 사용자별 최근 검색어 추가
+   * @param term 검색어
+   * @param userId 사용자 ID
+   * @param bookInfo 책 정보 (선택적)
+   */
+  private async addRecentSearchTerm(
+    term: string,
+    userId: number,
+    bookInfo?: {
+      bookId: number;
+      title: string;
+      author: string;
+      coverImage?: string;
+      publisher?: string;
+      description?: string;
+    },
+  ): Promise<void> {
+    // 이미 존재하는 동일 검색어가 있는지 확인
+    const existingSearch = await this.recentSearchRepository.findOne({
+      where: { userId, term },
+    });
+
+    if (existingSearch) {
+      // 이미 있으면 삭제 후 새로 추가 (최신 날짜로 업데이트)
+      await this.recentSearchRepository.remove(existingSearch);
+    }
+
+    // 최근 검색어 추가를 위한 기본 객체
+    const recentSearch = {
+      userId,
+      term,
+    };
+
+    // 책 정보가 있으면 추가
+    if (bookInfo) {
+      Object.assign(recentSearch, {
+        bookId: bookInfo.bookId,
+        title: bookInfo.title,
+        author: bookInfo.author,
+        coverImage: bookInfo.coverImage,
+        publisher: bookInfo.publisher,
+        description: bookInfo.description,
+      });
+    }
+
+    // 최근 검색어 저장
+    await this.recentSearchRepository.save(recentSearch);
+
+    // 사용자별 최대 검색어 수 제한 (오래된 것부터 삭제)
+    const recentSearchCount = await this.recentSearchRepository.count({
+      where: { userId },
+    });
+
+    if (recentSearchCount > this.RECENT_SEARCH_MAX_PER_USER) {
+      const excessCount = recentSearchCount - this.RECENT_SEARCH_MAX_PER_USER;
+
+      // 오래된 검색어 조회
+      const oldestSearches = await this.recentSearchRepository.find({
+        where: { userId },
+        order: { createdAt: 'ASC' },
+        take: excessCount,
+      });
+
+      // 오래된 검색어 삭제
+      if (oldestSearches.length > 0) {
+        await this.recentSearchRepository.remove(oldestSearches);
+      }
+    }
+  }
+
+  /**
+   * 인기 검색어 조회
+   */
+  async getPopularSearchTerms(
+    limit: number = 10,
+  ): Promise<{ term: string; count: number }[]> {
+    const popularSearches = await this.popularSearchRepository.find({
+      order: { count: 'DESC' },
+      take: limit,
+    });
+
+    return popularSearches.map((item) => ({
+      term: item.term,
+      count: item.count,
+    }));
+  }
+
+  /**
+   * 최근 검색어 조회
+   * @param userId 사용자 ID
+   * @param limit 조회 개수
+   * @returns 최근 검색어 목록 (책 정보 포함)
+   */
+  async getRecentSearchTerms(
+    userId: number,
+    limit: number = 5,
+  ): Promise<any[]> {
+    if (!userId) {
+      return [];
+    }
+
+    const recentSearches = await this.recentSearchRepository.find({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+      take: limit,
+    });
+
+    return recentSearches.map((item) => ({
+      term: item.term,
+      bookId: item.bookId,
+      title: item.title,
+      author: item.author,
+      coverImage: item.coverImage,
+      publisher: item.publisher,
+      createdAt: item.createdAt,
+    }));
+  }
+
+  /**
+   * 인기 검색어 집계 (배치 작업)
+   * 스케줄러 등에서 주기적으로 호출할 함수
+   */
+  async aggregatePopularSearchTerms(): Promise<void> {
+    this.logger.log('인기 검색어 집계 시작');
+
+    try {
+      // 집계 기간 설정 (최근 24시간)
+      const aggregationPeriod = new Date();
+      aggregationPeriod.setHours(aggregationPeriod.getHours() - 24);
+
+      // 기간 내 검색어 집계
+      const searchStats = await this.searchLogRepository
+        .createQueryBuilder('log')
+        .select('log.term, COUNT(*) as count')
+        .where('log.createdAt > :period', { period: aggregationPeriod })
+        .groupBy('log.term')
+        .orderBy('count', 'DESC')
+        .getRawMany();
+
+      // 인기 검색어 테이블 업데이트
+      for (const stat of searchStats) {
+        const { term, count } = stat;
+
+        const popularSearch = await this.popularSearchRepository.findOne({
+          where: { term },
+        });
+
+        if (popularSearch) {
+          // 기존 데이터 업데이트
+          popularSearch.count = count;
+          await this.popularSearchRepository.save(popularSearch);
+        } else {
+          // 새 데이터 추가
+          await this.popularSearchRepository.save({
+            term,
+            count,
+          });
+        }
+      }
+
+      this.logger.log(`인기 검색어 집계 완료 (${searchStats.length}개 처리)`);
+    } catch (error) {
+      this.logger.error(`인기 검색어 집계 오류: ${error.message}`);
+    }
+  }
+
+  /**
+   * 오래된 검색 로그 삭제 (배치 작업)
+   */
+  async cleanupOldSearchLogs(days: number = 30): Promise<void> {
+    this.logger.log(`${days}일 이상 된 검색 로그 삭제 시작`);
+
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+
+      const deleteResult = await this.searchLogRepository.delete({
+        createdAt: LessThan(cutoffDate),
+      });
+
+      this.logger.log(`검색 로그 삭제 완료 (${deleteResult.affected}개 삭제)`);
+    } catch (error) {
+      this.logger.error(`검색 로그 삭제 오류: ${error.message}`);
+    }
+  }
+
+  /**
+   * 사용자의 모든 최근 검색어 삭제
+   */
+  async deleteAllRecentSearchesByUserId(userId: number): Promise<void> {
+    if (!userId) return;
+
+    try {
+      await this.recentSearchRepository.delete({ userId });
+      this.logger.log(`사용자 ID ${userId}의 모든 최근 검색어 삭제 완료`);
+    } catch (error) {
+      this.logger.error(`최근 검색어 삭제 오류: ${error.message}`);
+      throw error;
+    }
+  }
+}

@@ -29,6 +29,8 @@ import { PostImage } from './post/entities/post-image.entity';
 import { PostBook } from './post/entities/post-book.entity';
 import { PostLike } from './post/entities/post-like.entity';
 import { Comment } from './post/entities/comment.entity';
+import { SearchModule } from './search/search.module';
+import { SearchLog, PopularSearch, RecentSearch } from './search/search.entity';
 
 @Module({
   imports: [
@@ -64,6 +66,9 @@ import { Comment } from './post/entities/comment.entity';
           PostBook,
           PostLike,
           Comment,
+          SearchLog,
+          PopularSearch,
+          RecentSearch,
         ],
         synchronize: true,
         namingStrategy: new SnakeNamingStrategy(),
@@ -78,6 +83,7 @@ import { Comment } from './post/entities/comment.entity';
     LibraryModule,
     TagModule,
     PostModule,
+    SearchModule,
   ],
 })
 export class AppModule implements NestModule {
