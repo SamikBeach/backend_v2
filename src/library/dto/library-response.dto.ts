@@ -15,8 +15,10 @@ export interface BookInfoDto {
 
 export interface LibraryTagResponseDto {
   id: number;
-  name: string;
+  tagId: number;
+  tagName: string;
   libraryId: number;
+  note?: string;
   createdAt: Date;
 }
 

@@ -5,6 +5,7 @@ import { UserService } from '../user/user.service';
 import { User, UserStatus, AuthProvider } from '../user/entities/user.entity';
 import { Repository } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import * as bcrypt from 'bcrypt';
 
 interface UserSeed {
   email: string;
@@ -71,37 +72,25 @@ async function bootstrap() {
 
     // 사용자 생성
     for (const userData of users) {
-      // 이미 존재하는 사용자인지 확인
-      const existingUser = await userRepository.findOne({
-        where: { email: userData.email },
-      });
-
-      if (existingUser) {
-        logger.log(`사용자 ${userData.email}는 이미 존재합니다. 건너뜁니다.`);
-        continue;
-      }
-
       try {
-        // UserService를 통해 사용자 생성 (비밀번호 암호화 등 적용)
-        const createdUser = await userService.createLocalUser({
+        // 비밀번호 해싱
+        const salt = await bcrypt.genSalt();
+        const hashedPassword = await bcrypt.hash(userData.password, salt);
+
+        // 직접 사용자 생성 (UserService 사용하지 않고 저장소에 직접 저장)
+        const user = userRepository.create({
           email: userData.email,
-          password: userData.password,
+          password: hashedPassword,
           username: userData.username,
+          status: userData.isActive ? UserStatus.ACTIVE : UserStatus.INACTIVE,
+          isEmailVerified: true, // 시드 데이터이므로 이메일 인증 완료 상태로 설정
           marketingConsent: userData.marketingConsent,
+          provider: AuthProvider.LOCAL,
         });
 
-        // 시드 데이터이므로 이메일 인증 완료 상태로 설정
-        createdUser.isEmailVerified = true;
-        createdUser.status = userData.isActive
-          ? UserStatus.ACTIVE
-          : UserStatus.INACTIVE;
-        createdUser.verificationToken = null;
+        await userRepository.save(user);
 
-        await userRepository.save(createdUser);
-
-        logger.log(
-          `사용자 ${userData.email} 생성 완료 (상태: ${createdUser.status})`,
-        );
+        logger.log(`사용자 ${userData.email} 생성 완료 (상태: ${user.status})`);
       } catch (error) {
         logger.error(`사용자 ${userData.email} 생성 중 오류: ${error.message}`);
       }

@@ -4,6 +4,8 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -28,6 +30,7 @@ import {
 } from './dto/library-response.dto';
 import { UserService } from '../user/user.service';
 import { In } from 'typeorm';
+import { TagService } from '../tag/tag.service';
 
 @Injectable()
 export class LibraryService {
@@ -46,6 +49,8 @@ export class LibraryService {
     private readonly libraryUpdateHistoryRepository: Repository<LibraryUpdateHistory>,
     private readonly bookService: BookService,
     private readonly userService: UserService,
+    @Inject(forwardRef(() => TagService))
+    private readonly tagService: TagService,
   ) {}
 
   // 서재 생성
@@ -79,6 +84,7 @@ export class LibraryService {
       .createQueryBuilder('library')
       .leftJoinAndSelect('library.owner', 'owner')
       .leftJoinAndSelect('library.tags', 'tags')
+      .leftJoinAndSelect('tags.tag', 'tag')
       .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
       .leftJoinAndSelect('libraryBooks.book', 'book')
       .where('library.isPublic = :isPublic', { isPublic: true });
@@ -124,12 +130,7 @@ export class LibraryService {
             email: library.owner.email,
           },
           tags: library.tags
-            ? library.tags.map((tag) => ({
-                id: tag.id,
-                name: tag.name,
-                libraryId: tag.libraryId,
-                createdAt: tag.createdAt,
-              }))
+            ? library.tags.map((tag) => this.mapLibraryTagToDto(tag))
             : [],
           bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
           previewBooks,
@@ -158,6 +159,7 @@ export class LibraryService {
       .createQueryBuilder('library')
       .leftJoinAndSelect('library.owner', 'owner')
       .leftJoinAndSelect('library.tags', 'tags')
+      .leftJoinAndSelect('tags.tag', 'tag')
       .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
       .leftJoinAndSelect('libraryBooks.book', 'book')
       .where('library.ownerId = :ownerId', { ownerId: userId });
@@ -201,12 +203,7 @@ export class LibraryService {
             email: library.owner.email,
           },
           tags: library.tags
-            ? library.tags.map((tag) => ({
-                id: tag.id,
-                name: tag.name,
-                libraryId: tag.libraryId,
-                createdAt: tag.createdAt,
-              }))
+            ? library.tags.map((tag) => this.mapLibraryTagToDto(tag))
             : [],
           bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
           previewBooks,
@@ -248,7 +245,13 @@ export class LibraryService {
         id: In(libraryIds),
         isPublic: true,
       },
-      relations: ['owner', 'tags', 'libraryBooks', 'libraryBooks.book'],
+      relations: [
+        'owner',
+        'tags',
+        'tags.tag',
+        'libraryBooks',
+        'libraryBooks.book',
+      ],
     });
 
     return Promise.all(
@@ -280,12 +283,7 @@ export class LibraryService {
             email: library.owner.email,
           },
           tags: library.tags
-            ? library.tags.map((tag) => ({
-                id: tag.id,
-                name: tag.name,
-                libraryId: tag.libraryId,
-                createdAt: tag.createdAt,
-              }))
+            ? library.tags.map((tag) => this.mapLibraryTagToDto(tag))
             : [],
           bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
           previewBooks,
@@ -309,6 +307,7 @@ export class LibraryService {
         'libraryBooks',
         'libraryBooks.book',
         'tags',
+        'tags.tag',
         'subscriptions',
         'subscriptions.subscriber',
         'updateHistory',
@@ -371,12 +370,7 @@ export class LibraryService {
         email: library.owner.email,
       },
       books: libraryBooks,
-      tags: library.tags?.map((tag) => ({
-        id: tag.id,
-        name: tag.name,
-        libraryId: tag.libraryId,
-        createdAt: tag.createdAt,
-      })),
+      tags: library.tags?.map((tag) => this.mapLibraryTagToDto(tag)) || [],
       isSubscribed,
       subscriberCount: library.subscriptions?.length || 0,
       subscribers:
@@ -571,11 +565,28 @@ export class LibraryService {
       throw new ForbiddenException('이 서재에 태그를 추가할 권한이 없습니다.');
     }
 
+    // 태그를 찾거나 새로 생성
+    let tagId = addTagToLibraryDto.tagId;
+    let tag;
+
+    if (!tagId && !addTagToLibraryDto.name) {
+      throw new BadRequestException('태그 ID 또는 태그 이름이 필요합니다.');
+    }
+
+    if (!tagId && addTagToLibraryDto.name) {
+      // 이름으로 태그 찾기 또는 생성
+      tag = await this.tagService.findOrCreateTag(addTagToLibraryDto.name);
+      tagId = tag.id;
+    } else {
+      // ID로 태그 찾기
+      tag = await this.tagService.findOne(tagId);
+    }
+
     // 이미 서재에 해당 태그가 있는지 확인
     const existingTag = await this.libraryTagRepository.findOne({
       where: {
         libraryId,
-        name: addTagToLibraryDto.name,
+        tagId,
       },
     });
 
@@ -583,24 +594,32 @@ export class LibraryService {
       throw new BadRequestException('이미 서재에 추가된 태그입니다.');
     }
 
+    // 라이브러리-태그 관계 생성
     const libraryTag = this.libraryTagRepository.create({
       library,
       libraryId,
-      name: addTagToLibraryDto.name,
+      tag,
+      tagId,
+      note: addTagToLibraryDto.note,
     });
 
     const savedLibraryTag = await this.libraryTagRepository.save(libraryTag);
 
+    // 태그 사용 횟수 증가
+    await this.tagService.incrementUsage(tagId);
+
     // 태그 추가 이력
     await this.addUpdateHistory(
       libraryId,
-      `"${addTagToLibraryDto.name}" 태그가 서재에 추가되었습니다.`,
+      `"${tag.name}" 태그가 서재에 추가되었습니다.`,
     );
 
     return {
       id: savedLibraryTag.id,
-      name: savedLibraryTag.name,
+      tagId: tag.id,
+      tagName: tag.name,
       libraryId: savedLibraryTag.libraryId,
+      note: savedLibraryTag.note,
       createdAt: savedLibraryTag.createdAt,
     };
   }
@@ -625,21 +644,27 @@ export class LibraryService {
       );
     }
 
-    const tag = await this.libraryTagRepository.findOne({
+    const libraryTag = await this.libraryTagRepository.findOne({
       where: {
         id: tagId,
         libraryId,
       },
+      relations: ['tag'],
     });
 
-    if (!tag) {
+    if (!libraryTag) {
       throw new NotFoundException(
         `태그 ID ${tagId}를 서재에서 찾을 수 없습니다.`,
       );
     }
 
-    const tagName = tag.name;
-    await this.libraryTagRepository.remove(tag);
+    const tagName = libraryTag.tag.name;
+
+    // 태그 사용 횟수 감소
+    await this.tagService.decrementUsage(libraryTag.tagId);
+
+    // 라이브러리 태그 삭제
+    await this.libraryTagRepository.remove(libraryTag);
 
     // 태그 제거 이력
     await this.addUpdateHistory(
@@ -821,6 +846,18 @@ export class LibraryService {
       },
       createdAt: library.createdAt,
       updatedAt: library.updatedAt,
+    };
+  }
+
+  // 라이브러리 태그 매핑 메소드
+  private mapLibraryTagToDto(libraryTag: LibraryTag): LibraryTagResponseDto {
+    return {
+      id: libraryTag.id,
+      tagId: libraryTag.tagId,
+      tagName: libraryTag.tag?.name || '',
+      libraryId: libraryTag.libraryId,
+      note: libraryTag.note,
+      createdAt: libraryTag.createdAt,
     };
   }
 }

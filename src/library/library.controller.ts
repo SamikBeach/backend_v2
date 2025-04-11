@@ -18,7 +18,7 @@ import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
 
-@Controller('libraries')
+@Controller('library')
 export class LibraryController {
   constructor(private readonly libraryService: LibraryService) {}
 
@@ -86,7 +86,7 @@ export class LibraryController {
     );
   }
 
-  @Delete(':id/books/:bookId')
+  @Delete(':id/book/:bookId')
   removeBookFromLibrary(
     @Param('id', ParseIntPipe) id: number,
     @Param('bookId', ParseIntPipe) bookId: number,
@@ -95,7 +95,7 @@ export class LibraryController {
     return this.libraryService.removeBookFromLibrary(id, bookId, user.id);
   }
 
-  @Post(':id/tags')
+  @Post(':id/tag')
   addTagToLibrary(
     @Param('id', ParseIntPipe) id: number,
     @GetUser() user: User,
@@ -104,7 +104,7 @@ export class LibraryController {
     return this.libraryService.addTagToLibrary(id, user.id, addTagToLibraryDto);
   }
 
-  @Delete(':id/tags/:tagId')
+  @Delete(':id/tag/:tagId')
   removeTagFromLibrary(
     @Param('id', ParseIntPipe) id: number,
     @Param('tagId', ParseIntPipe) tagId: number,

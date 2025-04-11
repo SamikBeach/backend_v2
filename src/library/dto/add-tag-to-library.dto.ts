@@ -1,7 +1,15 @@
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsNumber } from 'class-validator';
 
 export class AddTagToLibraryDto {
-  @IsNotEmpty()
+  @IsOptional()
+  @IsNumber()
+  tagId?: number;
+
+  @IsOptional()
   @IsString()
-  name: string;
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
 }

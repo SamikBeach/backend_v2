@@ -21,6 +21,8 @@ import { LibraryBook } from './library/entities/library-book.entity';
 import { LibraryTag } from './library/entities/library-tag.entity';
 import { LibrarySubscription } from './library/entities/library-subscription.entity';
 import { LibraryUpdateHistory } from './library/entities/library-update-history.entity';
+import { TagModule } from './tag/tag.module';
+import { Tag } from './library/entities/tag.entity';
 
 @Module({
   imports: [
@@ -50,8 +52,9 @@ import { LibraryUpdateHistory } from './library/entities/library-update-history.
           LibraryTag,
           LibrarySubscription,
           LibraryUpdateHistory,
+          Tag,
         ],
-        synchronize: configService.get('NODE_ENV') !== 'production',
+        synchronize: true,
         namingStrategy: new SnakeNamingStrategy(),
       }),
     }),
@@ -62,6 +65,7 @@ import { LibraryUpdateHistory } from './library/entities/library-update-history.
     BookModule,
     DiscoverCategoryModule,
     LibraryModule,
+    TagModule,
   ],
 })
 export class AppModule implements NestModule {

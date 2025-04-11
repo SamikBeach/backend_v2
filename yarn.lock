@@ -2700,6 +2700,7 @@ __metadata:
     rxjs: "npm:^7.8.2"
     semantic-release: "npm:^24.2.3"
     ts-node: "npm:^10.9.2"
+    tsconfig-paths: "npm:^4.2.0"
     tslib: "npm:^2.8.1"
     typeorm: "npm:^0.3.22"
     typeorm-naming-strategies: "npm:^4.1.0"
@@ -10046,7 +10047,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tsconfig-paths@npm:4.2.0, tsconfig-paths@npm:^4.1.2":
+"tsconfig-paths@npm:4.2.0, tsconfig-paths@npm:^4.1.2, tsconfig-paths@npm:^4.2.0":
   version: 4.2.0
   resolution: "tsconfig-paths@npm:4.2.0"
   dependencies:
