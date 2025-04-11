@@ -160,4 +160,11 @@ export class PostController {
     await this.commentService.deleteComment(commentId, user.id);
     return { success: true };
   }
+
+  // 홈화면용 인기 게시물 API
+  @Get('popular/home')
+  @IsPublic()
+  async findPopularPostsForHome(@Query('limit') limit?: number): Promise<any> {
+    return this.postService.findPopularPostsForHome(limit || 4);
+  }
 }

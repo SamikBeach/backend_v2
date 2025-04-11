@@ -77,6 +77,47 @@ export class LibraryService {
     return this.mapToLibraryResponseDto(savedLibrary);
   }
 
+  // 홈화면용 인기 서재 목록 조회
+  async findPopularLibrariesForHome(limit: number = 3): Promise<any> {
+    // 구독자 수가 많은 순으로 공개 서재 조회
+    const popularLibraries = await this.libraryRepository
+      .createQueryBuilder('library')
+      .leftJoinAndSelect('library.owner', 'owner')
+      .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
+      .leftJoinAndSelect('libraryBooks.book', 'book')
+      .where('library.isPublic = :isPublic', { isPublic: true })
+      .orderBy('library.subscriberCount', 'DESC')
+      .take(limit)
+      .getMany();
+
+    // 홈화면에 표시할 형태로 데이터 가공
+    const result = popularLibraries.map((library) => {
+      // 미리보기용 책 - 최근 추가된 3권으로 제한
+      const previewBooks = library.libraryBooks
+        ? library.libraryBooks
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+            .slice(0, 3)
+            .map((libraryBook) => ({
+              id: libraryBook.book.id,
+              title: libraryBook.book.title,
+              author: libraryBook.book.author,
+              coverImage: libraryBook.book.coverImage,
+            }))
+        : [];
+
+      return {
+        id: library.id,
+        name: library.name,
+        ownerName: library.owner.username,
+        subscriberCount: library.subscriberCount,
+        bookCount: library.libraryBooks.length,
+        previewBooks,
+      };
+    });
+
+    return result;
+  }
+
   // 모든 서재 목록 조회 (공개된 서재만)
   async findAll(userId?: number): Promise<LibraryListResponseDto[]> {
     // 공개 서재만 가져오거나, 사용자 ID가 제공된 경우 해당 사용자의 서재까지 가져옴

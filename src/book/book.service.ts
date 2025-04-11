@@ -735,4 +735,94 @@ export class BookService {
     book.isDiscovered = isDiscovered;
     return this.bookRepository.save(book);
   }
+
+  /**
+   * 홈 화면용 인기 도서 조회 (제한된 수량, 카테고리별로 분류)
+   * @param limit 카테고리별 최대 도서 수
+   */
+  async findPopularBooksForHome(limit: number = 4): Promise<any> {
+    // 기본 쿼리 빌더 생성
+    const queryBuilder = this.bookRepository
+      .createQueryBuilder('book')
+      .leftJoinAndSelect('book.category', 'category')
+      .leftJoinAndSelect('book.subcategory', 'subcategory')
+      .where('book.isFeatured = :isFeatured', { isFeatured: true })
+      .orderBy('book.rating', 'DESC')
+      .addOrderBy('book.reviews', 'DESC')
+      .take(limit * 2); // 충분한 수의 책을 가져와서 카테고리별로 필터링
+
+    const books = await queryBuilder.getMany();
+
+    // 홈화면에 표시할 간략한 정보만 포함
+    const simplifiedBooks = books.map((book) => ({
+      id: book.id,
+      title: book.title,
+      author: book.author,
+      coverImage: book.coverImage,
+      rating: book.rating,
+      category: {
+        id: book.category?.id,
+        name: book.category?.name,
+      },
+    }));
+
+    return simplifiedBooks;
+  }
+
+  /**
+   * 홈 화면용 오늘의 발견 도서 조회
+   * @param limit 가져올 도서 수
+   */
+  async findDiscoverBooksForHome(limit: number = 6): Promise<any> {
+    // discoverCategory에서 활성화된 카테고리 가져오기
+    const categories = await this.discoverCategoryService.findAllCategories();
+
+    if (!categories.length) {
+      return [];
+    }
+
+    // 활성화된 상위 2개 카테고리만 사용
+    const activeCategories = categories.slice(0, 2);
+
+    // 각 카테고리에 속한 도서 가져오기
+    const result = await Promise.all(
+      activeCategories.map(async (category) => {
+        // 해당 카테고리에 속한 도서 가져오기
+        const books = await this.bookRepository
+          .createQueryBuilder('book')
+          .leftJoinAndSelect('book.category', 'bookCategory')
+          .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
+          .where('book.isDiscovered = :isDiscovered', { isDiscovered: true })
+          .andWhere('discoverCategory.id = :categoryId', {
+            categoryId: category.id,
+          })
+          .orderBy('book.rating', 'DESC')
+          .take(limit / activeCategories.length)
+          .getMany();
+
+        // 도서 정보 가공
+        const discoveryBooks = books.map((book) => ({
+          id: book.id,
+          title: book.title,
+          author: book.author,
+          coverImage: book.coverImage,
+          rating: book.rating,
+          category: {
+            id: book.category?.id,
+            name: book.category?.name,
+          },
+          publisher: book.publisher,
+        }));
+
+        return {
+          categoryId: category.id,
+          categoryName: category.name,
+          books: discoveryBooks,
+        };
+      }),
+    );
+
+    // 결과에서 빈 카테고리 제외
+    return result.filter((item) => item.books.length > 0);
+  }
 }

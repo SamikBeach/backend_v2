@@ -143,4 +143,13 @@ export class LibraryController {
   ) {
     return this.libraryService.getRecentUpdates(id, limit ? +limit : 5);
   }
+
+  // 홈화면용 인기 서재 API
+  @Get('popular/home')
+  @IsPublic()
+  async findPopularLibrariesForHome(
+    @Query('limit') limit?: number,
+  ): Promise<any> {
+    return this.libraryService.findPopularLibrariesForHome(limit || 3);
+  }
 }

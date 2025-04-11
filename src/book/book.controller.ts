@@ -148,6 +148,20 @@ export class BookController {
     return this.bookService.findAllPopularBooks(sort, timeRange);
   }
 
+  // 홈화면용 인기 도서 API
+  @Get('popular/home')
+  @IsPublic()
+  async findPopularBooksForHome(@Query('limit') limit?: number): Promise<any> {
+    return this.bookService.findPopularBooksForHome(limit || 4);
+  }
+
+  // 홈화면용 오늘의 발견 API
+  @Get('discover/home')
+  @IsPublic()
+  async findDiscoverBooksForHome(@Query('limit') limit?: number): Promise<any> {
+    return this.bookService.findDiscoverBooksForHome(limit || 6);
+  }
+
   // ======= Discover 관련 엔드포인트 =======
 
   @Get('discover/all')

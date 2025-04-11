@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Post } from './entities/post.entity';
 import { PostImage } from './entities/post-image.entity';
 import { PostBook } from './entities/post-book.entity';
@@ -345,6 +345,69 @@ export class PostService {
       await this.postRepository.save(post);
     } catch (error) {
       this.logger.error(`Failed to unlike post ${postId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 홈화면용 인기 게시물 조회
+   * @param limit 가져올 게시물 수
+   */
+  async findPopularPostsForHome(limit: number = 4): Promise<any> {
+    try {
+      // 좋아요 수가 많은 순으로 게시물 조회
+      const popularPosts = await this.postRepository
+        .createQueryBuilder('post')
+        .leftJoinAndSelect('post.author', 'author')
+        .leftJoinAndSelect('post.images', 'images')
+        .leftJoinAndSelect('post.books', 'postBooks')
+        .leftJoinAndSelect('postBooks.book', 'book')
+        .orderBy('post.likeCount', 'DESC')
+        .addOrderBy('post.commentCount', 'DESC')
+        .take(limit)
+        .getMany();
+
+      // 홈화면에 표시할 형태로 데이터 가공
+      const simplifiedPosts = await Promise.all(
+        popularPosts.map(async (post) => {
+          // 첫 번째 이미지만 포함
+          const previewImage =
+            post.images.length > 0 ? post.images[0].url : null;
+
+          // 책 정보
+          const postBooks =
+            post.books?.map((postBook) => ({
+              id: postBook.book.id,
+              title: postBook.book.title,
+              author: postBook.book.author,
+              coverImage: postBook.book.coverImage,
+            })) || [];
+
+          // 내용 일부만 표시 (100자 제한)
+          const previewContent =
+            post.content.length > 100
+              ? post.content.substring(0, 100) + '...'
+              : post.content;
+
+          return {
+            id: post.id,
+            content: previewContent,
+            type: post.type,
+            authorName: post.author.username || '사용자',
+            previewImage,
+            likeCount: post.likeCount,
+            commentCount: post.commentCount,
+            books: postBooks.slice(0, 1), // 첫 번째 책만 포함
+            createdAt: post.createdAt,
+          };
+        }),
+      );
+
+      return simplifiedPosts;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch popular posts for home: ${error.message}`,
+      );
       throw error;
     }
   }
