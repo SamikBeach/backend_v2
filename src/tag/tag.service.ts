@@ -3,11 +3,9 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
-  Inject,
-  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, DataSource, MoreThan } from 'typeorm';
+import { Repository, DataSource, MoreThan } from 'typeorm';
 import { Tag } from '../library/entities/tag.entity';
 import { LibraryTag } from '../library/entities/library-tag.entity';
 import {
