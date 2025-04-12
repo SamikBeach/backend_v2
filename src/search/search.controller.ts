@@ -51,10 +51,6 @@ export class SearchController {
       };
     }
 
-    // 검색어 저장 (비동기로 처리)
-    const userId = user?.id;
-    this.searchService.saveSearchTerm(query, userId);
-
     // 검색 매개변수 객체 구성
     const searchParams = {
       sort: sort as SortType,
@@ -65,18 +61,42 @@ export class SearchController {
       recentPublishFilter,
     };
 
-    // 검색 결과 반환
-    return this.bookService.searchBooks(
+    // 검색 결과 조회
+    const searchResults = await this.bookService.searchBooks(
       query,
       type || 'Keyword',
       page || 1,
       limit || 10,
       searchParams,
     );
+
+    // 검색 결과가 있고, 첫 번째 책 정보가 있는 경우 첫 번째 책 정보를 포함하여 저장
+    const userId = user?.id;
+    if (searchResults.books && searchResults.books.length > 0) {
+      const firstBook = searchResults.books[0];
+      await this.searchService.saveSearchTerm(query, userId, {
+        bookId: firstBook.id,
+        title: firstBook.title,
+        author: firstBook.author,
+        coverImage: firstBook.coverImage,
+        publisher: firstBook.publisher,
+        description: firstBook.description
+          ? firstBook.description.substring(0, 500)
+          : undefined, // 설명이 너무 길면 잘라내기
+      });
+    } else {
+      // 검색 결과가 없는 경우, 검색어만 저장
+      await this.searchService.saveSearchTerm(query, userId);
+    }
+
+    // 검색 결과 반환
+    return searchResults;
   }
 
   /**
    * 검색 결과에서 책 선택 시 저장 API
+   * 사용자가 검색 결과에서 특정 책을 선택했을 때 해당 정보를 기록합니다.
+   * 이 정보는 Book 테이블에 저장되지 않고, 검색 로그 및 최근 검색어에 직접 저장됩니다.
    */
   @Post('log-book-selection')
   @OptionalAuth()
@@ -90,6 +110,10 @@ export class SearchController {
     @Body('description') description?: string,
     @GetUser() user?: User,
   ): Promise<any> {
+    if (!term || !title || !author) {
+      return { success: false, message: '필수 정보가 누락되었습니다.' };
+    }
+
     const userId = user?.id;
 
     await this.searchService.saveSearchTerm(term, userId, {
@@ -98,10 +122,10 @@ export class SearchController {
       author,
       coverImage,
       publisher,
-      description,
+      description: description ? description.substring(0, 500) : undefined, // 설명이 너무 길면 잘라내기
     });
 
-    return { success: true };
+    return { success: true, message: '검색 선택 정보가 저장되었습니다.' };
   }
 
   /**

@@ -25,21 +25,40 @@ export class SearchLog {
   @Index()
   userId: number;
 
+  /**
+   * 책 ID (외래키가 아님) - 알라딘 API 또는 다른 소스에서 얻은 ID
+   * Book 테이블에 실제로 저장되지 않을 수 있음
+   */
   @Column({ nullable: true })
   bookId: number;
 
+  /**
+   * 책 제목 - DB에 직접 저장
+   */
   @Column({ nullable: true })
   title: string;
 
+  /**
+   * 책 저자 - DB에 직접 저장
+   */
   @Column({ nullable: true })
   author: string;
 
+  /**
+   * 책 표지 이미지 URL - DB에 직접 저장
+   */
   @Column({ nullable: true })
   coverImage: string;
 
+  /**
+   * 출판사 정보 - DB에 직접 저장
+   */
   @Column({ nullable: true })
   publisher: string;
 
+  /**
+   * 책 설명 - DB에 직접 저장
+   */
   @Column({ nullable: true, type: 'text' })
   description: string;
 
@@ -87,21 +106,40 @@ export class RecentSearch {
   @Column()
   term: string;
 
+  /**
+   * 책 ID (외래키가 아님) - 알라딘 API 또는 다른 소스에서 얻은 ID
+   * Book 테이블에 실제로 저장되지 않을 수 있음
+   */
   @Column({ nullable: true })
   bookId: number;
 
+  /**
+   * 책 제목 - DB에 직접 저장
+   */
   @Column({ nullable: true })
   title: string;
 
+  /**
+   * 책 저자 - DB에 직접 저장
+   */
   @Column({ nullable: true })
   author: string;
 
+  /**
+   * 책 표지 이미지 URL - DB에 직접 저장
+   */
   @Column({ nullable: true })
   coverImage: string;
 
+  /**
+   * 출판사 정보 - DB에 직접 저장
+   */
   @Column({ nullable: true })
   publisher: string;
 
+  /**
+   * 책 설명 - DB에 직접 저장
+   */
   @Column({ nullable: true, type: 'text' })
   description: string;
 

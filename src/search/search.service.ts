@@ -21,13 +21,13 @@ export class SearchService {
    * 검색어 저장 (로그, 인기 검색어, 최근 검색어)
    * @param term 검색어
    * @param userId 사용자 ID (옵션)
-   * @param bookInfo 선택된 책 정보 (옵션)
+   * @param bookInfo 선택된 책 정보 (옵션) - Book 테이블과 연관관계가 아니라 직접 정보를 저장
    */
   async saveSearchTerm(
     term: string,
     userId?: number,
     bookInfo?: {
-      bookId: number;
+      bookId: number; // 알라딘 API에서의 ID 값, Book 테이블에 없을 수 있음
       title: string;
       author: string;
       coverImage?: string;
@@ -36,21 +36,28 @@ export class SearchService {
     },
   ): Promise<void> {
     try {
+      // 공백 검색어는 저장하지 않음
+      if (!term || term.trim() === '') {
+        return;
+      }
+
       // 검색어 로그 저장
       const searchLog = {
-        term,
+        term: term.trim(),
         userId,
       };
 
       // 책 정보가 있으면 추가
-      if (bookInfo) {
+      if (bookInfo && bookInfo.title && bookInfo.author) {
         Object.assign(searchLog, {
-          bookId: bookInfo.bookId,
-          title: bookInfo.title,
-          author: bookInfo.author,
+          bookId: bookInfo.bookId, // 책의 식별자로만 사용, 외래키가 아님
+          title: bookInfo.title.trim(),
+          author: bookInfo.author.trim(),
           coverImage: bookInfo.coverImage,
-          publisher: bookInfo.publisher,
-          description: bookInfo.description,
+          publisher: bookInfo.publisher ? bookInfo.publisher.trim() : undefined,
+          description: bookInfo.description
+            ? bookInfo.description.trim()
+            : undefined,
         });
       }
 
@@ -93,13 +100,13 @@ export class SearchService {
    * 사용자별 최근 검색어 추가
    * @param term 검색어
    * @param userId 사용자 ID
-   * @param bookInfo 책 정보 (선택적)
+   * @param bookInfo 책 정보 (DB 저장된 책이 아니어도 직접 정보 저장)
    */
   private async addRecentSearchTerm(
     term: string,
     userId: number,
     bookInfo?: {
-      bookId: number;
+      bookId: number; // 알라딘 API의 ID, Book 테이블에 실제로 존재하지 않을 수 있음
       title: string;
       author: string;
       coverImage?: string;
@@ -109,7 +116,7 @@ export class SearchService {
   ): Promise<void> {
     // 이미 존재하는 동일 검색어가 있는지 확인
     const existingSearch = await this.recentSearchRepository.findOne({
-      where: { userId, term },
+      where: { userId, term: term.trim() },
     });
 
     if (existingSearch) {
@@ -120,18 +127,20 @@ export class SearchService {
     // 최근 검색어 추가를 위한 기본 객체
     const recentSearch = {
       userId,
-      term,
+      term: term.trim(),
     };
 
     // 책 정보가 있으면 추가
-    if (bookInfo) {
+    if (bookInfo && bookInfo.title && bookInfo.author) {
       Object.assign(recentSearch, {
-        bookId: bookInfo.bookId,
-        title: bookInfo.title,
-        author: bookInfo.author,
+        bookId: bookInfo.bookId, // 외래키가 아닌 식별자로 사용
+        title: bookInfo.title.trim(),
+        author: bookInfo.author.trim(),
         coverImage: bookInfo.coverImage,
-        publisher: bookInfo.publisher,
-        description: bookInfo.description,
+        publisher: bookInfo.publisher ? bookInfo.publisher.trim() : undefined,
+        description: bookInfo.description
+          ? bookInfo.description.trim()
+          : undefined,
       });
     }
 
