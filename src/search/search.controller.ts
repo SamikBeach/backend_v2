@@ -6,44 +6,72 @@ import {
   Query,
   UseGuards,
   Delete,
-  Redirect,
+  Param,
 } from '@nestjs/common';
 import { SearchService } from './search.service';
+import { BookService } from '../book/book.service';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
+import { SearchTarget, SortType, CoverSize } from '../book/dto/search-book.dto';
 
 @Controller('search')
 export class SearchController {
-  constructor(private readonly searchService: SearchService) {}
+  constructor(
+    private readonly searchService: SearchService,
+    private readonly bookService: BookService,
+  ) {}
 
   /**
    * 통합 검색 API
-   * 실제 검색은 BookController로 리다이렉트하여 처리
    */
   @Get()
   @IsPublic()
-  @Redirect()
   async search(
     @Query('query') query: string,
     @Query('type') type?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('sort') sort?: string,
+    @Query('searchTarget') searchTarget?: string,
+    @Query('categoryId') categoryId?: number,
+    @Query('cover') cover?: string,
+    @Query('outOfStockFilter') outOfStockFilter?: boolean,
+    @Query('recentPublishFilter') recentPublishFilter?: number,
     @GetUser() user?: User,
-  ): Promise<{ url: string }> {
+  ): Promise<any> {
     if (!query) {
-      return { url: '/api/v2/books/search?query=' };
+      return {
+        books: [],
+        total: 0,
+        page: 1,
+        totalPages: 0,
+      };
     }
 
     // 검색어 저장 (비동기로 처리)
     const userId = user?.id;
     this.searchService.saveSearchTerm(query, userId);
 
-    // 검색 결과는 BookController로 리다이렉트
-    return {
-      url: `/api/v2/books/search?query=${encodeURIComponent(query)}${type ? `&type=${type}` : ''}${page ? `&page=${page}` : ''}${limit ? `&limit=${limit}` : ''}`,
+    // 검색 매개변수 객체 구성
+    const searchParams = {
+      sort: sort as SortType,
+      searchTarget: searchTarget as SearchTarget,
+      categoryId,
+      cover: cover as CoverSize,
+      outOfStockFilter,
+      recentPublishFilter,
     };
+
+    // 검색 결과 반환
+    return this.bookService.searchBooks(
+      query,
+      type || 'Keyword',
+      page || 1,
+      limit || 10,
+      searchParams,
+    );
   }
 
   /**
@@ -86,7 +114,6 @@ export class SearchController {
 
   /**
    * 최근 검색어 API
-   * 검색어와 관련 책 정보 함께 반환
    */
   @Get('recent')
   @UseGuards(JwtAuthGuard)
@@ -131,5 +158,40 @@ export class SearchController {
   async cleanupSearchLogs(@Query('days') days?: number): Promise<any> {
     await this.searchService.cleanupOldSearchLogs(days || 30);
     return { success: true };
+  }
+
+  /**
+   * 베스트셀러 도서 API
+   */
+  @Get('bestsellers')
+  @IsPublic()
+  async getBestsellers(
+    @Query('categoryId') categoryId?: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ): Promise<any> {
+    return this.bookService.findBestsellers(categoryId, page || 1, limit || 10);
+  }
+
+  /**
+   * 신간 도서 API
+   */
+  @Get('new-releases')
+  @IsPublic()
+  async getNewReleases(
+    @Query('categoryId') categoryId?: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ): Promise<any> {
+    return this.bookService.findNewBooks(categoryId, page || 1, limit || 10);
+  }
+
+  /**
+   * ISBN으로 도서 상세 정보 조회 API
+   */
+  @Get('detail/:isbn')
+  @IsPublic()
+  async getBookDetail(@Param('isbn') isbn: string): Promise<any> {
+    return this.bookService.getBookDetailByIsbn(isbn);
   }
 }
