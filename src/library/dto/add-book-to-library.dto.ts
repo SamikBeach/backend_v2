@@ -8,4 +8,8 @@ export class AddBookToLibraryDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @IsOptional()
+  @IsString()
+  isbn?: string;
 }

@@ -4,6 +4,7 @@ import { ValidationPipe, VersioningType, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -17,6 +18,11 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3001);
   const logger = new Logger('Bootstrap');
+
+  // 정적 파일 서빙 설정 (업로드된 이미지)
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+  });
 
   // Set global prefix
   app.setGlobalPrefix('api');

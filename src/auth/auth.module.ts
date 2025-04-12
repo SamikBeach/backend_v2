@@ -9,6 +9,7 @@ import { UserModule } from '../user/user.module';
 import { CommonModule } from '../common/common.module';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { AppleStrategy } from './strategies/apple.strategy';
+import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
 
 @Module({
   imports: [
@@ -27,7 +28,13 @@ import { AppleStrategy } from './strategies/apple.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, GoogleStrategy, AppleStrategy],
-  exports: [AuthService, JwtStrategy],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    GoogleStrategy,
+    AppleStrategy,
+    OptionalJwtAuthGuard,
+  ],
+  exports: [AuthService, JwtStrategy, OptionalJwtAuthGuard],
 })
 export class AuthModule {}

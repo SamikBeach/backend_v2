@@ -8,11 +8,16 @@ import {
   ParseIntPipe,
   Patch,
   Delete,
+  UseGuards,
 } from '@nestjs/common';
 import { BookService } from './book.service';
 import { Book } from './entities/book.entity';
 import { CreateBookDto, UpdateBookDto } from './dto/book.dto';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
+import { SearchTarget, SortType, CoverSize } from './dto/search-book.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { GetUser } from '../auth/decorators/get-user.decorator';
+import { User } from '../user/entities/user.entity';
 
 @Controller('books')
 export class BookController {
@@ -146,6 +151,20 @@ export class BookController {
     @Query('timeRange') timeRange?: string,
   ): Promise<Book[]> {
     return this.bookService.findAllPopularBooks(sort, timeRange);
+  }
+
+  // 홈화면용 인기 도서 API
+  @Get('popular/home')
+  @IsPublic()
+  async findPopularBooksForHome(@Query('limit') limit?: number): Promise<any> {
+    return this.bookService.findPopularBooksForHome(limit || 4);
+  }
+
+  // 홈화면용 오늘의 발견 API
+  @Get('discover/home')
+  @IsPublic()
+  async findDiscoverBooksForHome(@Query('limit') limit?: number): Promise<any> {
+    return this.bookService.findDiscoverBooksForHome(limit || 6);
   }
 
   // ======= Discover 관련 엔드포인트 =======

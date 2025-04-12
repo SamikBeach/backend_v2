@@ -46,6 +46,12 @@ export class Book {
   @Column()
   description: string;
 
+  @Column({ nullable: true, type: 'int' })
+  priceSales: number;
+
+  @Column({ nullable: true, type: 'int' })
+  priceStandard: number;
+
   @ManyToOne(() => Category, (category) => category.books)
   category: Category;
 

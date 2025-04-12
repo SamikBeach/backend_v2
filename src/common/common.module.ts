@@ -3,6 +3,7 @@ import { EmailService } from './services/email.service';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AladinService } from './services/aladin.service';
+import { FileService } from './services/file.service';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { AladinService } from './services/aladin.service';
       }),
     }),
   ],
-  providers: [EmailService, AladinService],
-  exports: [EmailService, AladinService],
+  providers: [EmailService, AladinService, FileService],
+  exports: [EmailService, AladinService, FileService],
 })
 export class CommonModule {}

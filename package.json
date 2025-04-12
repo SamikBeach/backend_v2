@@ -10,10 +10,15 @@
     "seed:categories": "NODE_ENV=development ts-node src/seeds/category.seed.ts",
     "seed:books": "NODE_ENV=development ts-node src/seeds/book.seed.ts",
     "seed:discover-category": "NODE_ENV=development ts-node src/seeds/discover-category.seed.ts",
-    "seed:library": "NODE_ENV=development ts-node src/seeds/library.seed.ts",
-    "seed:users": "NODE_ENV=development ts-node src/seeds/user.seed.ts",
-    "seed:all": "yarn seed:users && yarn seed:categories && yarn seed:books && yarn seed:discover-category && yarn seed:library",
-    "seed:run-all": "NODE_ENV=development ts-node src/seeds/seed-all.ts"
+    "seed:tag": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/tag.seed.ts",
+    "seed:user": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/user.seed.ts",
+    "seed:library": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/library.seed.ts",
+    "seed:post": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/post.seed.ts",
+    "seed:search": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/search.seed.ts",
+    "seed:notification": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/notification.seed.ts",
+    "seed:all": "yarn seed:categories && yarn seed:books && yarn seed:discover-category && yarn seed:tag && yarn seed:user && yarn seed:library && yarn seed:post && yarn seed:search && yarn seed:notification",
+    "seed:run-all": "NODE_ENV=development ts-node src/seeds/seed-all.ts",
+    "seed:category": "ts-node -r tsconfig-paths/register src/seeds/category.seed.ts"
   },
   "dependencies": {
     "@nestjs-modules/mailer": "^2.0.2",
@@ -25,14 +30,17 @@
     "@nestjs/typeorm": "^11.0.0",
     "axios": "^1.8.4",
     "lodash": "^4.17.21",
+    "multer": "^1.4.5-lts.2",
     "mysql2": "^3.14.0",
     "nodemailer": "^6.9.13",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "sharp": "^0.34.1",
     "ts-node": "^10.9.2",
     "tslib": "^2.8.1",
     "typeorm": "^0.3.22",
-    "typeorm-naming-strategies": "^4.1.0"
+    "typeorm-naming-strategies": "^4.1.0",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.24.0",
@@ -44,6 +52,7 @@
     "@types/bcrypt": "^5.0.2",
     "@types/express": "^5.0.1",
     "@types/lodash": "^4.17.16",
+    "@types/multer": "^1.4.12",
     "@types/node": "^22.14.0",
     "@types/nodemailer": "^6.4.17",
     "@types/passport": "^0",
@@ -66,6 +75,7 @@
     "passport-local": "^1.0.0",
     "prettier": "^3.5.3",
     "semantic-release": "^24.2.3",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.8.3"
   }
 }

@@ -1,57 +1,72 @@
-import { Book } from '../../book/entities/book.entity';
-import { User } from '../../user/entities/user.entity';
+export interface OwnerInfoDto {
+  id: number;
+  username: string;
+  email: string;
+}
 
-export class LibraryBookResponseDto {
+export interface BookInfoDto {
+  id: number;
+  title: string;
+  author: string;
+  coverImage: string;
+  isbn: string;
+  publisher: string;
+}
+
+export interface LibraryTagResponseDto {
+  id: number;
+  tagId: number;
+  tagName: string;
+  libraryId: number;
+  note?: string;
+  createdAt: Date;
+}
+
+export interface LibraryBookResponseDto {
   id: number;
   bookId: number;
   libraryId: number;
   note?: string;
-  book: Partial<Book>;
+  book: BookInfoDto;
   createdAt: Date;
 }
 
-export class LibraryTagResponseDto {
-  id: number;
-  name: string;
-  libraryId: number;
-  createdAt: Date;
-}
-
-export class LibraryOwnerDto {
+export interface SubscriberResponseDto {
   id: number;
   username: string;
   email: string;
+  profileImage?: string;
 }
 
-export class LibraryResponseDto {
+export interface UpdateHistoryItem {
+  date: Date;
+  message: string;
+}
+
+export interface LibraryResponseDto {
   id: number;
   name: string;
-  description?: string;
+  description: string;
   isPublic: boolean;
   subscriberCount: number;
-  owner: LibraryOwnerDto;
-  books?: LibraryBookResponseDto[];
-  tags?: LibraryTagResponseDto[];
-  isSubscribed?: boolean;
+  owner: OwnerInfoDto;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export class LibraryListResponseDto {
-  id: number;
-  name: string;
-  description?: string;
-  isPublic: boolean;
-  subscriberCount: number;
+export interface LibraryListResponseDto extends LibraryResponseDto {
   bookCount: number;
-  owner: LibraryOwnerDto;
-  tags?: LibraryTagResponseDto[];
-  isSubscribed?: boolean;
-  createdAt: Date;
+  previewBooks: BookInfoDto[];
+  tags: LibraryTagResponseDto[];
+  isSubscribed: boolean;
 }
 
-export class SubscriberResponseDto {
-  id: number;
-  username: string;
-  email: string;
+export interface LibraryDetailResponseDto
+  extends Omit<LibraryResponseDto, 'subscriberCount'> {
+  books: LibraryBookResponseDto[];
+  tags: LibraryTagResponseDto[];
+  isSubscribed: boolean;
+  subscriberCount: number;
+  subscribers: SubscriberResponseDto[];
+  recentUpdates: UpdateHistoryItem[];
 }
