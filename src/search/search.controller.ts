@@ -70,26 +70,7 @@ export class SearchController {
       searchParams,
     );
 
-    // 검색 결과가 있고, 첫 번째 책 정보가 있는 경우 첫 번째 책 정보를 포함하여 저장
-    const userId = user?.id;
-    if (searchResults.books && searchResults.books.length > 0) {
-      const firstBook = searchResults.books[0];
-      await this.searchService.saveSearchTerm(query, userId, {
-        bookId: firstBook.id,
-        title: firstBook.title,
-        author: firstBook.author,
-        coverImage: firstBook.coverImage,
-        publisher: firstBook.publisher,
-        description: firstBook.description
-          ? firstBook.description.substring(0, 500)
-          : undefined, // 설명이 너무 길면 잘라내기
-      });
-    } else {
-      // 검색 결과가 없는 경우, 검색어만 저장
-      await this.searchService.saveSearchTerm(query, userId);
-    }
-
-    // 검색 결과 반환
+    // 검색 결과만 반환
     return searchResults;
   }
 
