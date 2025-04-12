@@ -174,13 +174,14 @@ export class SearchService {
    */
   async getPopularSearchTerms(
     limit: number = 10,
-  ): Promise<{ term: string; count: number }[]> {
+  ): Promise<{ id: number; term: string; count: number }[]> {
     const popularSearches = await this.popularSearchRepository.find({
       order: { count: 'DESC' },
       take: limit,
     });
 
     return popularSearches.map((item) => ({
+      id: item.id,
       term: item.term,
       count: item.count,
     }));
@@ -207,6 +208,7 @@ export class SearchService {
     });
 
     return recentSearches.map((item) => ({
+      id: item.id,
       term: item.term,
       bookId: item.bookId,
       title: item.title,
