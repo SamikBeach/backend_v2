@@ -770,17 +770,31 @@ export class BookService {
 
     const books = await queryBuilder.getMany();
 
-    // 홈화면에 표시할 간략한 정보만 포함
+    // 홈화면에 표시할 책 정보를 포함 (ISBN 등 추가)
     const simplifiedBooks = books.map((book) => ({
       id: book.id,
       title: book.title,
       author: book.author,
       coverImage: book.coverImage,
+      isbn: book.isbn,
+      isbn13: book.isbn13,
+      publisher: book.publisher,
+      publishDate: book.publishDate,
       rating: book.rating,
+      reviews: book.reviews,
+      description: book.description?.substring(0, 100) + '...', // 간략한 설명만 포함
+      priceSales: book.priceSales,
+      priceStandard: book.priceStandard,
       category: {
         id: book.category?.id,
         name: book.category?.name,
       },
+      subcategory: book.subcategory
+        ? {
+            id: book.subcategory.id,
+            name: book.subcategory.name,
+          }
+        : null,
     }));
 
     return simplifiedBooks;
@@ -917,14 +931,34 @@ export class BookService {
               }
 
               // 검색 시에는 DB에 저장하지 않고 메모리 상의 Book 객체만 생성
-              const tempBook = this.bookRepository.create({
+              const bookObject = {
                 ...bookData,
                 category,
                 subcategory,
-              });
+                // ISBN 필드 명시적 포함
+                isbn: bookData.isbn || item.isbn,
+                isbn13: bookData.isbn13 || item.isbn13,
+                // 나머지 필드도 명시적으로 설정
+                title: bookData.title,
+                author: bookData.author,
+                coverImage: bookData.coverImage,
+                publisher: bookData.publisher,
+                publishDate: bookData.publishDate,
+                description: bookData.description,
+                rating: bookData.rating || 0,
+                reviews: bookData.reviews || 0,
+                priceSales: bookData.priceSales,
+                priceStandard: bookData.priceStandard,
+                isFeatured: false,
+                isDiscovered: false,
+              };
+
+              const tempBook = this.bookRepository.create(
+                bookObject,
+              ) as unknown as Book;
 
               // 관계 객체 설정 (TypeORM은 save 없이도 관계 객체를 설정할 수 있음)
-              book = tempBook as unknown as Book;
+              book = tempBook;
             } catch (error) {
               this.logger.error(`도서 객체 생성 오류: ${error.message}`);
               // 오류 발생 시 임시 Book 객체 생성
@@ -1012,15 +1046,34 @@ export class BookService {
               }
 
               // 검색 시에는 DB에 저장하지 않고 메모리 상의 Book 객체만 생성
-              const tempBook = this.bookRepository.create({
+              const bookObject = {
                 ...bookData,
                 category,
                 subcategory,
+                // ISBN 필드 명시적 포함
+                isbn: bookData.isbn || item.isbn,
+                isbn13: bookData.isbn13 || item.isbn13,
+                // 나머지 필드도 명시적으로 설정
+                title: bookData.title,
+                author: bookData.author,
+                coverImage: bookData.coverImage,
+                publisher: bookData.publisher,
+                publishDate: bookData.publishDate,
+                description: bookData.description,
+                rating: bookData.rating || 0,
+                reviews: bookData.reviews || 0,
+                priceSales: bookData.priceSales,
+                priceStandard: bookData.priceStandard,
                 isFeatured: true,
-              });
+                isDiscovered: false,
+              };
+
+              const tempBook = this.bookRepository.create(
+                bookObject,
+              ) as unknown as Book;
 
               // 관계 객체 설정
-              book = tempBook as unknown as Book;
+              book = tempBook;
             } catch (error) {
               this.logger.error(
                 `베스트셀러 도서 객체 생성 오류: ${error.message}`,
@@ -1098,13 +1151,33 @@ export class BookService {
               const category = await this.categoryService.findOne(1); // 기본 카테고리
 
               // 검색 시에는 DB에 저장하지 않고 메모리 상의 Book 객체만 생성
-              const tempBook = this.bookRepository.create({
+              const bookObject = {
                 ...bookData,
                 category,
-              });
+                // ISBN 필드 명시적 포함
+                isbn: bookData.isbn || item.isbn,
+                isbn13: bookData.isbn13 || item.isbn13,
+                // 나머지 필드도 명시적으로 설정
+                title: bookData.title,
+                author: bookData.author,
+                coverImage: bookData.coverImage,
+                publisher: bookData.publisher,
+                publishDate: bookData.publishDate,
+                description: bookData.description,
+                rating: bookData.rating || 0,
+                reviews: bookData.reviews || 0,
+                priceSales: bookData.priceSales,
+                priceStandard: bookData.priceStandard,
+                isFeatured: false,
+                isDiscovered: false,
+              };
+
+              const tempBook = this.bookRepository.create(
+                bookObject,
+              ) as unknown as Book;
 
               // 관계 객체 설정
-              book = tempBook as unknown as Book;
+              book = tempBook;
             } catch (error) {
               this.logger.error(`신간 도서 객체 생성 오류: ${error.message}`);
               const tempBook = this.bookRepository.create(
@@ -1171,12 +1244,36 @@ export class BookService {
       const category = await this.categoryService.findOne(1);
 
       // 상세 정보 조회만으로는 DB에 저장하지 않고, 임시 Book 객체만 생성하여 반환
-      const tempBook = this.bookRepository.create({
+      // 모든 필드가 명시적으로 포함되도록 확장
+      const bookObject = {
         ...bookData,
         category,
-      });
+        // ISBN과 ISBN13이 항상 포함되도록 명시
+        isbn: bookData.isbn || isbn,
+        isbn13: bookData.isbn13 || (isbn.length === 13 ? isbn : undefined),
+        // 나머지 필드도 명시적으로 설정
+        title: bookData.title,
+        author: bookData.author,
+        coverImage: bookData.coverImage,
+        publisher: bookData.publisher,
+        publishDate: bookData.publishDate,
+        description: bookData.description,
+        rating: bookData.rating || 0,
+        reviews: bookData.reviews || 0,
+        priceSales: bookData.priceSales,
+        priceStandard: bookData.priceStandard,
+        isFeatured: false,
+        isDiscovered: false,
+      };
 
-      return tempBook as unknown as Book;
+      const tempBook = this.bookRepository.create(
+        bookObject,
+      ) as unknown as Book;
+
+      this.logger.log(
+        `[ISBN 도서 조회] ${isbn}: ${tempBook.title} by ${tempBook.author}`,
+      );
+      return tempBook;
     } catch (error) {
       this.logger.error(`도서 상세 정보 조회 오류: ${error.message}`);
       throw new NotFoundException(`ISBN ${isbn}으로 도서를 찾을 수 없습니다.`);
