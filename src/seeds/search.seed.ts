@@ -49,6 +49,8 @@ async function bootstrap() {
         author: '버트런드 러셀',
         coverImage: 'https://example.com/covers/philosophy_history.jpg',
         publisher: '동서문화사',
+        isbn: '8949132508',
+        isbn13: '9788949132501',
         description:
           '서양 철학의 역사를 다룬 명저로, 고대 그리스 철학부터 현대 철학까지의 흐름을 조망합니다.',
       },
@@ -61,6 +63,8 @@ async function bootstrap() {
         author: '플라톤',
         coverImage: 'https://example.com/covers/republic.jpg',
         publisher: '문예출판사',
+        isbn: '8931006349',
+        isbn13: '9788931006346',
         description:
           '플라톤의 대표작으로 이상적인 국가와 정의로운 삶에 대해 논합니다.',
       },
@@ -73,6 +77,8 @@ async function bootstrap() {
         author: '플라톤',
         coverImage: 'https://example.com/covers/apology.jpg',
         publisher: '문학동네',
+        isbn: '8982817883',
+        isbn13: '9788982817885',
         description:
           '소크라테스의 재판에서의 변론을 기록한 플라톤의 작품입니다.',
       },
@@ -85,6 +91,8 @@ async function bootstrap() {
         author: '아리스토텔레스',
         coverImage: 'https://example.com/covers/nicomachean_ethics.jpg',
         publisher: '이카루스',
+        isbn: '8972883751',
+        isbn13: '9788972883753',
         description: '아리스토텔레스의 윤리학 사상을 담은 대표적인 저작입니다.',
       },
     },
@@ -96,6 +104,8 @@ async function bootstrap() {
         author: '프리드리히 니체',
         coverImage: 'https://example.com/covers/zarathustra.jpg',
         publisher: '민음사',
+        isbn: '8937460866',
+        isbn13: '9788937460869',
         description: '니체의 대표작으로 초인 개념과 신의 죽음에 대해 논합니다.',
       },
     },
@@ -107,6 +117,8 @@ async function bootstrap() {
         author: '공자',
         coverImage: 'https://example.com/covers/analects.jpg',
         publisher: '동양출판사',
+        isbn: '8984520071',
+        isbn13: '9788984520073',
         description:
           '공자의 가르침과 제자들과의 대화를 기록한 동양 고전입니다.',
       },
@@ -119,6 +131,8 @@ async function bootstrap() {
         author: '노자',
         coverImage: 'https://example.com/covers/tao_te_ching.jpg',
         publisher: '현대사상사',
+        isbn: '8976257138',
+        isbn13: '9788976257130',
         description: '도가 철학의 핵심 사상을 담은 노자의 저작입니다.',
       },
     },
@@ -130,6 +144,8 @@ async function bootstrap() {
         author: '테리 이글턴',
         coverImage: 'https://example.com/covers/literary_theory.jpg',
         publisher: '산지니',
+        isbn: '8995816139',
+        isbn13: '9788995816134',
         description: '문학의 본질과 이론에 대한 흥미로운 탐구를 담고 있습니다.',
       },
     },
@@ -141,6 +157,8 @@ async function bootstrap() {
         author: '윌리엄 셰익스피어',
         coverImage: 'https://example.com/covers/hamlet.jpg',
         publisher: '민음사',
+        isbn: '8937462265',
+        isbn13: '9788937462269',
         description:
           '셰익스피어의 4대 비극 중 하나로, 덴마크 왕자 햄릿의 복수를 다룹니다.',
       },
@@ -153,6 +171,8 @@ async function bootstrap() {
         author: '표도르 도스토예프스키',
         coverImage: 'https://example.com/covers/crime_and_punishment.jpg',
         publisher: '민음사',
+        isbn: '8937460521',
+        isbn13: '9788937460524',
         description: '러시아 문학의 대표작으로, 살인과 양심의 갈등을 다룹니다.',
       },
     },
@@ -164,6 +184,8 @@ async function bootstrap() {
         author: '레프 톨스토이',
         coverImage: 'https://example.com/covers/war_and_peace.jpg',
         publisher: '열린책들',
+        isbn: '8932902488',
+        isbn13: '9788932902487',
         description:
           '나폴레옹의 러시아 침공을 배경으로 한 톨스토이의 대작입니다.',
       },
@@ -176,6 +198,8 @@ async function bootstrap() {
         author: '요한 볼프강 폰 괴테',
         coverImage: 'https://example.com/covers/faust.jpg',
         publisher: '문학과지성사',
+        isbn: '8932007705',
+        isbn13: '9788932007700',
         description:
           '영혼을 악마에게 판 학자 파우스트의 이야기를 담은 독일 문학의 대표작입니다.',
       },
@@ -188,6 +212,8 @@ async function bootstrap() {
         author: '마르셀 프루스트',
         coverImage: 'https://example.com/covers/remembrance.jpg',
         publisher: '민음사',
+        isbn: '893746053X',
+        isbn13: '9788937460531',
         description:
           '기억과 예술, 삶의 의미를 탐구하는 20세기 문학의 걸작입니다.',
       },
@@ -200,6 +226,8 @@ async function bootstrap() {
         author: 'E.H. 카',
         coverImage: 'https://example.com/covers/what_is_history.jpg',
         publisher: '까치',
+        isbn: '898934085X',
+        isbn13: '9788989340850',
         description: '역사학의 본질과 역사가의 역할에 대해 다룬 명저입니다.',
       },
     },
@@ -297,6 +325,8 @@ async function bootstrap() {
             author: bookInfo.author,
             coverImage: bookInfo.coverImage,
             publisher: bookInfo.publisher,
+            isbn: bookInfo.isbn,
+            isbn13: bookInfo.isbn13,
             description: bookInfo.description,
           });
         }
@@ -375,6 +405,8 @@ async function bootstrap() {
             author: bookInfo.author,
             coverImage: bookInfo.coverImage,
             publisher: bookInfo.publisher,
+            isbn: bookInfo.isbn,
+            isbn13: bookInfo.isbn13,
             description: bookInfo.description,
           });
         }

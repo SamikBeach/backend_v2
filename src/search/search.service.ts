@@ -32,6 +32,8 @@ export class SearchService {
       author: string;
       coverImage?: string;
       publisher?: string;
+      isbn?: string;
+      isbn13?: string;
       description?: string;
     },
   ): Promise<void> {
@@ -55,6 +57,8 @@ export class SearchService {
           author: bookInfo.author.trim(),
           coverImage: bookInfo.coverImage,
           publisher: bookInfo.publisher ? bookInfo.publisher.trim() : undefined,
+          isbn: bookInfo.isbn,
+          isbn13: bookInfo.isbn13,
           description: bookInfo.description
             ? bookInfo.description.trim()
             : undefined,
@@ -111,6 +115,8 @@ export class SearchService {
       author: string;
       coverImage?: string;
       publisher?: string;
+      isbn?: string;
+      isbn13?: string;
       description?: string;
     },
   ): Promise<void> {
@@ -138,6 +144,8 @@ export class SearchService {
         author: bookInfo.author.trim(),
         coverImage: bookInfo.coverImage,
         publisher: bookInfo.publisher ? bookInfo.publisher.trim() : undefined,
+        isbn: bookInfo.isbn,
+        isbn13: bookInfo.isbn13,
         description: bookInfo.description
           ? bookInfo.description.trim()
           : undefined,
@@ -215,6 +223,8 @@ export class SearchService {
       author: item.author,
       coverImage: item.coverImage,
       publisher: item.publisher,
+      isbn: item.isbn,
+      isbn13: item.isbn13,
       createdAt: item.createdAt,
     }));
   }

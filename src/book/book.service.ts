@@ -838,11 +838,18 @@ export class BookService {
           author: book.author,
           coverImage: book.coverImage,
           rating: book.rating,
+          reviews: book.reviews,
+          isbn: book.isbn,
+          isbn13: book.isbn13,
+          publisher: book.publisher,
+          publishDate: book.publishDate,
+          description: book.description?.substring(0, 100) + '...',
+          priceSales: book.priceSales,
+          priceStandard: book.priceStandard,
           category: {
             id: book.category?.id,
             name: book.category?.name,
           },
-          publisher: book.publisher,
         }));
 
         return {
@@ -1205,8 +1212,7 @@ export class BookService {
 
   /**
    * ISBN으로 도서 상세 정보 조회
-   * 이 메서드는 특정 책을 자세히 조회할 때 사용되므로 DB에 정보를 저장하지 않고
-   * 해당 책에 대한 리뷰, 평점 등의 액션이 발생할 때 DB에 저장하도록 변경
+   * 책이 DB에 없으면 알라딘 API에서 가져와서 DB에 저장합니다.
    */
   async getBookDetailByIsbn(isbn: string): Promise<Book> {
     // 이미 DB에 있는지 확인
@@ -1243,8 +1249,7 @@ export class BookService {
       // 카테고리 처리 (기본값 사용)
       const category = await this.categoryService.findOne(1);
 
-      // 상세 정보 조회만으로는 DB에 저장하지 않고, 임시 Book 객체만 생성하여 반환
-      // 모든 필드가 명시적으로 포함되도록 확장
+      // 책 데이터 DB에 저장
       const bookObject = {
         ...bookData,
         category,
@@ -1266,14 +1271,14 @@ export class BookService {
         isDiscovered: false,
       };
 
-      const tempBook = this.bookRepository.create(
-        bookObject,
-      ) as unknown as Book;
+      // 새 Book 엔티티 생성 및 저장
+      const newBook = this.bookRepository.create(bookObject) as unknown as Book;
+      const savedBook = await this.bookRepository.save(newBook);
 
       this.logger.log(
-        `[ISBN 도서 조회] ${isbn}: ${tempBook.title} by ${tempBook.author}`,
+        `[ISBN 도서 저장] ${isbn}: ${savedBook.title} by ${savedBook.author}가 DB에 저장되었습니다.`,
       );
-      return tempBook;
+      return savedBook;
     } catch (error) {
       this.logger.error(`도서 상세 정보 조회 오류: ${error.message}`);
       throw new NotFoundException(`ISBN ${isbn}으로 도서를 찾을 수 없습니다.`);

@@ -57,6 +57,18 @@ export class SearchLog {
   publisher: string;
 
   /**
+   * ISBN - DB에 직접 저장
+   */
+  @Column({ nullable: true })
+  isbn: string;
+
+  /**
+   * ISBN13 - DB에 직접 저장
+   */
+  @Column({ nullable: true })
+  isbn13: string;
+
+  /**
    * 책 설명 - DB에 직접 저장
    */
   @Column({ nullable: true, type: 'text' })
@@ -136,6 +148,18 @@ export class RecentSearch {
    */
   @Column({ nullable: true })
   publisher: string;
+
+  /**
+   * ISBN - DB에 직접 저장
+   */
+  @Column({ nullable: true })
+  isbn: string;
+
+  /**
+   * ISBN13 - DB에 직접 저장
+   */
+  @Column({ nullable: true })
+  isbn13: string;
 
   /**
    * 책 설명 - DB에 직접 저장

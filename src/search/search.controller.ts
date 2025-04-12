@@ -88,6 +88,8 @@ export class SearchController {
     @Body('author') author: string,
     @Body('coverImage') coverImage?: string,
     @Body('publisher') publisher?: string,
+    @Body('isbn') isbn?: string,
+    @Body('isbn13') isbn13?: string,
     @Body('description') description?: string,
     @GetUser() user?: User,
   ): Promise<any> {
@@ -103,6 +105,8 @@ export class SearchController {
       author,
       coverImage,
       publisher,
+      isbn,
+      isbn13,
       description: description ? description.substring(0, 500) : undefined, // 설명이 너무 길면 잘라내기
     });
 
