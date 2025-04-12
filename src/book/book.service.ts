@@ -184,7 +184,7 @@ export class BookService {
   /**
    * 알라딘 API로 도서 정보 가져오기
    */
-  async fetchBookDetailsFromAladin(isbn: string): Promise<Book> {
+  async fetchBookDetailsFromAladin(isbn: string): Promise<any> {
     try {
       const result = await this.aladinService.getBookDetail({ itemId: isbn });
       if (!result || !result.item || result.item.length === 0) {
@@ -196,26 +196,10 @@ export class BookService {
       // 첫 번째 아이템 선택
       const bookItem = result.item[0];
 
-      // 기본 카테고리 사용 (추후 매핑 로직 추가 가능)
-      const category = await this.categoryService.findOne(1);
-      if (!category) {
-        throw new NotFoundException(`Category with ID 1 not found`);
-      }
-
       // 책 데이터 추출
       const bookData = this.aladinService.extractBookData(bookItem);
 
-      // 새 Book 엔티티 생성
-      const newBook = this.bookRepository.create({
-        ...bookData,
-        category,
-      }) as unknown as Book;
-
-      // 단일 엔티티 저장 시 첫 번째 결과값 반환
-      const savedBook = await (this.bookRepository.save(
-        newBook,
-      ) as unknown as Promise<Book>);
-      return savedBook;
+      return bookData;
     } catch (error) {
       this.logger.error(
         `Failed to fetch book details for ISBN ${isbn}: ${error.message}`,
