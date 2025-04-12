@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { SearchTarget, SortType, CoverSize } from '../book/dto/search-book.dto';
+import { OptionalAuth } from '../auth/decorators/optional-auth.decorator';
 
 @Controller('search')
 export class SearchController {
@@ -27,7 +28,7 @@ export class SearchController {
    * 통합 검색 API
    */
   @Get()
-  @IsPublic()
+  @OptionalAuth()
   async search(
     @Query('query') query: string,
     @Query('type') type?: string,
@@ -78,7 +79,7 @@ export class SearchController {
    * 검색 결과에서 책 선택 시 저장 API
    */
   @Post('log-book-selection')
-  @IsPublic()
+  @OptionalAuth()
   async logBookSelection(
     @Body('term') term: string,
     @Body('bookId') bookId: number,
@@ -140,6 +141,24 @@ export class SearchController {
   async deleteAllRecentSearches(@GetUser() user: User): Promise<any> {
     await this.searchService.deleteAllRecentSearchesByUserId(user.id);
     return { success: true, message: '모든 최근 검색어가 삭제되었습니다.' };
+  }
+
+  /**
+   * 특정 검색어 삭제 API
+   */
+  @Delete('recent/:id')
+  @UseGuards(JwtAuthGuard)
+  async deleteRecentSearch(
+    @GetUser() user: User,
+    @Param('id') id: string,
+  ): Promise<any> {
+    const searchId = parseInt(id, 10);
+    if (isNaN(searchId)) {
+      return { success: false, message: '유효하지 않은 ID입니다.' };
+    }
+
+    await this.searchService.deleteRecentSearchById(user.id, searchId);
+    return { success: true, message: '검색어가 삭제되었습니다.' };
   }
 
   /**

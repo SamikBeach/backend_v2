@@ -290,4 +290,36 @@ export class SearchService {
       throw error;
     }
   }
+
+  /**
+   * 사용자의 특정 검색어 삭제
+   * @param userId 사용자 ID
+   * @param searchId 삭제할 검색어 ID
+   */
+  async deleteRecentSearchById(
+    userId: number,
+    searchId: number,
+  ): Promise<void> {
+    if (!userId || !searchId) return;
+
+    try {
+      // 해당 ID의 검색어가 사용자의 것인지 확인
+      const search = await this.recentSearchRepository.findOne({
+        where: { id: searchId, userId },
+      });
+
+      if (!search) {
+        throw new Error(
+          '검색어를 찾을 수 없거나 해당 사용자의 검색어가 아닙니다.',
+        );
+      }
+
+      // 검색어 삭제
+      await this.recentSearchRepository.delete(searchId);
+      this.logger.log(`사용자 ID ${userId}의 검색어 ID ${searchId} 삭제 완료`);
+    } catch (error) {
+      this.logger.error(`검색어 삭제 오류: ${error.message}`);
+      throw error;
+    }
+  }
 }
