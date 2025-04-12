@@ -916,19 +916,17 @@ export class BookService {
                   await this.subCategoryService.findOne(subcategoryId);
               }
 
-              // 새 Book 엔티티 생성
-              const newBook = this.bookRepository.create({
+              // 검색 시에는 DB에 저장하지 않고 메모리 상의 Book 객체만 생성
+              const tempBook = this.bookRepository.create({
                 ...bookData,
                 category,
                 subcategory,
-              }) as unknown as Book;
+              });
 
-              // 단일 엔티티 저장 시 첫 번째 결과값 반환
-              book = await (this.bookRepository.save(
-                newBook,
-              ) as unknown as Promise<Book>);
+              // 관계 객체 설정 (TypeORM은 save 없이도 관계 객체를 설정할 수 있음)
+              book = tempBook as unknown as Book;
             } catch (error) {
-              this.logger.error(`도서 저장 오류: ${error.message}`);
+              this.logger.error(`도서 객체 생성 오류: ${error.message}`);
               // 오류 발생 시 임시 Book 객체 생성
               const tempBook = this.bookRepository.create(
                 bookData,
@@ -1013,20 +1011,20 @@ export class BookService {
                   await this.subCategoryService.findOne(subcategoryId);
               }
 
-              // 베스트셀러 표시
-              const newBook = this.bookRepository.create({
+              // 검색 시에는 DB에 저장하지 않고 메모리 상의 Book 객체만 생성
+              const tempBook = this.bookRepository.create({
                 ...bookData,
                 category,
                 subcategory,
                 isFeatured: true,
-              }) as unknown as Book;
+              });
 
-              // 단일 엔티티 저장 시 첫 번째 결과값 반환
-              book = await (this.bookRepository.save(
-                newBook,
-              ) as unknown as Promise<Book>);
+              // 관계 객체 설정
+              book = tempBook as unknown as Book;
             } catch (error) {
-              this.logger.error(`베스트셀러 도서 저장 오류: ${error.message}`);
+              this.logger.error(
+                `베스트셀러 도서 객체 생성 오류: ${error.message}`,
+              );
               const tempBook = this.bookRepository.create(
                 bookData,
               ) as unknown as Book;
@@ -1099,17 +1097,16 @@ export class BookService {
             try {
               const category = await this.categoryService.findOne(1); // 기본 카테고리
 
-              const newBook = this.bookRepository.create({
+              // 검색 시에는 DB에 저장하지 않고 메모리 상의 Book 객체만 생성
+              const tempBook = this.bookRepository.create({
                 ...bookData,
                 category,
-              }) as unknown as Book;
+              });
 
-              // 단일 엔티티 저장 시 첫 번째 결과값 반환
-              book = await (this.bookRepository.save(
-                newBook,
-              ) as unknown as Promise<Book>);
+              // 관계 객체 설정
+              book = tempBook as unknown as Book;
             } catch (error) {
-              this.logger.error(`신간 도서 저장 오류: ${error.message}`);
+              this.logger.error(`신간 도서 객체 생성 오류: ${error.message}`);
               const tempBook = this.bookRepository.create(
                 bookData,
               ) as unknown as Book;
@@ -1135,6 +1132,8 @@ export class BookService {
 
   /**
    * ISBN으로 도서 상세 정보 조회
+   * 이 메서드는 특정 책을 자세히 조회할 때 사용되므로 DB에 정보를 저장하지 않고
+   * 해당 책에 대한 리뷰, 평점 등의 액션이 발생할 때 DB에 저장하도록 변경
    */
   async getBookDetailByIsbn(isbn: string): Promise<Book> {
     // 이미 DB에 있는지 확인
@@ -1171,16 +1170,13 @@ export class BookService {
       // 카테고리 처리 (기본값 사용)
       const category = await this.categoryService.findOne(1);
 
-      // 새 Book 엔티티 생성 및 저장
-      const newBook = this.bookRepository.create({
+      // 상세 정보 조회만으로는 DB에 저장하지 않고, 임시 Book 객체만 생성하여 반환
+      const tempBook = this.bookRepository.create({
         ...bookData,
         category,
-      }) as unknown as Book;
+      });
 
-      // 단일 엔티티 저장 시 첫 번째 결과값 반환
-      return await (this.bookRepository.save(
-        newBook,
-      ) as unknown as Promise<Book>);
+      return tempBook as unknown as Book;
     } catch (error) {
       this.logger.error(`도서 상세 정보 조회 오류: ${error.message}`);
       throw new NotFoundException(`ISBN ${isbn}으로 도서를 찾을 수 없습니다.`);

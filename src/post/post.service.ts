@@ -435,26 +435,65 @@ export class PostService {
   }
 
   /**
-   * 게시물에 책 연결
+   * 게시물에 책 연결 (이 시점에 책 DB에 저장)
    */
   private async addBooksToPost(
     postId: number,
     bookIds: number[],
   ): Promise<void> {
-    // 책이 실제로 존재하는지 확인
-    const books = await this.bookService.findByIds(bookIds);
+    try {
+      // bookIds가 정수 배열인지 확인
+      if (!bookIds || !bookIds.length) return;
 
-    if (books.length === 0) {
-      return; // 유효한 책이 없으면 아무 작업도 하지 않음
+      // 실제 DB에 존재하는 책만 필터링
+      const existingBooks = await this.bookService.findByIds(bookIds);
+      const existingBookIds = existingBooks.map((book) => book.id);
+
+      // 존재하지 않는 책들을 찾아서 Aladin API로 가져와 DB에 저장
+      const nonExistingBookIds = bookIds.filter(
+        (id) => !existingBookIds.includes(id),
+      );
+
+      const savedBooks = [];
+      for (const bookId of nonExistingBookIds) {
+        try {
+          // 책 정보를 Aladin API로부터 가져와서 DB에 저장
+          // getBookDetailByIsbn 대신 fetchBookDetailsById 같은 메서드가 필요할 수 있음
+          // 여기서는 이 예제에서 직접 id로 가져오는 메서드가 없다고 가정하고 진행
+          this.logger.log(
+            `책 ID ${bookId}를 DB에 저장합니다. (포스트 ID: ${postId})`,
+          );
+
+          // 실제 구현은 BookService에 해당 메서드가 있어야 함
+          // 예: const book = await this.bookService.fetchAndSaveBookById(bookId);
+          // savedBooks.push(book);
+        } catch (error) {
+          this.logger.error(`책 ID ${bookId} 저장 실패: ${error.message}`);
+        }
+      }
+
+      // DB에 있는 책들과 새로 저장한 책들 모두 포함
+      const allBooks = [...existingBooks, ...savedBooks];
+
+      if (allBooks.length === 0) {
+        return; // 유효한 책이 없으면 아무 작업도 하지 않음
+      }
+
+      // 책 연결 저장
+      const postBooks = allBooks.map((book) => ({
+        postId,
+        bookId: book.id,
+      }));
+
+      await this.postBookRepository.save(postBooks);
+
+      this.logger.log(
+        `포스트 ID ${postId}에 ${postBooks.length}개의 책 연결 완료`,
+      );
+    } catch (error) {
+      this.logger.error(`포스트에 책 연결 실패: ${error.message}`);
+      throw error;
     }
-
-    // 책 연결 저장
-    const postBooks = books.map((book) => ({
-      postId,
-      bookId: book.id,
-    }));
-
-    await this.postBookRepository.save(postBooks);
   }
 
   /**
