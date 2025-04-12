@@ -11,6 +11,7 @@ import { Tag } from './entities/tag.entity';
 import { BookModule } from '../book/book.module';
 import { UserModule } from '../user/user.module';
 import { TagModule } from '../tag/tag.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { TagModule } from '../tag/tag.module';
     BookModule,
     UserModule,
     forwardRef(() => TagModule),
+    NotificationModule,
   ],
   controllers: [LibraryController],
   providers: [LibraryService],

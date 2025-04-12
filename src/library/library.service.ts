@@ -6,6 +6,7 @@ import {
   Logger,
   Inject,
   forwardRef,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -31,6 +32,7 @@ import {
 import { UserService } from '../user/user.service';
 import { In } from 'typeorm';
 import { TagService } from '../tag/tag.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class LibraryService {
@@ -51,6 +53,7 @@ export class LibraryService {
     private readonly userService: UserService,
     @Inject(forwardRef(() => TagService))
     private readonly tagService: TagService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // 서재 생성
@@ -489,63 +492,116 @@ export class LibraryService {
     userId: number,
     addBookToLibraryDto: AddBookToLibraryDto,
   ): Promise<LibraryBookResponseDto> {
-    const library = await this.libraryRepository.findOne({
-      where: { id: libraryId },
-    });
+    try {
+      // 라이브러리 존재 및 사용자 권한 확인
+      const library = await this.findOne(libraryId);
+      if (library.owner.id !== userId) {
+        throw new ForbiddenException(
+          '이 라이브러리에 책을 추가할 권한이 없습니다.',
+        );
+      }
 
-    if (!library) {
-      throw new NotFoundException(`서재 ID ${libraryId}를 찾을 수 없습니다.`);
-    }
+      // 책 존재 여부 확인
+      let book: any;
+      try {
+        // 기존 DB에서 책 찾기
+        book = await this.bookService.findById(addBookToLibraryDto.bookId);
+      } catch (error) {
+        if (error instanceof NotFoundException) {
+          // ID로 책을 찾을 수 없는 경우, ISBN으로 알라딘 API 검색 결과일 수 있음
+          if (addBookToLibraryDto.isbn) {
+            this.logger.log(
+              `책 ID ${addBookToLibraryDto.bookId}를 찾을 수 없어 ISBN ${addBookToLibraryDto.isbn}으로 검색합니다.`,
+            );
 
-    if (library.ownerId !== userId) {
-      throw new ForbiddenException('이 서재에 책을 추가할 권한이 없습니다.');
-    }
+            // 이미 ISBN으로 저장된 책이 있는지 확인
+            let existingBook = await this.bookService.findByIsbn(
+              addBookToLibraryDto.isbn,
+            );
 
-    const book = await this.bookService.findById(addBookToLibraryDto.bookId);
+            if (!existingBook) {
+              // 알라딘 API에서 책 정보 가져와서 DB에 저장
+              this.logger.log(
+                `ISBN ${addBookToLibraryDto.isbn}의 책을 알라딘 API에서 가져와 저장합니다.`,
+              );
+              existingBook = await this.bookService.getBookDetailByIsbn(
+                addBookToLibraryDto.isbn,
+              );
+            }
 
-    // 이미 서재에 해당 책이 있는지 확인
-    const existingBook = await this.libraryBookRepository.findOne({
-      where: {
+            book = existingBook;
+          } else {
+            throw new NotFoundException('책을 찾을 수 없습니다.');
+          }
+        } else {
+          throw error; // 다른 에러는 그대로 전파
+        }
+      }
+
+      if (!book) {
+        throw new NotFoundException('책을 찾을 수 없습니다.');
+      }
+
+      // 이미 라이브러리에 책이 있는지 확인
+      const existingBook = await this.libraryBookRepository.findOne({
+        where: {
+          libraryId,
+          bookId: book.id,
+        },
+      });
+
+      if (existingBook) {
+        throw new ConflictException('이미 라이브러리에 추가된 책입니다.');
+      }
+
+      // 책 추가
+      const libraryBook = this.libraryBookRepository.create({
         libraryId,
-        bookId: addBookToLibraryDto.bookId,
-      },
-    });
+        bookId: book.id,
+        note: addBookToLibraryDto.note,
+      });
 
-    if (existingBook) {
-      throw new BadRequestException('이미 서재에 추가된 책입니다.');
+      const savedLibraryBook =
+        await this.libraryBookRepository.save(libraryBook);
+
+      // 라이브러리 업데이트 이력 저장
+      const message = `라이브러리에 새로운 책이 추가되었습니다: ${book.title}`;
+      await this.addUpdateHistory(libraryId, message);
+
+      // 구독자들에게 알림 발송
+      const subscribers = await this.getLibrarySubscribers(libraryId);
+      if (subscribers.length > 0) {
+        const subscriberIds = subscribers.map((subscriber) => subscriber.id);
+        await this.notificationService.createLibraryUpdateNotification(
+          libraryId,
+          library.name,
+          book.id,
+          book.title,
+          subscriberIds,
+        );
+      }
+
+      return {
+        id: savedLibraryBook.id,
+        bookId: savedLibraryBook.bookId,
+        libraryId: savedLibraryBook.libraryId,
+        note: savedLibraryBook.note,
+        book: {
+          id: book.id,
+          title: book.title,
+          author: book.author,
+          coverImage: book.coverImage,
+          publisher: book.publisher,
+          isbn: book.isbn,
+        },
+        createdAt: savedLibraryBook.createdAt,
+      };
+    } catch (error) {
+      this.logger.error(
+        `라이브러리(${libraryId})에 책 추가 실패: ${error.message}`,
+      );
+      throw error;
     }
-
-    const libraryBook = this.libraryBookRepository.create({
-      library,
-      libraryId,
-      book,
-      bookId: addBookToLibraryDto.bookId,
-      note: addBookToLibraryDto.note,
-    });
-
-    const savedLibraryBook = await this.libraryBookRepository.save(libraryBook);
-
-    // 책 추가 이력
-    await this.addUpdateHistory(
-      libraryId,
-      `"${book.title}" 책이 서재에 추가되었습니다.`,
-    );
-
-    return {
-      id: savedLibraryBook.id,
-      bookId: savedLibraryBook.bookId,
-      libraryId: savedLibraryBook.libraryId,
-      note: savedLibraryBook.note,
-      book: {
-        id: book.id,
-        title: book.title,
-        author: book.author,
-        coverImage: book.coverImage,
-        isbn: book.isbn,
-        publisher: book.publisher,
-      },
-      createdAt: savedLibraryBook.createdAt,
-    };
   }
 
   // 서재에서 책 제거

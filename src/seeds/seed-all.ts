@@ -50,6 +50,11 @@ async function bootstrap() {
     await exec('yarn seed:search');
     logger.log('검색 이력 데이터 시드 작업 완료!');
 
+    // 9. 알림 데이터 시드
+    logger.log('알림 데이터 시드 작업 시작...');
+    await exec('yarn seed:notification');
+    logger.log('알림 데이터 시드 작업 완료!');
+
     logger.log('모든 시드 작업이 성공적으로 완료되었습니다! 🎉');
   } catch (error) {
     logger.error(`시드 작업 중 오류 발생: ${error.message}`);

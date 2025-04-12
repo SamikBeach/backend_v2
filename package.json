@@ -15,7 +15,8 @@
     "seed:library": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/library.seed.ts",
     "seed:post": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/post.seed.ts",
     "seed:search": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/search.seed.ts",
-    "seed:all": "yarn seed:categories && yarn seed:books && yarn seed:discover-category && yarn seed:tag && yarn seed:user && yarn seed:library && yarn seed:post && yarn seed:search",
+    "seed:notification": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/notification.seed.ts",
+    "seed:all": "yarn seed:categories && yarn seed:books && yarn seed:discover-category && yarn seed:tag && yarn seed:user && yarn seed:library && yarn seed:post && yarn seed:search && yarn seed:notification",
     "seed:run-all": "NODE_ENV=development ts-node src/seeds/seed-all.ts",
     "seed:category": "ts-node -r tsconfig-paths/register src/seeds/category.seed.ts"
   },

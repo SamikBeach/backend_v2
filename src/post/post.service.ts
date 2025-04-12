@@ -16,6 +16,8 @@ import { UpdatePostDto } from './dto/update-post.dto';
 import { FileService } from '../common/services/file.service';
 import { User } from '../user/entities/user.entity';
 import { BookService } from '../book/book.service';
+import { UserService } from '../user/user.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class PostService {
@@ -32,6 +34,8 @@ export class PostService {
     private readonly postLikeRepository: Repository<PostLike>,
     private readonly fileService: FileService,
     private readonly bookService: BookService,
+    private readonly userService: UserService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   /**
@@ -277,40 +281,43 @@ export class PostService {
   /**
    * 게시물 좋아요 추가
    */
-  async likePost(postId: number, userId: number): Promise<void> {
-    try {
-      const post = await this.postRepository.findOne({
-        where: { id: postId },
-      });
+  async likePost(postId: number, userId: number): Promise<PostLike> {
+    // 이미 좋아요를 눌렀는지 확인
+    const existingLike = await this.postLikeRepository.findOne({
+      where: { postId, userId },
+    });
 
-      if (!post) {
-        throw new NotFoundException(
-          `게시물을 찾을 수 없습니다. (ID: ${postId})`,
-        );
-      }
-
-      // 이미 좋아요 했는지 확인
-      const existingLike = await this.postLikeRepository.findOne({
-        where: { postId, userId },
-      });
-
-      if (existingLike) {
-        return; // 이미 좋아요 한 경우 아무것도 하지 않음
-      }
-
-      // 좋아요 추가
-      await this.postLikeRepository.save({
-        postId,
-        userId,
-      });
-
-      // 좋아요 카운트 증가
-      post.likeCount += 1;
-      await this.postRepository.save(post);
-    } catch (error) {
-      this.logger.error(`Failed to like post ${postId}: ${error.message}`);
-      throw error;
+    if (existingLike) {
+      return existingLike;
     }
+
+    const post = await this.postRepository.findOne({
+      where: { id: postId },
+    });
+
+    if (!post) {
+      throw new NotFoundException(`Post with ID ${postId} not found`);
+    }
+
+    const like = this.postLikeRepository.create({
+      postId,
+      userId,
+    });
+
+    const savedLike = await this.postLikeRepository.save(like);
+
+    // 좋아요 알림 생성
+    const user = await this.userService.findOne(userId);
+    if (post.authorId !== userId) {
+      await this.notificationService.createLikeNotification(
+        postId,
+        post.authorId,
+        userId,
+        user.username || user.email,
+      );
+    }
+
+    return savedLike;
   }
 
   /**

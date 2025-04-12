@@ -31,6 +31,8 @@ import { PostLike } from './post/entities/post-like.entity';
 import { Comment } from './post/entities/comment.entity';
 import { SearchModule } from './search/search.module';
 import { SearchLog, PopularSearch, RecentSearch } from './search/search.entity';
+import { NotificationModule } from './notification/notification.module';
+import { Notification } from './notification/entities/notification.entity';
 
 @Module({
   imports: [
@@ -69,6 +71,7 @@ import { SearchLog, PopularSearch, RecentSearch } from './search/search.entity';
           SearchLog,
           PopularSearch,
           RecentSearch,
+          Notification,
         ],
         synchronize: true,
         namingStrategy: new SnakeNamingStrategy(),
@@ -84,6 +87,7 @@ import { SearchLog, PopularSearch, RecentSearch } from './search/search.entity';
     TagModule,
     PostModule,
     SearchModule,
+    NotificationModule,
   ],
 })
 export class AppModule implements NestModule {

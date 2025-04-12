@@ -18,6 +18,8 @@ import { Comment } from './entities/comment.entity';
 import { CommonModule } from '../common/common.module';
 import { FileService } from '../common/services/file.service';
 import { BookModule } from '../book/book.module';
+import { UserModule } from '../user/user.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
@@ -58,6 +60,8 @@ import { BookModule } from '../book/book.module';
     }),
     CommonModule,
     BookModule,
+    UserModule,
+    NotificationModule,
   ],
   controllers: [PostController],
   providers: [PostService, CommentService, FileService],

@@ -11,6 +11,8 @@ import { Post } from './entities/post.entity';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CommentResponseDto } from './dto/post-response.dto';
 import { User } from '../user/entities/user.entity';
+import { UserService } from '../user/user.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class CommentService {
@@ -21,6 +23,8 @@ export class CommentService {
     private readonly commentRepository: Repository<Comment>,
     @InjectRepository(Post)
     private readonly postRepository: Repository<Post>,
+    private readonly userService: UserService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   /**
@@ -74,6 +78,16 @@ export class CommentService {
       // 댓글 수 증가
       post.commentCount += 1;
       await this.postRepository.save(post);
+
+      // 댓글 알림 생성
+      if (post.authorId !== user.id) {
+        await this.notificationService.createCommentNotification(
+          postId,
+          post.authorId,
+          user.id,
+          user.username || user.email,
+        );
+      }
 
       // 응답 데이터 구성
       return this.mapCommentToDto(savedComment, user);
