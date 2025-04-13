@@ -5,19 +5,19 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Post } from './post.entity';
+import { Review } from './review.entity';
 import { Book } from '../../book/entities/book.entity';
 
 @Entity()
-export class PostBook {
+export class ReviewBook {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Post, (post) => post.books, { onDelete: 'CASCADE' })
-  post: Post;
+  @ManyToOne(() => Review, (review) => review.books, { onDelete: 'CASCADE' })
+  review: Review;
 
   @Column()
-  postId: number;
+  reviewId: number;
 
   @ManyToOne(() => Book)
   book: Book;

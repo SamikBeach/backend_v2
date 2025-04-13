@@ -1,9 +1,9 @@
-import { PostType } from '../entities/post.entity';
+import { ReviewType } from '../entities/review.entity';
 
-export class PostResponseDto {
+export class ReviewResponseDto {
   id: number;
   content: string;
-  type: PostType;
+  type: ReviewType;
   author: {
     id: number;
     username: string;

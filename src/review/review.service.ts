@@ -1,0 +1,550 @@
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from '../user/entities/user.entity';
+import { Review } from './entities/review.entity';
+import { ReviewImage } from './entities/review-image.entity';
+import { ReviewBook } from './entities/review-book.entity';
+import { ReviewLike } from './entities/review-like.entity';
+import { CreateReviewDto } from './dto/create-review.dto';
+import { ReviewResponseDto } from './dto/review-response.dto';
+import { UpdateReviewDto } from './dto/update-review.dto';
+import { FileService } from '../common/services/file.service';
+import { BookService } from '../book/book.service';
+import { UserService } from '../user/user.service';
+import { NotificationService } from '../notification/notification.service';
+
+@Injectable()
+export class ReviewService {
+  private readonly logger = new Logger(ReviewService.name);
+
+  constructor(
+    @InjectRepository(Review)
+    private readonly reviewRepository: Repository<Review>,
+    @InjectRepository(ReviewImage)
+    private readonly reviewImageRepository: Repository<ReviewImage>,
+    @InjectRepository(ReviewBook)
+    private readonly reviewBookRepository: Repository<ReviewBook>,
+    @InjectRepository(ReviewLike)
+    private readonly reviewLikeRepository: Repository<ReviewLike>,
+    private readonly fileService: FileService,
+    private readonly bookService: BookService,
+    private readonly userService: UserService,
+    private readonly notificationService: NotificationService,
+  ) {}
+
+  /**
+   * 리뷰 생성
+   */
+  async createReview(
+    user: User,
+    createReviewDto: CreateReviewDto,
+    files?: Express.Multer.File[],
+  ): Promise<ReviewResponseDto> {
+    try {
+      // 리뷰 엔티티 생성
+      const review = this.reviewRepository.create({
+        content: createReviewDto.content,
+        type: createReviewDto.type,
+        authorId: user.id,
+      });
+
+      // 리뷰 저장
+      const savedReview = await this.reviewRepository.save(review);
+
+      // 이미지가 있으면 이미지 업로드 및 연결
+      if (files && files.length > 0) {
+        await this.addImagesToReview(savedReview.id, files);
+      }
+
+      // 책 연결
+      if (createReviewDto.bookIds && createReviewDto.bookIds.length > 0) {
+        await this.addBooksToReview(savedReview.id, createReviewDto.bookIds);
+      }
+
+      // 저장된 리뷰 반환 (응답용 DTO로 변환)
+      return this.findReviewById(savedReview.id, user.id);
+    } catch (error) {
+      this.logger.error(`리뷰 생성 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 모든 리뷰 조회 (페이지네이션)
+   */
+  async findAllReviews(
+    userId?: number,
+    page: number = 1,
+    limit: number = 10,
+    type?: string,
+  ): Promise<{
+    reviews: ReviewResponseDto[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    try {
+      const queryBuilder = this.reviewRepository
+        .createQueryBuilder('review')
+        .leftJoinAndSelect('review.author', 'author')
+        .leftJoinAndSelect('review.images', 'images')
+        .leftJoinAndSelect('review.books', 'reviewBooks')
+        .leftJoinAndSelect('reviewBooks.book', 'book')
+        .orderBy('review.createdAt', 'DESC')
+        .skip((page - 1) * limit)
+        .take(limit);
+
+      // 타입 필터링
+      if (type) {
+        queryBuilder.andWhere('review.type = :type', { type });
+      }
+
+      // 로그인한 사용자의 경우 좋아요 여부 체크
+      if (userId) {
+        queryBuilder.leftJoin(
+          'review.likes',
+          'likes',
+          'likes.userId = :userId',
+          {
+            userId,
+          },
+        );
+        queryBuilder.addSelect(
+          'CASE WHEN likes.id IS NOT NULL THEN true ELSE false END',
+          'review_isLiked',
+        );
+      } else {
+        queryBuilder.addSelect('false', 'review_isLiked');
+      }
+
+      // 쿼리 실행
+      const [reviews, total] = await queryBuilder.getManyAndCount();
+
+      // DTO로 변환
+      const reviewDtos = await Promise.all(
+        reviews.map((review) => this.mapReviewToResponseDto(review, userId)),
+      );
+
+      return {
+        reviews: reviewDtos,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      this.logger.error(`Failed to fetch reviews: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 리뷰 상세 조회
+   */
+  async findReviewById(
+    id: number,
+    userId?: number,
+  ): Promise<ReviewResponseDto> {
+    try {
+      const queryBuilder = this.reviewRepository
+        .createQueryBuilder('review')
+        .leftJoinAndSelect('review.author', 'author')
+        .leftJoinAndSelect('review.images', 'images')
+        .leftJoinAndSelect('review.books', 'reviewBooks')
+        .leftJoinAndSelect('reviewBooks.book', 'book')
+        .where('review.id = :id', { id });
+
+      // 로그인한 사용자의 경우 좋아요 여부 체크
+      if (userId) {
+        queryBuilder.leftJoin(
+          'review.likes',
+          'likes',
+          'likes.userId = :userId',
+          {
+            userId,
+          },
+        );
+        queryBuilder.addSelect(
+          'CASE WHEN likes.id IS NOT NULL THEN true ELSE false END',
+          'review_isLiked',
+        );
+      } else {
+        queryBuilder.addSelect('false', 'review_isLiked');
+      }
+
+      const review = await queryBuilder.getOne();
+
+      if (!review) {
+        throw new NotFoundException(`리뷰를 찾을 수 없습니다. (ID: ${id})`);
+      }
+
+      return this.mapReviewToResponseDto(review, userId);
+    } catch (error) {
+      this.logger.error(`리뷰 조회 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 리뷰 수정
+   */
+  async updateReview(
+    id: number,
+    userId: number,
+    updateReviewDto: UpdateReviewDto,
+    files?: Express.Multer.File[],
+  ): Promise<ReviewResponseDto> {
+    try {
+      const review = await this.reviewRepository.findOne({
+        where: { id },
+        relations: ['author', 'images', 'books'],
+      });
+
+      if (!review) {
+        throw new NotFoundException(`리뷰를 찾을 수 없습니다. (ID: ${id})`);
+      }
+
+      // 자신의 리뷰만 수정 가능
+      if (review.authorId !== userId) {
+        throw new ForbiddenException('자신의 리뷰만 수정할 수 있습니다.');
+      }
+
+      // 내용 업데이트
+      if (updateReviewDto.content) {
+        review.content = updateReviewDto.content;
+      }
+
+      // 타입 업데이트
+      if (updateReviewDto.type) {
+        review.type = updateReviewDto.type;
+      }
+
+      // 이미지 추가
+      if (files && files.length > 0) {
+        await this.addImagesToReview(id, files);
+      }
+
+      // 책 ID 업데이트
+      if (updateReviewDto.bookIds) {
+        // 기존 책 연결 삭제
+        await this.reviewBookRepository.delete({ reviewId: id });
+        // 새 책 연결
+        await this.addBooksToReview(id, updateReviewDto.bookIds);
+      }
+
+      // 리뷰 저장
+      await this.reviewRepository.save(review);
+
+      return this.findReviewById(id, userId);
+    } catch (error) {
+      this.logger.error(`리뷰 수정 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 리뷰 삭제
+   */
+  async deleteReview(id: number, userId: number): Promise<void> {
+    try {
+      const review = await this.reviewRepository.findOne({
+        where: { id },
+        relations: ['images'],
+      });
+
+      if (!review) {
+        throw new NotFoundException(`리뷰를 찾을 수 없습니다. (ID: ${id})`);
+      }
+
+      // 자신의 리뷰만 삭제 가능
+      if (review.authorId !== userId) {
+        throw new ForbiddenException('자신의 리뷰만 삭제할 수 있습니다.');
+      }
+
+      // 이미지 파일 삭제
+      for (const image of review.images) {
+        try {
+          await this.fileService.deleteFile(image.url);
+        } catch (error) {
+          this.logger.warn(`이미지 삭제 실패: ${image.url} - ${error.message}`);
+        }
+      }
+
+      // 리뷰 삭제 (cascade 설정으로 연결된 이미지, 책, 좋아요 등도 함께 삭제됨)
+      await this.reviewRepository.remove(review);
+    } catch (error) {
+      this.logger.error(`리뷰 삭제 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 리뷰 좋아요
+   */
+  async likeReview(reviewId: number, userId: number): Promise<ReviewLike> {
+    try {
+      // 이미 좋아요 했는지 확인
+      const existingLike = await this.reviewLikeRepository.findOne({
+        where: { reviewId, userId },
+      });
+
+      if (existingLike) {
+        return existingLike; // 이미 좋아요 상태면 그대로 반환
+      }
+
+      // 리뷰 존재 여부 확인
+      const review = await this.reviewRepository.findOne({
+        where: { id: reviewId },
+      });
+
+      if (!review) {
+        throw new NotFoundException(`Review with ID ${reviewId} not found`);
+      }
+
+      // 좋아요 생성
+      const like = this.reviewLikeRepository.create({
+        reviewId,
+        userId,
+      });
+
+      const savedLike = await this.reviewLikeRepository.save(like);
+
+      // 리뷰의 좋아요 수 증가
+      if (review.authorId !== userId) {
+        await this.notificationService.createLikeNotification(
+          reviewId,
+          review.authorId,
+          userId,
+          (await this.userService.findOne(userId)).username || '사용자',
+        );
+      }
+
+      review.likeCount += 1;
+      await this.reviewRepository.save(review);
+
+      return savedLike;
+    } catch (error) {
+      this.logger.error(`리뷰 좋아요 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 리뷰 좋아요 취소
+   */
+  async unlikeReview(reviewId: number, userId: number): Promise<void> {
+    try {
+      // 리뷰 존재 여부 확인
+      const review = await this.reviewRepository.findOne({
+        where: { id: reviewId },
+      });
+
+      if (!review) {
+        throw new NotFoundException(
+          `리뷰를 찾을 수 없습니다. (ID: ${reviewId})`,
+        );
+      }
+
+      // 좋아요 삭제
+      const result = await this.reviewLikeRepository.delete({
+        reviewId,
+        userId,
+      });
+
+      // 좋아요 수 감소 (삭제된 항목이 있는 경우에만)
+      if (result.affected > 0) {
+        review.likeCount = Math.max(0, review.likeCount - 1);
+        await this.reviewRepository.save(review);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to unlike review ${reviewId}: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * 홈화면용 인기 리뷰 조회
+   */
+  async findPopularReviewsForHome(limit: number = 4): Promise<any> {
+    try {
+      const popularReviews = await this.reviewRepository
+        .createQueryBuilder('review')
+        .leftJoinAndSelect('review.author', 'author')
+        .leftJoinAndSelect('review.images', 'images')
+        .leftJoinAndSelect('review.books', 'reviewBooks')
+        .leftJoinAndSelect('reviewBooks.book', 'book')
+        .orderBy('review.likeCount', 'DESC')
+        .addOrderBy('review.commentCount', 'DESC')
+        .addOrderBy('review.createdAt', 'DESC')
+        .take(limit)
+        .getMany();
+
+      const simplifiedReviews = await Promise.all(
+        popularReviews.map(async (review) => {
+          // 첫 번째 이미지만 사용 (미리보기용)
+          const previewImageUrl =
+            review.images.length > 0 ? review.images[0].url : null;
+
+          // 연결된 책 정보
+          const books = review.books?.map((reviewBook) => ({
+            id: reviewBook.book.id,
+            title: reviewBook.book.title,
+            author: reviewBook.book.author,
+            coverImage: reviewBook.book.coverImage,
+          }));
+
+          // 짧은 버전의 컨텐츠
+          const shortContent =
+            review.content.length > 100
+              ? review.content.substring(0, 100) + '...'
+              : review.content;
+
+          return {
+            id: review.id,
+            content: shortContent,
+            type: review.type,
+            authorName: review.author.username || '사용자',
+            previewImage: previewImageUrl,
+            likeCount: review.likeCount,
+            commentCount: review.commentCount,
+            books,
+            createdAt: review.createdAt,
+          };
+        }),
+      );
+
+      return simplifiedReviews;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch popular reviews for home: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * 리뷰에 이미지 추가
+   */
+  private async addImagesToReview(
+    reviewId: number,
+    files: Express.Multer.File[],
+  ): Promise<void> {
+    try {
+      for (const file of files) {
+        // 이미지 업로드
+        const imageUrl = await this.fileService.uploadImage(file);
+
+        // ReviewImage 엔티티 생성 및 저장
+        const reviewImage = this.reviewImageRepository.create({
+          url: imageUrl,
+          reviewId,
+        });
+        await this.reviewImageRepository.save(reviewImage);
+      }
+    } catch (error) {
+      this.logger.error(`이미지 업로드 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 리뷰에 책 연결
+   */
+  private async addBooksToReview(
+    reviewId: number,
+    bookIds: number[],
+  ): Promise<void> {
+    try {
+      // 모든 책이 존재하는지 확인
+      const uniqueBookIds = [...new Set(bookIds)]; // 중복 제거
+      const books = await this.bookService.findByIds(uniqueBookIds);
+
+      if (books.length !== uniqueBookIds.length) {
+        const foundIds = books.map((book) => book.id);
+        const missingIds = uniqueBookIds.filter((id) => !foundIds.includes(id));
+        throw new BadRequestException(
+          `다음 ID의 책을 찾을 수 없습니다: ${missingIds.join(', ')}`,
+        );
+      }
+
+      // 책과 리뷰 연결
+      const reviewBooks = [];
+      for (const bookId of uniqueBookIds) {
+        this.logger.log(
+          `책 ID ${bookId}를 DB에 저장합니다. (리뷰 ID: ${reviewId})`,
+        );
+        const reviewBook = this.reviewBookRepository.create({
+          reviewId,
+          bookId,
+        });
+        reviewBooks.push(reviewBook);
+      }
+
+      await this.reviewBookRepository.save(reviewBooks);
+      this.logger.log(
+        `리뷰 ID ${reviewId}에 ${reviewBooks.length}개의 책 연결 완료`,
+      );
+    } catch (error) {
+      this.logger.error(`책 연결 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 리뷰 엔티티를 응답 DTO로 변환
+   */
+  private async mapReviewToResponseDto(
+    review: any,
+    userId?: number,
+  ): Promise<ReviewResponseDto> {
+    // 좋아요 여부
+    let isLiked = false;
+    if (review.review_isLiked !== undefined) {
+      isLiked = review.review_isLiked;
+    } else if (userId) {
+      const like = await this.reviewLikeRepository.findOne({
+        where: { reviewId: review.id, userId },
+      });
+      isLiked = !!like;
+    }
+
+    // 책 정보
+    const books = review.books?.map((reviewBook) => ({
+      id: reviewBook.book.id,
+      title: reviewBook.book.title,
+      author: reviewBook.book.author,
+      coverImage: reviewBook.book.coverImage,
+      publisher: reviewBook.book.publisher,
+    }));
+
+    return {
+      id: review.id,
+      content: review.content,
+      type: review.type,
+      author: {
+        id: review.author.id,
+        username: review.author.username || '사용자',
+        email: review.author.email,
+      },
+      images: review.images?.map((image) => ({
+        id: image.id,
+        url: image.url,
+        caption: image.caption,
+      })),
+      books,
+      likeCount: review.likeCount,
+      commentCount: review.commentCount,
+      isLiked,
+      createdAt: review.createdAt,
+      updatedAt: review.updatedAt,
+    };
+  }
+}

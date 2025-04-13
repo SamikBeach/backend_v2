@@ -1,14 +1,14 @@
 import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator';
-import { PostType } from '../entities/post.entity';
+import { ReviewType } from '../entities/review.entity';
 
-export class UpdatePostDto {
+export class UpdateReviewDto {
   @IsString()
   @IsOptional()
   content?: string;
 
   @IsEnum(['general', 'discussion', 'review', 'question', 'meetup'])
   @IsOptional()
-  type?: PostType;
+  type?: ReviewType;
 
   @IsArray()
   @IsOptional()

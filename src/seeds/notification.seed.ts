@@ -93,9 +93,9 @@ async function bootstrap() {
         title: '새 댓글',
         content: `${commenter.username || commenter.email}님이 당신의 리뷰에 댓글을 남겼습니다.`,
         sourceId: i + 1, // 가상의 게시물 ID
-        sourceType: 'post',
+        sourceType: 'review',
         actorId: commenter.id,
-        linkUrl: `/post/${i + 1}`,
+        linkUrl: `/review/${i + 1}`,
       });
     }
 
@@ -110,9 +110,9 @@ async function bootstrap() {
         title: '새 좋아요',
         content: `${liker.username || liker.email}님이 당신의 독서 목록을 좋아합니다.`,
         sourceId: i + 5, // 가상의 게시물 ID
-        sourceType: 'post',
+        sourceType: 'review',
         actorId: liker.id,
-        linkUrl: `/post/${i + 5}`,
+        linkUrl: `/review/${i + 5}`,
       });
     }
 

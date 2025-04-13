@@ -6,20 +6,20 @@ import {
   PrimaryGeneratedColumn,
   Unique,
 } from 'typeorm';
-import { Post } from './post.entity';
+import { Review } from './review.entity';
 import { User } from '../../user/entities/user.entity';
 
 @Entity()
-@Unique(['postId', 'userId'])
-export class PostLike {
+@Unique(['reviewId', 'userId'])
+export class ReviewLike {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Post, (post) => post.likes, { onDelete: 'CASCADE' })
-  post: Post;
+  @ManyToOne(() => Review, (review) => review.likes, { onDelete: 'CASCADE' })
+  review: Review;
 
   @Column()
-  postId: number;
+  reviewId: number;
 
   @ManyToOne(() => User)
   user: User;

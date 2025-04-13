@@ -1,65 +1,53 @@
+import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
-
-import * as childProcess from 'child_process';
-import * as util from 'util';
-
-const exec = util.promisify(childProcess.exec);
+import { AppModule } from '../app.module';
+import { execSync } from 'child_process';
+import * as path from 'path';
 
 async function bootstrap() {
   const logger = new Logger('SeedAll');
-  logger.log('모든 시드 작업 시작...');
+  const app = await NestFactory.createApplicationContext(AppModule);
 
   try {
-    // 1. 카테고리 데이터 시드
-    logger.log('카테고리 데이터 시드 작업 시작...');
-    await exec('yarn seed:categories');
-    logger.log('카테고리 데이터 시드 작업 완료!');
+    logger.log('전체 시드 데이터 생성 시작...');
 
-    // 2. 책 데이터 시드
-    logger.log('책 데이터 시드 작업 시작...');
-    await exec('yarn seed:books');
-    logger.log('책 데이터 시드 작업 완료!');
+    const seeds = [
+      'user.seed.ts',
+      'category.seed.ts',
+      'book.seed.ts',
+      'discover-category.seed.ts',
+      'tag.seed.ts',
+      'library.seed.ts',
+      'review.seed.ts',
+      'notification.seed.ts',
+      'search.seed.ts',
+    ];
 
-    // 3. 디스커버 카테고리 데이터 시드
-    logger.log('디스커버 카테고리 데이터 시드 작업 시작...');
-    await exec('yarn seed:discover-category');
-    logger.log('디스커버 카테고리 데이터 시드 작업 완료!');
+    const nodeEnv = process.env.NODE_ENV || 'development';
+    const basePath = path.join(__dirname);
 
-    // 4. 태그 데이터 시드
-    logger.log('태그 데이터 시드 작업 시작...');
-    await exec('yarn seed:tag');
-    logger.log('태그 데이터 시드 작업 완료!');
+    for (const seed of seeds) {
+      logger.log(`실행 중: ${seed}`);
+      try {
+        execSync(
+          `NODE_ENV=${nodeEnv} ts-node -r tsconfig-paths/register ${basePath}/${seed}`,
+          {
+            stdio: 'inherit',
+          },
+        );
+        logger.log(`완료: ${seed}`);
+      } catch (error) {
+        logger.error(`시드 파일 실행 실패: ${seed}`);
+        logger.error(error.message);
+        // 다음 시드 파일 계속 실행
+      }
+    }
 
-    // 5. 사용자 데이터 시드
-    logger.log('사용자 데이터 시드 작업 시작...');
-    await exec('yarn seed:user');
-    logger.log('사용자 데이터 시드 작업 완료!');
-
-    // 6. 라이브러리 데이터 시드 (사용자 이후에 실행)
-    logger.log('라이브러리 데이터 시드 작업 시작...');
-    await exec('yarn seed:library');
-    logger.log('라이브러리 데이터 시드 작업 완료!');
-
-    // 7. 게시물 데이터 시드 (사용자 및 책 이후에 실행)
-    logger.log('게시물 데이터 시드 작업 시작...');
-    await exec('yarn seed:post');
-    logger.log('게시물 데이터 시드 작업 완료!');
-
-    // 8. 검색 이력 데이터 시드
-    logger.log('검색 이력 데이터 시드 작업 시작...');
-    await exec('yarn seed:search');
-    logger.log('검색 이력 데이터 시드 작업 완료!');
-
-    // 9. 알림 데이터 시드
-    logger.log('알림 데이터 시드 작업 시작...');
-    await exec('yarn seed:notification');
-    logger.log('알림 데이터 시드 작업 완료!');
-
-    logger.log('모든 시드 작업이 성공적으로 완료되었습니다! 🎉');
+    logger.log('모든 시드 데이터 생성 완료!');
   } catch (error) {
-    logger.error(`시드 작업 중 오류 발생: ${error.message}`);
-    logger.error(`${error.stdout}`);
-    process.exit(1);
+    logger.error(`시드 중 오류 발생: ${error.message}`);
+  } finally {
+    await app.close();
   }
 }
 
