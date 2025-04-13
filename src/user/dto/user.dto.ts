@@ -59,18 +59,10 @@ export class ReadingCategoryStatDto {
 
 export class UserDetailResponseDto {
   user: UserDetailDto;
-  libraries: {
-    total: number;
-    libraries: LibraryPreviewDto[];
-  };
-  reviews: {
-    total: number;
-    reviews: ReviewPreviewDto[];
-  };
-  reading: {
-    total: number;
-    byCategory: ReadingCategoryStatDto[];
-  };
+  libraryCount: number;
+  readCount: number;
+  subscribedLibraryCount: number;
+  reviewCount: number;
   followers: number;
   following: number;
   isEditable: boolean;

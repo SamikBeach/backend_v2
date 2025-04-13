@@ -10,6 +10,7 @@ import { CommonModule } from '../common/common.module';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { AppleStrategy } from './strategies/apple.strategy';
 import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -34,7 +35,8 @@ import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
     GoogleStrategy,
     AppleStrategy,
     OptionalJwtAuthGuard,
+    JwtAuthGuard,
   ],
-  exports: [AuthService, JwtStrategy, OptionalJwtAuthGuard],
+  exports: [AuthService, JwtStrategy, OptionalJwtAuthGuard, JwtAuthGuard],
 })
 export class AuthModule {}

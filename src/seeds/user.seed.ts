@@ -43,29 +43,29 @@ async function bootstrap() {
       {
         email: 'user1@example.com',
         password: 'password123',
-        username: '사용자1',
+        username: '책벌레',
         isActive: true,
         marketingConsent: true,
       },
       {
         email: 'user2@example.com',
         password: 'password123',
-        username: '사용자2',
+        username: '독서광',
         isActive: true,
         marketingConsent: false,
       },
       {
         email: 'user3@example.com',
         password: 'password123',
-        username: '사용자3',
+        username: '문학청년',
         isActive: true,
         marketingConsent: true,
       },
       {
         email: 'inactive@example.com',
         password: 'password123',
-        username: '비활성 사용자',
-        isActive: false,
+        username: '명상가',
+        isActive: true, // 모든 사용자를 활성 상태로 변경
         marketingConsent: false,
       },
     ];

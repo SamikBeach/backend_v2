@@ -34,7 +34,6 @@ export class ReviewController {
    * 리뷰 생성 (이미지 업로드 가능)
    */
   @Post()
-  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('images', 5)) // 최대 5개 이미지 업로드 허용
   async createReview(
     @GetUser() user: User,
@@ -79,7 +78,6 @@ export class ReviewController {
    * 리뷰 수정 (이미지 업로드 가능)
    */
   @Put(':id')
-  @UseGuards(JwtAuthGuard)
   @UseInterceptors(FilesInterceptor('images', 5)) // 최대 5개 이미지 업로드 허용
   async updateReview(
     @GetUser() user: User,
@@ -94,7 +92,6 @@ export class ReviewController {
    * 리뷰 삭제
    */
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
   async deleteReview(
     @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
@@ -107,7 +104,6 @@ export class ReviewController {
    * 리뷰 좋아요
    */
   @Post(':id/like')
-  @UseGuards(JwtAuthGuard)
   async likeReview(
     @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
@@ -120,7 +116,6 @@ export class ReviewController {
    * 리뷰 좋아요 취소
    */
   @Delete(':id/like')
-  @UseGuards(JwtAuthGuard)
   async unlikeReview(
     @GetUser() user: User,
     @Param('id', ParseIntPipe) id: number,
@@ -133,7 +128,6 @@ export class ReviewController {
    * 댓글 작성
    */
   @Post(':id/comment')
-  @UseGuards(JwtAuthGuard)
   async createComment(
     @GetUser() user: User,
     @Param('id', ParseIntPipe) reviewId: number,
@@ -155,7 +149,6 @@ export class ReviewController {
    * 댓글 삭제
    */
   @Delete('comment/:id')
-  @UseGuards(JwtAuthGuard)
   async deleteComment(
     @GetUser() user: User,
     @Param('id', ParseIntPipe) commentId: number,

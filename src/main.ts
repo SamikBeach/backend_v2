@@ -42,7 +42,8 @@ async function bootstrap() {
   );
 
   // 전역 가드 적용
-  app.useGlobalGuards(app.get(JwtAuthGuard));
+  const jwtAuthGuard = app.get(JwtAuthGuard);
+  app.useGlobalGuards(jwtAuthGuard);
 
   await app.listen(port);
 

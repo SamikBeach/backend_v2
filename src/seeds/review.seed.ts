@@ -168,24 +168,127 @@ async function bootstrap() {
           },
         ],
       },
+      // 추가 리뷰 데이터
+      {
+        content:
+          '철학 입문서로 최고의 책입니다. 어려운 개념들을 쉽게 설명해주어 철학을 처음 접하는 사람도 부담 없이 읽을 수 있어요.',
+        type: 'review',
+        bookIds: [9, 10],
+        imageUrls: [sampleImages[4]],
+      },
+      {
+        content:
+          '역사책인데도 소설처럼 재미있게 읽혔습니다. 사실에 기반하면서도 흥미진진한 서술방식이 인상적이었어요.',
+        type: 'review',
+        bookIds: [11],
+      },
+      {
+        content:
+          '과학 서적 추천해주세요! 천문학이나 물리학 관련 재미있는 교양서를 찾고 있습니다.',
+        type: 'question',
+        bookIds: [],
+        comments: [
+          {
+            content:
+              '칼 세이건의 "코스모스"는 어떠세요? 천문학 교양서로 최고입니다!',
+          },
+          {
+            content: '리처드 도킨스의 "이기적 유전자"도 추천합니다.',
+          },
+        ],
+      },
+      {
+        content:
+          '이번 주 독서 모임에서 토론할 주제입니다: "현대 문학에서 기술의 역할". 관련 생각이나 추천 도서가 있으시면 공유해주세요.',
+        type: 'discussion',
+        bookIds: [12],
+      },
+      {
+        content:
+          '책을 읽고 메모하는 방법에 대해 공유합니다. 저는 색깔별로 형광펜을 사용해서 중요 개념, 인용구, 의문점 등을 구분해서 표시합니다. 여러분의 독서 메모 방법은 어떤가요?',
+        type: 'general',
+        imageUrls: [sampleImages[0], sampleImages[3]],
+      },
+      {
+        content:
+          '연말 독서 모임을 준비중입니다. 12월 20일 저녁 7시, 시내 북카페에서 올해의 베스트 책들을 나누는 시간을 가질 예정입니다. 참여 원하시는 분들은 댓글 남겨주세요!',
+        type: 'meetup',
+        bookIds: [],
+      },
+      {
+        content:
+          '이 책은 결말이 너무 실망스러웠습니다. 전반부의 탄탄한 스토리 전개가 후반부에서 너무 허무하게 마무리된 느낌이에요.',
+        type: 'review',
+        bookIds: [13],
+      },
+      {
+        content:
+          '자녀 교육에 관한 책을 찾고 있는데, 추천해주실 만한 책이 있을까요? 초등학생 자녀의 학습 습관을 기르는 데 도움이 될 만한 책이면 좋겠습니다.',
+        type: 'question',
+        bookIds: [],
+      },
+      {
+        content:
+          '요즘 많이 읽히는 자기계발서들이 실제로 도움이 될까요? 너무 뻔한 조언들만 반복하는 것 같아 회의적입니다. 여러분의 생각은 어떤가요?',
+        type: 'discussion',
+        bookIds: [14, 15],
+      },
+      {
+        content:
+          '올해의 베스트 책 5권을 소개합니다. 모두 2023년에 읽은 책 중 가장 인상 깊었던 작품들입니다. 각각의 책이 제게 어떤 영향을 주었는지 간략하게 적어봤어요.',
+        type: 'general',
+        bookIds: [16, 17, 18, 19, 20],
+        imageUrls: [sampleImages[1]],
+      },
+      {
+        content:
+          '이 책의 주요 개념을 마인드맵으로 정리해봤습니다. 복잡한 이론들을 시각화하니 이해가 더 잘 되는 것 같아요.',
+        type: 'review',
+        bookIds: [21],
+        imageUrls: [sampleImages[4]],
+      },
     ];
+
+    // 사용자별로 리뷰를 균등하게 배분하기 위한 준비
+    const userEmails = [
+      'user1@example.com',
+      'user2@example.com',
+      'user3@example.com',
+      'google@example.com',
+      'apple@example.com',
+    ];
+    const userMap = new Map();
+
+    for (const user of users) {
+      if (userEmails.includes(user.email)) {
+        userMap.set(user.email, user);
+      }
+    }
 
     // 리뷰 생성
     for (const [index, reviewData] of reviews.entries()) {
       try {
-        // 랜덤 사용자 선택
-        const randomUser = users[Math.floor(Math.random() * users.length)];
+        // 특정 사용자에게 리뷰 할당 (균등하게 분배)
+        const userEmail = userEmails[index % userEmails.length];
+        let authorUser = userMap.get(userEmail);
+
+        // 해당 사용자가 없으면 랜덤 사용자 선택
+        if (!authorUser) {
+          authorUser = users[Math.floor(Math.random() * users.length)];
+        }
 
         // 리뷰 생성
         const review = reviewRepository.create({
           content: reviewData.content,
           type: reviewData.type,
-          authorId: randomUser.id,
+          authorId: authorUser.id,
         });
 
         // 리뷰 저장
         await reviewRepository.save(review);
-        logger.log(`리뷰 ${index + 1} 생성 완료: ${review.id}`);
+        logger.log(
+          `리뷰 ${index + 1} 생성 완료: ${review.id} (작성자: ${authorUser.email})`,
+        );
 
         // 이미지 추가
         if (reviewData.imageUrls && reviewData.imageUrls.length > 0) {
@@ -226,7 +329,7 @@ async function bootstrap() {
           for (const commentData of reviewData.comments) {
             // 랜덤 사용자 선택 (리뷰 작성자와 다른 사용자)
             const filteredUsers = users.filter(
-              (user) => user.id !== randomUser.id,
+              (user) => user.id !== authorUser.id,
             );
             const commentUser =
               filteredUsers[Math.floor(Math.random() * filteredUsers.length)];

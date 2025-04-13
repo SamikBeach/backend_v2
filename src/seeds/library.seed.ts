@@ -19,6 +19,7 @@ interface LibrarySeed {
   isPublic: boolean;
   tags: string[];
   bookCount: number;
+  preferredCategory?: string;
 }
 
 async function bootstrap() {
@@ -62,22 +63,81 @@ async function bootstrap() {
 
     logger.log('Starting library seed...');
 
-    // 각 사용자별 라이브러리 예시 데이터
-    const librarySeeds: { [key: string]: LibrarySeed[] } = {
+    // Enhanced function to get books by category if possible
+    const getRandomBookIds = (
+      count: number,
+      preferredCategory?: string,
+    ): number[] => {
+      try {
+        if (preferredCategory) {
+          // First try to get books from the preferred category
+          const categoryBooks = books.filter(
+            (book) => book.category && book.category.name === preferredCategory,
+          );
+
+          if (categoryBooks.length > 0) {
+            const shuffled = [...categoryBooks].sort(() => 0.5 - Math.random());
+            // If we have enough books in this category, return them
+            if (shuffled.length >= count) {
+              return shuffled.slice(0, count).map((book) => book.id);
+            }
+
+            // Otherwise get some books from this category
+            const selectedCount = Math.min(
+              shuffled.length,
+              Math.ceil(count * 0.7),
+            );
+            const selectedIds = shuffled
+              .slice(0, selectedCount)
+              .map((book) => book.id);
+
+            // And fill the rest with random books
+            const remainingCount = count - selectedCount;
+            const remainingIds = getRandomBookIds(remainingCount);
+
+            return [...selectedIds, ...remainingIds];
+          }
+        }
+
+        // Fallback to completely random selection
+        const shuffled = [...bookIds].sort(() => 0.5 - Math.random());
+        return shuffled.slice(0, Math.min(count, bookIds.length));
+      } catch (error) {
+        logger.error(`Error in getRandomBookIds: ${error.message}`);
+        // Fallback to original random selection
+        const shuffled = [...bookIds].sort(() => 0.5 - Math.random());
+        return shuffled.slice(0, Math.min(count, bookIds.length));
+      }
+    };
+
+    // Update librarySeeds to include preferred categories
+    const librarySeeds: {
+      [key: string]: (LibrarySeed & { preferredCategory?: string })[];
+    } = {
       'user1@example.com': [
         {
           name: '철학 고전 모음',
           description: '철학 분야의 고전 명작들을 모아둔 라이브러리입니다.',
           isPublic: true,
           tags: ['철학', '고전', '필독서'],
-          bookCount: 5,
+          bookCount: 8,
+          preferredCategory: '철학',
         },
         {
           name: '읽고 싶은 책 목록',
           description: '향후 읽고 싶은 책들을 모아둔 개인 라이브러리입니다.',
           isPublic: false,
           tags: ['읽고 싶은 책'],
-          bookCount: 3,
+          bookCount: 5,
+          preferredCategory: '소설',
+        },
+        {
+          name: '2023년 완독한 책들',
+          description: '2023년에 완독한 책 모음입니다.',
+          isPublic: true,
+          tags: ['완독', '2023'],
+          bookCount: 12,
+          preferredCategory: '자기계발',
         },
       ],
       'user2@example.com': [
@@ -86,14 +146,24 @@ async function bootstrap() {
           description: '과학 분야의 대중적인 교양서를 모은 컬렉션입니다.',
           isPublic: true,
           tags: ['과학', '자연과학', '교양서'],
-          bookCount: 4,
+          bookCount: 6,
+          preferredCategory: '과학',
         },
         {
           name: '자기계발 도서',
           description: '자기계발과 생산성 향상에 관한 책들입니다.',
           isPublic: true,
           tags: ['자기계발', '비즈니스'],
-          bookCount: 3,
+          bookCount: 7,
+          preferredCategory: '자기계발',
+        },
+        {
+          name: '좋아하는 작가 모음',
+          description: '제가 좋아하는 작가들의 책을 모아둔 서재입니다.',
+          isPublic: true,
+          tags: ['작가', '소설'],
+          bookCount: 5,
+          preferredCategory: '소설',
         },
       ],
       'user3@example.com': [
@@ -102,16 +172,57 @@ async function bootstrap() {
           description: '세계 각국의 문학 작품을 모아둔 컬렉션입니다.',
           isPublic: true,
           tags: ['소설', '고전', '세계문학'],
+          bookCount: 9,
+          preferredCategory: '소설',
+        },
+        {
+          name: '역사 서적 모음',
+          description: '역사에 관한 책들을 모아둔 서재입니다.',
+          isPublic: true,
+          tags: ['역사', '교양'],
           bookCount: 6,
+          preferredCategory: '역사',
+        },
+      ],
+      'google@example.com': [
+        {
+          name: '소프트웨어 엔지니어링 서적',
+          description: '개발 및 프로그래밍 관련 서적 모음입니다.',
+          isPublic: true,
+          tags: ['프로그래밍', '개발', '컴퓨터과학'],
+          bookCount: 8,
+          preferredCategory: '과학',
+        },
+        {
+          name: '프라이빗 컬렉션',
+          description: '개인적으로 좋아하는 책들의 모음입니다.',
+          isPublic: false,
+          tags: ['개인', '취향'],
+          bookCount: 4,
+          preferredCategory: '소설',
+        },
+      ],
+      'apple@example.com': [
+        {
+          name: '디자인 서적 모음',
+          description: 'UX/UI 및 제품 디자인 관련 서적 모음입니다.',
+          isPublic: true,
+          tags: ['디자인', '예술', 'UX'],
+          bookCount: 7,
+          preferredCategory: '예술',
+        },
+        {
+          name: '경영 및 리더십 서적',
+          description: '리더십과 경영에 관한 서적을 모아둔 서재입니다.',
+          isPublic: true,
+          tags: ['경영', '리더십', '비즈니스'],
+          bookCount: 5,
+          preferredCategory: '자기계발',
         },
       ],
     };
 
     const bookIds = books.map((book) => book.id);
-    const getRandomBookIds = (count: number): number[] => {
-      const shuffled = [...bookIds].sort(() => 0.5 - Math.random());
-      return shuffled.slice(0, Math.min(count, bookIds.length));
-    };
 
     // 각 사용자에 대해 라이브러리 생성
     for (const user of users) {
@@ -167,7 +278,10 @@ async function bootstrap() {
           }
 
           // 책 추가
-          const randomBookIds = getRandomBookIds(librarySeed.bookCount);
+          const randomBookIds = getRandomBookIds(
+            librarySeed.bookCount,
+            librarySeed.preferredCategory,
+          );
           for (const bookId of randomBookIds) {
             try {
               const bookDto: AddBookToLibraryDto = {
@@ -189,8 +303,17 @@ async function bootstrap() {
           // 공개 라이브러리인 경우 구독자 추가
           if (librarySeed.isPublic) {
             const potentialSubscribers = users.filter((u) => u.id !== user.id);
+            // 공개 라이브러리에 더 많은 구독자 추가 (구독자 최대 5명)
+            // 소셜 로그인 사용자(Google, Apple)는 더 많은 구독자를 가지도록 조정
+            const maxSubscribers =
+              user.email.includes('@example.com') &&
+              (user.email.startsWith('google') ||
+                user.email.startsWith('apple'))
+                ? Math.floor(Math.random() * 2) + 4 // 4-5명
+                : Math.floor(Math.random() * 4) + 2; // 2-5명
+
             const subscriberCount = Math.min(
-              Math.floor(Math.random() * 3) + 1,
+              maxSubscribers,
               potentialSubscribers.length,
             );
             const shuffledUsers = [...potentialSubscribers].sort(

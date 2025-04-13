@@ -126,7 +126,6 @@ export class SearchController {
    * 최근 검색어 API
    */
   @Get('recent')
-  @UseGuards(JwtAuthGuard)
   async getRecentSearchTerms(
     @GetUser() user: User,
     @Query('limit') limit?: number,
@@ -146,7 +145,6 @@ export class SearchController {
    * 최근 검색어 삭제 API
    */
   @Delete('recent')
-  @UseGuards(JwtAuthGuard)
   async deleteAllRecentSearches(@GetUser() user: User): Promise<any> {
     await this.searchService.deleteAllRecentSearchesByUserId(user.id);
     return { success: true, message: '모든 최근 검색어가 삭제되었습니다.' };
@@ -156,7 +154,6 @@ export class SearchController {
    * 특정 검색어 삭제 API
    */
   @Delete('recent/:id')
-  @UseGuards(JwtAuthGuard)
   async deleteRecentSearch(
     @GetUser() user: User,
     @Param('id') id: string,
