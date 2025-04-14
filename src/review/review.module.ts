@@ -20,6 +20,7 @@ import { FileService } from '../common/services/file.service';
 import { BookModule } from '../book/book.module';
 import { UserModule } from '../user/user.module';
 import { NotificationModule } from '../notification/notification.module';
+import { RatingModule } from '../rating/rating.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { NotificationModule } from '../notification/notification.module';
     BookModule,
     UserModule,
     NotificationModule,
+    RatingModule,
   ],
   controllers: [ReviewController],
   providers: [ReviewService, CommentService, FileService],

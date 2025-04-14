@@ -130,15 +130,35 @@ export class RatingService {
     userId: number,
     bookId: number,
   ): Promise<RatingResponseDto | null> {
-    const rating = await this.ratingRepository.findOne({
-      where: { userId, bookId },
-    });
+    try {
+      if (!userId || !bookId) {
+        this.logger.debug(
+          `Invalid parameters: userId=${userId}, bookId=${bookId}`,
+        );
+        return null;
+      }
 
-    if (!rating) {
+      this.logger.debug(`Finding rating for user ${userId} and book ${bookId}`);
+      const rating = await this.ratingRepository.findOne({
+        where: { userId, bookId },
+      });
+
+      if (!rating) {
+        this.logger.debug(
+          `No rating found for user ${userId} and book ${bookId}`,
+        );
+        return null;
+      }
+
+      const result = this.mapToResponseDto(rating);
+      this.logger.debug(`Found rating: ${JSON.stringify(result)}`);
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `Error finding rating for user ${userId} and book ${bookId}: ${error.message}`,
+      );
       return null;
     }
-
-    return this.mapToResponseDto(rating);
   }
 
   /**
@@ -201,15 +221,20 @@ export class RatingService {
    * Rating 엔티티를 RatingResponseDto로 변환
    */
   private mapToResponseDto(rating: Rating): RatingResponseDto {
+    // Ensure numeric conversion of rating value
+    const ratingValue =
+      typeof rating.rating === 'string'
+        ? parseInt(rating.rating, 10)
+        : Number(rating.rating);
+
     return {
       id: rating.id,
       userId: rating.userId,
       bookId: rating.bookId,
-      rating: Number(rating.rating),
+      rating: ratingValue,
       comment: rating.comment,
       createdAt: rating.createdAt,
       updatedAt: rating.updatedAt,
     };
   }
 }
- 

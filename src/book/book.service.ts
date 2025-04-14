@@ -175,13 +175,63 @@ export class BookService {
    * ISBN 또는 ISBN13으로 도서 검색
    */
   async findByIsbn(isbnParam: string): Promise<Book | null> {
-    // 입력된 ISBN으로 먼저 검색
-    let book = await this.bookRepository.findOne({
-      where: [{ isbn: isbnParam }, { isbn13: isbnParam }],
-      relations: ['category', 'subcategory'],
-    });
+    // 로깅 추가
+    this.logger.log(`[findByIsbn] ISBN 검색: ${isbnParam}`);
 
-    return book;
+    let book = null;
+
+    // ISBN13으로 먼저 검색 (정확한 매치)
+    if (isbnParam.length === 13) {
+      this.logger.log(`[findByIsbn] ISBN13으로 검색 시도: ${isbnParam}`);
+      book = await this.bookRepository.findOne({
+        where: { isbn13: isbnParam },
+        relations: ['category', 'subcategory'],
+      });
+
+      if (book) {
+        this.logger.log(
+          `[findByIsbn] ISBN13으로 책 발견: ID ${book.id}, Title: ${book.title}`,
+        );
+        return book;
+      }
+    }
+
+    // ISBN으로 검색 (정확한 매치)
+    if (!book) {
+      this.logger.log(`[findByIsbn] ISBN으로 검색 시도: ${isbnParam}`);
+      book = await this.bookRepository.findOne({
+        where: { isbn: isbnParam },
+        relations: ['category', 'subcategory'],
+      });
+
+      if (book) {
+        this.logger.log(
+          `[findByIsbn] ISBN으로 책 발견: ID ${book.id}, Title: ${book.title}`,
+        );
+        return book;
+      }
+    }
+
+    // 하이픈을 제거한 값으로도 검색
+    if (!book && isbnParam.includes('-')) {
+      const cleanIsbn = isbnParam.replace(/-/g, '');
+      this.logger.log(`[findByIsbn] 하이픈 제거 후 검색 시도: ${cleanIsbn}`);
+
+      book = await this.bookRepository.findOne({
+        where: [{ isbn13: cleanIsbn }, { isbn: cleanIsbn }],
+        relations: ['category', 'subcategory'],
+      });
+
+      if (book) {
+        this.logger.log(
+          `[findByIsbn] 하이픈 제거 후 책 발견: ID ${book.id}, Title: ${book.title}`,
+        );
+        return book;
+      }
+    }
+
+    this.logger.log(`[findByIsbn] 책을 찾을 수 없음: ${isbnParam}`);
+    return null;
   }
 
   /**
@@ -1204,12 +1254,37 @@ export class BookService {
     isbnParam: string,
     saveToDb: boolean = false,
   ): Promise<Book> {
+    this.logger.log(`[getBookDetailByIsbn] 요청받은 ISBN: ${isbnParam}`);
+
     // 이미 DB에 있는지 확인 (ISBN 또는 ISBN13으로 검색)
     let book = await this.findByIsbn(isbnParam);
 
     if (book) {
+      this.logger.log(
+        `[getBookDetailByIsbn] 기존 책 발견: ID ${book.id}, ISBN: ${book.isbn}, ISBN13: ${book.isbn13}`,
+      );
       return book;
     }
+
+    // ISBN13 형식이지만 하이픈이 있는 경우 하이픈 제거하고 다시 검색
+    if (isbnParam.includes('-')) {
+      const cleanIsbn = isbnParam.replace(/-/g, '');
+      this.logger.log(
+        `[getBookDetailByIsbn] 하이픈 제거 후 재검색: ${cleanIsbn}`,
+      );
+      book = await this.findByIsbn(cleanIsbn);
+
+      if (book) {
+        this.logger.log(
+          `[getBookDetailByIsbn] 하이픈 제거 후 책 발견: ID ${book.id}, ISBN: ${book.isbn}, ISBN13: ${book.isbn13}`,
+        );
+        return book;
+      }
+    }
+
+    this.logger.log(
+      `[getBookDetailByIsbn] DB에서 책을 찾을 수 없음, 알라딘 API 호출 시도`,
+    );
 
     try {
       // 알라딘 API로 도서 정보 가져오기
@@ -1227,6 +1302,9 @@ export class BookService {
       });
 
       if (!result || !result.item || result.item.length === 0) {
+        this.logger.error(
+          `[getBookDetailByIsbn] 알라딘 API에서 ISBN ${isbnParam} 정보를 찾을 수 없음`,
+        );
         throw new NotFoundException(
           `ISBN ${isbnParam}으로 도서를 찾을 수 없습니다.`,
         );
@@ -1234,6 +1312,11 @@ export class BookService {
 
       const item = result.item[0];
       const bookData = this.aladinService.extractBookData(item);
+
+      // ISBN 및 ISBN13 로깅
+      this.logger.log(
+        `[getBookDetailByIsbn] 알라딘에서 가져온 정보 - ISBN: ${bookData.isbn}, ISBN13: ${bookData.isbn13}`,
+      );
 
       // 카테고리 처리 (기본값 사용)
       const category = await this.categoryService.findOne(1);
@@ -1269,7 +1352,7 @@ export class BookService {
         // DB에 책 저장
         const savedBook = await this.bookRepository.save(bookObject);
         this.logger.log(
-          `[ISBN 도서 조회] ${isbnParam}: ${savedBook.title} by ${savedBook.author}를 알라딘 API에서 가져와 DB에 저장했습니다. (ID: ${savedBook.id})`,
+          `[getBookDetailByIsbn] ${isbnParam}: ${savedBook.title} by ${savedBook.author}를 알라딘 API에서 가져와 DB에 저장했습니다. (ID: ${savedBook.id})`,
         );
         return savedBook;
       } else {
@@ -1280,13 +1363,15 @@ export class BookService {
         }) as unknown as Book;
 
         this.logger.log(
-          `[ISBN 도서 조회] ${isbnParam}: ${tempBook.title} by ${tempBook.author}를 알라딘 API에서 가져왔습니다. (DB 저장 안함, 임시 ID: ${tempBook.id})`,
+          `[getBookDetailByIsbn] ${isbnParam}: ${tempBook.title} by ${tempBook.author}를 알라딘 API에서 가져왔습니다. (DB 저장 안함, 임시 ID: ${tempBook.id})`,
         );
 
         return tempBook;
       }
     } catch (error) {
-      this.logger.error(`도서 상세 정보 조회 오류: ${error.message}`);
+      this.logger.error(
+        `[getBookDetailByIsbn] 도서 상세 정보 조회 오류: ${error.message}`,
+      );
       throw new NotFoundException(
         `ISBN ${isbnParam}으로 도서를 찾을 수 없습니다.`,
       );

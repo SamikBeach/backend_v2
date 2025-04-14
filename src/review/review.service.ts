@@ -20,6 +20,7 @@ import { BookService } from '../book/book.service';
 import { UserService } from '../user/user.service';
 import { NotificationService } from '../notification/notification.service';
 import { Comment } from './entities/comment.entity';
+import { RatingService } from '../rating/rating.service';
 
 @Injectable()
 export class ReviewService {
@@ -40,6 +41,7 @@ export class ReviewService {
     private readonly bookService: BookService,
     private readonly userService: UserService,
     private readonly notificationService: NotificationService,
+    private readonly ratingService: RatingService,
   ) {}
 
   /**
@@ -548,6 +550,24 @@ export class ReviewService {
       publisher: reviewBook.book.publisher,
     }));
 
+    // 유저 별점 정보 가져오기
+    const userRatings = [];
+    if (userId && books && books.length > 0) {
+      for (const book of books) {
+        const rating = await this.ratingService.findByUserAndBook(
+          userId,
+          book.id,
+        );
+        if (rating) {
+          userRatings.push({
+            bookId: book.id,
+            rating: rating.rating,
+            comment: rating.comment,
+          });
+        }
+      }
+    }
+
     return {
       id: review.id,
       content: review.content,
@@ -563,6 +583,7 @@ export class ReviewService {
         caption: image.caption,
       })),
       books,
+      userRatings: userRatings.length > 0 ? userRatings : undefined,
       likeCount: review.likeCount,
       commentCount: review.commentCount,
       isLiked,
@@ -628,6 +649,41 @@ export class ReviewService {
 
           const book = reviewBook?.book || null;
 
+          // 유저 별점 정보 가져오기
+          let userRating = null;
+          if (userId && book) {
+            try {
+              this.logger.debug(
+                `Fetching rating for user ${userId} and book ${book.id}`,
+              );
+              const rating = await this.ratingService.findByUserAndBook(
+                userId,
+                book.id,
+              );
+
+              if (rating) {
+                this.logger.debug(`Found rating: ${JSON.stringify(rating)}`);
+                userRating = {
+                  bookId: book.id,
+                  rating: rating.rating,
+                  comment: rating.comment,
+                };
+              } else {
+                this.logger.debug(
+                  `No rating found for user ${userId} and book ${book.id}`,
+                );
+              }
+            } catch (error) {
+              this.logger.error(`Error fetching rating: ${error.message}`);
+              // Still allow the request to proceed even if rating fetch fails
+              userRating = null;
+            }
+          } else {
+            this.logger.debug(
+              `Skipping rating fetch: userId=${userId}, book=${book?.id}`,
+            );
+          }
+
           return {
             id: review.id,
             content: review.content,
@@ -648,6 +704,7 @@ export class ReviewService {
               id: image.id,
               url: image.url,
             })),
+            userRating,
             likesCount,
             commentsCount,
             userLiked,

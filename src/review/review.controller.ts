@@ -32,6 +32,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CommentResponseDto } from './dto/review-response.dto';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 
 @ApiTags('review')
 @Controller('review')
@@ -77,7 +78,7 @@ export class ReviewController {
    * 특정 책에 대한 리뷰 목록 조회
    */
   @Get('book/:bookId')
-  @IsPublic()
+  @UseGuards(OptionalJwtAuthGuard)
   async findReviewsByBookId(
     @GetUser() user: User,
     @Param('bookId', ParseIntPipe) bookId: number,

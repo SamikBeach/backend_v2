@@ -21,6 +21,11 @@ export class ReviewResponseDto {
     coverImage: string;
     publisher: string;
   }[];
+  userRatings?: {
+    bookId: number;
+    rating: number;
+    comment?: string;
+  }[];
   likeCount: number;
   commentCount: number;
   isLiked: boolean;
