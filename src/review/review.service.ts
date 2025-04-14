@@ -233,12 +233,20 @@ export class ReviewService {
         await this.addImagesToReview(id, files);
       }
 
+      // 리뷰 먼저 저장
+      await this.reviewRepository.save(review);
+
       // 책 ID 업데이트
       if ('bookId' in updateReviewDto) {
-        // 기존 책 연결 삭제
-        await this.reviewBookRepository.delete({ reviewId: id });
+        // 기존 책 연결을 완전히 삭제
+        await this.reviewBookRepository
+          .createQueryBuilder()
+          .delete()
+          .from('review_book')
+          .where('reviewId = :reviewId', { reviewId: id })
+          .execute();
 
-        // 새 책 ID가 있으면 연결 추가
+        // 새 책 ID가 있으면 완전히 새로운 연결 생성
         if (updateReviewDto.bookId) {
           await this.addBookToReview(id, updateReviewDto.bookId);
           this.logger.log(
@@ -248,9 +256,6 @@ export class ReviewService {
           this.logger.log(`리뷰 ID ${id}의 책 연결이 삭제됨`);
         }
       }
-
-      // 리뷰 저장
-      await this.reviewRepository.save(review);
 
       return this.findReviewById(id, userId);
     } catch (error) {
@@ -478,6 +483,19 @@ export class ReviewService {
     bookId: number,
   ): Promise<void> {
     try {
+      if (!reviewId || !bookId) {
+        throw new BadRequestException('유효한 reviewId와 bookId가 필요합니다.');
+      }
+
+      // 리뷰가 존재하는지 확인
+      const review = await this.reviewRepository.findOne({
+        where: { id: reviewId },
+      });
+
+      if (!review) {
+        throw new NotFoundException(`리뷰 ID ${reviewId}를 찾을 수 없습니다.`);
+      }
+
       // 책이 존재하는지 확인
       const book = await this.bookService.findById(bookId);
 
@@ -485,14 +503,17 @@ export class ReviewService {
         throw new BadRequestException(`책 ID ${bookId}를 찾을 수 없습니다.`);
       }
 
-      // 책과 리뷰 연결
-      this.logger.log(`책 ID ${bookId}를 리뷰 ID ${reviewId}에 연결합니다.`);
-      const reviewBook = this.reviewBookRepository.create({
-        reviewId,
-        bookId,
-      });
+      // 책과 리뷰 연결 - 직접 SQL을 사용하여 명확하게 값을 설정
+      await this.reviewBookRepository
+        .createQueryBuilder()
+        .insert()
+        .into('review_book')
+        .values({
+          reviewId: reviewId,
+          bookId: bookId,
+        })
+        .execute();
 
-      await this.reviewBookRepository.save(reviewBook);
       this.logger.log(`리뷰 ID ${reviewId}에 책 ID ${bookId} 연결 완료`);
     } catch (error) {
       this.logger.error(`책 연결 중 오류: ${error.message}`);
