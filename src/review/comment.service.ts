@@ -13,6 +13,7 @@ import { User } from '../user/entities/user.entity';
 import { UserService } from '../user/user.service';
 import { CommentResponseDto } from './dto/review-response.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
@@ -197,6 +198,44 @@ export class CommentService {
       await this.commentRepository.remove(comment);
     } catch (error) {
       this.logger.error(`댓글 삭제 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 댓글 수정
+   */
+  async updateComment(
+    commentId: number,
+    userId: number,
+    updateCommentDto: UpdateCommentDto,
+  ): Promise<CommentResponseDto> {
+    try {
+      // 댓글 존재 여부 확인
+      const comment = await this.commentRepository.findOne({
+        where: { id: commentId },
+        relations: ['author'],
+      });
+
+      if (!comment) {
+        throw new NotFoundException(
+          `댓글을 찾을 수 없습니다. (ID: ${commentId})`,
+        );
+      }
+
+      // 자신의 댓글만 수정 가능
+      if (comment.authorId !== userId) {
+        throw new ForbiddenException('자신의 댓글만 수정할 수 있습니다.');
+      }
+
+      // 댓글 내용 업데이트
+      comment.content = updateCommentDto.content;
+      const updatedComment = await this.commentRepository.save(comment);
+
+      this.logger.log(`댓글 ID ${commentId} 수정 완료`);
+      return this.mapCommentToDto(updatedComment);
+    } catch (error) {
+      this.logger.error(`댓글 수정 중 오류: ${error.message}`);
       throw error;
     }
   }

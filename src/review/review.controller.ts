@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFiles,
   Put,
+  Patch,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
@@ -20,9 +21,19 @@ import { CommentService } from './comment.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { CommentResponseDto } from './dto/review-response.dto';
 
+@ApiTags('review')
 @Controller('review')
 export class ReviewController {
   constructor(
@@ -174,6 +185,31 @@ export class ReviewController {
   ) {
     await this.commentService.deleteComment(commentId, user.id);
     return { success: true };
+  }
+
+  /**
+   * 댓글 수정
+   */
+  @Patch('comment/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '댓글 수정' })
+  @ApiParam({ name: 'id', description: '댓글 ID' })
+  @ApiResponse({
+    status: 200,
+    description: '댓글 수정 성공',
+    type: CommentResponseDto,
+  })
+  async updateComment(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) commentId: number,
+    @Body() updateCommentDto: UpdateCommentDto,
+  ) {
+    return this.commentService.updateComment(
+      commentId,
+      user.id,
+      updateCommentDto,
+    );
   }
 
   // 홈화면용 인기 리뷰 API
