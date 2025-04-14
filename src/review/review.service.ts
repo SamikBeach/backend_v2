@@ -21,6 +21,7 @@ import { UserService } from '../user/user.service';
 import { NotificationService } from '../notification/notification.service';
 import { Comment } from './entities/comment.entity';
 import { RatingService } from '../rating/rating.service';
+import { In } from 'typeorm';
 
 @Injectable()
 export class ReviewService {
@@ -600,6 +601,7 @@ export class ReviewService {
     userId?: number,
     page: number = 1,
     limit: number = 10,
+    sort: 'likes' | 'comments' | 'recent' = 'likes',
   ): Promise<any> {
     const skip = (page - 1) * limit;
 
@@ -610,14 +612,62 @@ export class ReviewService {
         .innerJoin('review.books', 'reviewBooks')
         .innerJoin('reviewBooks.book', 'book')
         .leftJoinAndSelect('review.author', 'author')
-        .leftJoinAndSelect('review.images', 'images')
-        .where('reviewBooks.bookId = :bookId', { bookId })
-        .orderBy('review.createdAt', 'DESC')
-        .skip(skip)
-        .take(limit);
+        .where('reviewBooks.bookId = :bookId', { bookId });
+
+      // 정렬 방식 설정
+      switch (sort) {
+        case 'likes':
+          // 좋아요순으로 정렬 (좋아요 수 내림차순, 그 다음 최신순)
+          queryBuilder
+            .leftJoin('review.likes', 'likes')
+            .addSelect('COUNT(DISTINCT likes.id)', 'likesCount')
+            .groupBy('review.id')
+            .addGroupBy('author.id')
+            .orderBy('likesCount', 'DESC')
+            .addOrderBy('review.createdAt', 'DESC');
+          break;
+        case 'comments':
+          // 댓글많은순으로 정렬 (댓글 수 내림차순, 그 다음 최신순)
+          queryBuilder
+            .leftJoin('review.comments', 'comments')
+            .addSelect('COUNT(DISTINCT comments.id)', 'commentsCount')
+            .groupBy('review.id')
+            .addGroupBy('author.id')
+            .orderBy('commentsCount', 'DESC')
+            .addOrderBy('review.createdAt', 'DESC');
+          break;
+        case 'recent':
+        default:
+          // 최신순으로 정렬
+          queryBuilder.orderBy('review.createdAt', 'DESC');
+          break;
+      }
+
+      // 페이지네이션 적용
+      queryBuilder.skip(skip).take(limit);
 
       // 리뷰 가져오기
       const [reviews, total] = await queryBuilder.getManyAndCount();
+
+      // 이미지를 별도로 로드
+      const reviewIds = reviews.map((review) => review.id);
+      const reviewImages = await this.reviewImageRepository.find({
+        where: { reviewId: In(reviewIds) },
+      });
+
+      // 이미지를 리뷰별로 매핑
+      const imagesByReviewId = reviewImages.reduce((acc, img) => {
+        if (!acc[img.reviewId]) {
+          acc[img.reviewId] = [];
+        }
+        acc[img.reviewId].push(img);
+        return acc;
+      }, {});
+
+      // 각 리뷰에 이미지 설정
+      reviews.forEach((review) => {
+        review.images = imagesByReviewId[review.id] || [];
+      });
 
       // 리뷰 정보 변환
       const reviewsWithDetails = await Promise.all(
@@ -700,10 +750,12 @@ export class ReviewService {
                   isbn: book.isbn,
                 }
               : null,
-            images: review.images.map((image) => ({
-              id: image.id,
-              url: image.url,
-            })),
+            images: review.images
+              ? review.images.map((image) => ({
+                  id: image.id,
+                  url: image.url,
+                }))
+              : [],
             userRating,
             likesCount,
             commentsCount,
@@ -722,6 +774,7 @@ export class ReviewService {
           page,
           limit,
           totalPages: Math.ceil(total / limit),
+          sort, // 적용된 정렬 방식 포함
         },
       };
     } catch (error) {

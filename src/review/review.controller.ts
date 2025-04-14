@@ -79,17 +79,25 @@ export class ReviewController {
    */
   @Get('book/:bookId')
   @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: '특정 책에 대한 리뷰 목록 조회' })
+  @ApiParam({ name: 'bookId', description: '책 ID', type: 'number' })
+  @ApiResponse({
+    status: 200,
+    description: '특정 책에 대한 리뷰 목록',
+  })
   async findReviewsByBookId(
     @GetUser() user: User,
     @Param('bookId', ParseIntPipe) bookId: number,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('sort') sort?: 'likes' | 'comments' | 'recent',
   ) {
     return this.reviewService.findReviewsByBookId(
       bookId,
       user?.id,
       page ? +page : 1,
       limit ? +limit : 10,
+      sort || 'likes', // 기본값은 좋아요순
     );
   }
 
