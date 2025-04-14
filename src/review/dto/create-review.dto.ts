@@ -1,7 +1,7 @@
 import {
-  IsArray,
   IsEnum,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
 } from 'class-validator';
@@ -17,7 +17,7 @@ export class CreateReviewDto {
   })
   type: ReviewType;
 
-  @IsArray()
+  @IsNumber()
   @IsOptional()
-  bookIds?: number[];
+  bookId?: number;
 }

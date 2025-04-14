@@ -1,4 +1,4 @@
-import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 import { ReviewType } from '../entities/review.entity';
 
 export class UpdateReviewDto {
@@ -10,7 +10,7 @@ export class UpdateReviewDto {
   @IsOptional()
   type?: ReviewType;
 
-  @IsArray()
+  @IsNumber()
   @IsOptional()
-  bookIds?: number[];
+  bookId?: number;
 }

@@ -67,8 +67,8 @@ export class ReviewService {
       }
 
       // 책 연결
-      if (createReviewDto.bookIds && createReviewDto.bookIds.length > 0) {
-        await this.addBooksToReview(savedReview.id, createReviewDto.bookIds);
+      if (createReviewDto.bookId) {
+        await this.addBookToReview(savedReview.id, createReviewDto.bookId);
       }
 
       // 저장된 리뷰 반환 (응답용 DTO로 변환)
@@ -234,11 +234,19 @@ export class ReviewService {
       }
 
       // 책 ID 업데이트
-      if (updateReviewDto.bookIds) {
+      if ('bookId' in updateReviewDto) {
         // 기존 책 연결 삭제
         await this.reviewBookRepository.delete({ reviewId: id });
-        // 새 책 연결
-        await this.addBooksToReview(id, updateReviewDto.bookIds);
+
+        // 새 책 ID가 있으면 연결 추가
+        if (updateReviewDto.bookId) {
+          await this.addBookToReview(id, updateReviewDto.bookId);
+          this.logger.log(
+            `리뷰 ID ${id}의 책이 ID ${updateReviewDto.bookId}로 업데이트됨`,
+          );
+        } else {
+          this.logger.log(`리뷰 ID ${id}의 책 연결이 삭제됨`);
+        }
       }
 
       // 리뷰 저장
@@ -258,7 +266,7 @@ export class ReviewService {
     try {
       const review = await this.reviewRepository.findOne({
         where: { id },
-        relations: ['images'],
+        relations: ['images', 'books'],
       });
 
       if (!review) {
@@ -279,7 +287,11 @@ export class ReviewService {
         }
       }
 
-      // 리뷰 삭제 (cascade 설정으로 연결된 이미지, 책, 좋아요 등도 함께 삭제됨)
+      // review-book 관계 명시적 삭제
+      await this.reviewBookRepository.delete({ reviewId: id });
+      this.logger.log(`리뷰 ID ${id}와 연결된 책 관계 삭제 완료`);
+
+      // 리뷰 삭제
       await this.reviewRepository.remove(review);
     } catch (error) {
       this.logger.error(`리뷰 삭제 중 오류: ${error.message}`);
@@ -461,40 +473,27 @@ export class ReviewService {
   /**
    * 리뷰에 책 연결
    */
-  private async addBooksToReview(
+  private async addBookToReview(
     reviewId: number,
-    bookIds: number[],
+    bookId: number,
   ): Promise<void> {
     try {
-      // 모든 책이 존재하는지 확인
-      const uniqueBookIds = [...new Set(bookIds)]; // 중복 제거
-      const books = await this.bookService.findByIds(uniqueBookIds);
+      // 책이 존재하는지 확인
+      const book = await this.bookService.findById(bookId);
 
-      if (books.length !== uniqueBookIds.length) {
-        const foundIds = books.map((book) => book.id);
-        const missingIds = uniqueBookIds.filter((id) => !foundIds.includes(id));
-        throw new BadRequestException(
-          `다음 ID의 책을 찾을 수 없습니다: ${missingIds.join(', ')}`,
-        );
+      if (!book) {
+        throw new BadRequestException(`책 ID ${bookId}를 찾을 수 없습니다.`);
       }
 
       // 책과 리뷰 연결
-      const reviewBooks = [];
-      for (const bookId of uniqueBookIds) {
-        this.logger.log(
-          `책 ID ${bookId}를 DB에 저장합니다. (리뷰 ID: ${reviewId})`,
-        );
-        const reviewBook = this.reviewBookRepository.create({
-          reviewId,
-          bookId,
-        });
-        reviewBooks.push(reviewBook);
-      }
+      this.logger.log(`책 ID ${bookId}를 리뷰 ID ${reviewId}에 연결합니다.`);
+      const reviewBook = this.reviewBookRepository.create({
+        reviewId,
+        bookId,
+      });
 
-      await this.reviewBookRepository.save(reviewBooks);
-      this.logger.log(
-        `리뷰 ID ${reviewId}에 ${reviewBooks.length}개의 책 연결 완료`,
-      );
+      await this.reviewBookRepository.save(reviewBook);
+      this.logger.log(`리뷰 ID ${reviewId}에 책 ID ${bookId} 연결 완료`);
     } catch (error) {
       this.logger.error(`책 연결 중 오류: ${error.message}`);
       throw error;
