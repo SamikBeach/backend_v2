@@ -5,11 +5,13 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
 import { Category } from '../../category/entities/category.entity';
 import { SubCategory } from '../../category/entities/subcategory.entity';
 import { DiscoverCategory } from '../../discover-category/entities/discover-category.entity';
 import { DiscoverSubCategory } from '../../discover-category/entities/discover-subcategory.entity';
+import { ReadingStatus } from '../../reading-status/entities/reading-status.entity';
 
 @Entity('book')
 export class Book {
@@ -34,6 +36,12 @@ export class Book {
   @Column()
   publisher: string;
 
+  @Column({ nullable: true })
+  translator: string;
+
+  @Column({ nullable: true, type: 'int' })
+  pageCount: number;
+
   @Column({ type: 'date', nullable: true })
   publishDate: Date;
 
@@ -42,6 +50,12 @@ export class Book {
 
   @Column({ default: 0 })
   reviews: number;
+
+  @Column({ default: 0 })
+  totalRatings: number;
+
+  @Column('simple-array', { nullable: true })
+  tags: string[];
 
   @Column()
   description: string;
@@ -77,6 +91,9 @@ export class Book {
 
   @Column({ default: false })
   isDiscovered: boolean; // Discover 도서 여부
+
+  @OneToMany(() => ReadingStatus, (readingStatus) => readingStatus.book)
+  readingStatuses: ReadingStatus[];
 
   @CreateDateColumn()
   createdAt: Date;

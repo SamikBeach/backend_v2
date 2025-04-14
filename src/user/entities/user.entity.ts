@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Library } from '../../library/entities/library.entity';
 import { Review } from '../../review/entities/review.entity';
+import { ReadingStatus } from '../../reading-status/entities/reading-status.entity';
 
 export enum UserStatus {
   ACTIVE = 'active',
@@ -75,6 +76,9 @@ export class User {
 
   @OneToMany(() => Review, (review) => review.author)
   reviews: Review[];
+
+  @OneToMany(() => ReadingStatus, (readingStatus) => readingStatus.user)
+  readingStatuses: ReadingStatus[];
 
   @CreateDateColumn()
   createdAt: Date;

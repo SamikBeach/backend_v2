@@ -45,10 +45,13 @@ async function bootstrap() {
       return;
     }
 
-    // Check if there are users
-    const users = await userRepository.find();
+    // 사용자 ID 1과 11만 가져오기
+    const users = await userRepository.find({
+      where: [{ id: 1 }, { id: 11 }],
+    });
+
     if (users.length === 0) {
-      logger.log('No users found. Please seed users first.');
+      logger.log('No users with ID 1 or 11 found. Please seed users first.');
       await app.close();
       return;
     }
@@ -110,11 +113,11 @@ async function bootstrap() {
       }
     };
 
-    // Update librarySeeds to include preferred categories
+    // 사용자 ID별 라이브러리 정의
     const librarySeeds: {
-      [key: string]: (LibrarySeed & { preferredCategory?: string })[];
+      [key: number]: (LibrarySeed & { preferredCategory?: string })[];
     } = {
-      'user1@example.com': [
+      1: [
         {
           name: '철학 고전 모음',
           description: '철학 분야의 고전 명작들을 모아둔 라이브러리입니다.',
@@ -140,7 +143,7 @@ async function bootstrap() {
           preferredCategory: '자기계발',
         },
       ],
-      'user2@example.com': [
+      11: [
         {
           name: '과학 교양서 모음',
           description: '과학 분야의 대중적인 교양서를 모은 컬렉션입니다.',
@@ -166,60 +169,6 @@ async function bootstrap() {
           preferredCategory: '소설',
         },
       ],
-      'user3@example.com': [
-        {
-          name: '세계 문학 컬렉션',
-          description: '세계 각국의 문학 작품을 모아둔 컬렉션입니다.',
-          isPublic: true,
-          tags: ['소설', '고전', '세계문학'],
-          bookCount: 9,
-          preferredCategory: '소설',
-        },
-        {
-          name: '역사 서적 모음',
-          description: '역사에 관한 책들을 모아둔 서재입니다.',
-          isPublic: true,
-          tags: ['역사', '교양'],
-          bookCount: 6,
-          preferredCategory: '역사',
-        },
-      ],
-      'google@example.com': [
-        {
-          name: '소프트웨어 엔지니어링 서적',
-          description: '개발 및 프로그래밍 관련 서적 모음입니다.',
-          isPublic: true,
-          tags: ['프로그래밍', '개발', '컴퓨터과학'],
-          bookCount: 8,
-          preferredCategory: '과학',
-        },
-        {
-          name: '프라이빗 컬렉션',
-          description: '개인적으로 좋아하는 책들의 모음입니다.',
-          isPublic: false,
-          tags: ['개인', '취향'],
-          bookCount: 4,
-          preferredCategory: '소설',
-        },
-      ],
-      'apple@example.com': [
-        {
-          name: '디자인 서적 모음',
-          description: 'UX/UI 및 제품 디자인 관련 서적 모음입니다.',
-          isPublic: true,
-          tags: ['디자인', '예술', 'UX'],
-          bookCount: 7,
-          preferredCategory: '예술',
-        },
-        {
-          name: '경영 및 리더십 서적',
-          description: '리더십과 경영에 관한 서적을 모아둔 서재입니다.',
-          isPublic: true,
-          tags: ['경영', '리더십', '비즈니스'],
-          bookCount: 5,
-          preferredCategory: '자기계발',
-        },
-      ],
     };
 
     const bookIds = books.map((book) => book.id);
@@ -227,7 +176,7 @@ async function bootstrap() {
     // 각 사용자에 대해 라이브러리 생성
     for (const user of users) {
       // 이 사용자에 대한 라이브러리 정의가 있는지 확인
-      const userLibraries = librarySeeds[user.email] || [];
+      const userLibraries = librarySeeds[user.id] || [];
 
       if (userLibraries.length === 0) {
         // 정의된 라이브러리가 없으면 기본 라이브러리 1개 생성
@@ -242,7 +191,7 @@ async function bootstrap() {
       }
 
       logger.log(
-        `Creating ${userLibraries.length} libraries for user ${user.username || user.email}`,
+        `Creating ${userLibraries.length} libraries for user ${user.username} (ID: ${user.id})`,
       );
 
       for (const librarySeed of userLibraries) {
@@ -255,7 +204,9 @@ async function bootstrap() {
           };
 
           const library = await libraryService.create(user.id, libraryData);
-          logger.log(`Created library: ${library.name}`);
+          logger.log(
+            `Created library: ${library.name} for user ID: ${user.id}`,
+          );
 
           // 태그 추가
           for (const tagName of librarySeed.tags) {
@@ -303,38 +254,24 @@ async function bootstrap() {
           // 공개 라이브러리인 경우 구독자 추가
           if (librarySeed.isPublic) {
             const potentialSubscribers = users.filter((u) => u.id !== user.id);
-            // 공개 라이브러리에 더 많은 구독자 추가 (구독자 최대 5명)
-            // 소셜 로그인 사용자(Google, Apple)는 더 많은 구독자를 가지도록 조정
-            const maxSubscribers =
-              user.email.includes('@example.com') &&
-              (user.email.startsWith('google') ||
-                user.email.startsWith('apple'))
-                ? Math.floor(Math.random() * 2) + 4 // 4-5명
-                : Math.floor(Math.random() * 4) + 2; // 2-5명
 
-            const subscriberCount = Math.min(
-              maxSubscribers,
-              potentialSubscribers.length,
-            );
-            const shuffledUsers = [...potentialSubscribers].sort(
-              () => 0.5 - Math.random(),
-            );
-            const subscribers = shuffledUsers.slice(0, subscriberCount);
-
-            for (const subscriber of subscribers) {
-              try {
-                // 올바른 파라미터 순서로 호출 - libraryId, userId
-                await libraryService.subscribeToLibrary(
-                  library.id,
-                  subscriber.id,
-                );
-                logger.log(
-                  `User ${subscriber.username || subscriber.email} subscribed to library ${library.name}`,
-                );
-              } catch (error) {
-                logger.error(
-                  `Error subscribing user ${subscriber.email}: ${error.message}`,
-                );
+            // 구독자가 있는 경우에만 진행
+            if (potentialSubscribers.length > 0) {
+              // 모든 잠재적 구독자를 구독자로 추가 (최대 1명 - 상대방 사용자)
+              for (const subscriber of potentialSubscribers) {
+                try {
+                  await libraryService.subscribeToLibrary(
+                    library.id,
+                    subscriber.id,
+                  );
+                  logger.log(
+                    `User ${subscriber.username} (ID: ${subscriber.id}) subscribed to library ${library.name}`,
+                  );
+                } catch (error) {
+                  logger.error(
+                    `Error subscribing user ${subscriber.email} (ID: ${subscriber.id}): ${error.message}`,
+                  );
+                }
               }
             }
           }

@@ -45,6 +45,22 @@ export class LibraryController {
     );
   }
 
+  @Get('book/:bookId')
+  @IsPublic()
+  findLibrariesByBookId(
+    @Param('bookId', ParseIntPipe) bookId: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @GetUser() user?: User,
+  ) {
+    return this.libraryService.findLibrariesByBookId(
+      bookId,
+      page ? +page : 1,
+      limit ? +limit : 10,
+      user?.id,
+    );
+  }
+
   @Get('subscribed')
   findSubscribedLibraries(@GetUser() user: User) {
     return this.libraryService.findSubscribedLibraries(user.id);

@@ -19,6 +19,7 @@ import { FileService } from '../common/services/file.service';
 import { BookService } from '../book/book.service';
 import { UserService } from '../user/user.service';
 import { NotificationService } from '../notification/notification.service';
+import { Comment } from './entities/comment.entity';
 
 @Injectable()
 export class ReviewService {
@@ -33,6 +34,8 @@ export class ReviewService {
     private readonly reviewBookRepository: Repository<ReviewBook>,
     @InjectRepository(ReviewLike)
     private readonly reviewLikeRepository: Repository<ReviewLike>,
+    @InjectRepository(Comment)
+    private readonly commentRepository: Repository<Comment>,
     private readonly fileService: FileService,
     private readonly bookService: BookService,
     private readonly userService: UserService,
@@ -546,5 +549,109 @@ export class ReviewService {
       createdAt: review.createdAt,
       updatedAt: review.updatedAt,
     };
+  }
+
+  /**
+   * 특정 책에 대한 리뷰 목록 조회
+   */
+  async findReviewsByBookId(
+    bookId: number,
+    userId?: number,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<any> {
+    const skip = (page - 1) * limit;
+
+    try {
+      // 책에 연결된 리뷰를 찾기 위해 ReviewBook 테이블을 통해 조회
+      const queryBuilder = this.reviewRepository
+        .createQueryBuilder('review')
+        .innerJoin('review.books', 'reviewBooks')
+        .innerJoin('reviewBooks.book', 'book')
+        .leftJoinAndSelect('review.author', 'author')
+        .leftJoinAndSelect('review.images', 'images')
+        .where('reviewBooks.bookId = :bookId', { bookId })
+        .orderBy('review.createdAt', 'DESC')
+        .skip(skip)
+        .take(limit);
+
+      // 리뷰 가져오기
+      const [reviews, total] = await queryBuilder.getManyAndCount();
+
+      // 리뷰 정보 변환
+      const reviewsWithDetails = await Promise.all(
+        reviews.map(async (review) => {
+          // 좋아요 수 가져오기
+          const likesCount = await this.reviewLikeRepository.count({
+            where: { reviewId: review.id },
+          });
+
+          // 댓글 수 가져오기
+          const commentsCount = await this.commentRepository.count({
+            where: { reviewId: review.id },
+          });
+
+          // 로그인한 사용자가 좋아요를 눌렀는지 확인
+          let userLiked = false;
+          if (userId) {
+            const userLike = await this.reviewLikeRepository.findOne({
+              where: { reviewId: review.id, userId },
+            });
+            userLiked = !!userLike;
+          }
+
+          // 책 정보 가져오기
+          const reviewBook = await this.reviewBookRepository.findOne({
+            where: { reviewId: review.id, bookId: bookId },
+            relations: ['book'],
+          });
+
+          const book = reviewBook?.book || null;
+
+          return {
+            id: review.id,
+            content: review.content,
+            author: {
+              id: review.author.id,
+              username: review.author.username,
+            },
+            book: book
+              ? {
+                  id: book.id,
+                  title: book.title,
+                  author: book.author,
+                  coverImage: book.coverImage,
+                  isbn: book.isbn,
+                }
+              : null,
+            images: review.images.map((image) => ({
+              id: image.id,
+              url: image.url,
+            })),
+            likesCount,
+            commentsCount,
+            userLiked,
+            createdAt: review.createdAt,
+            updatedAt: review.updatedAt,
+          };
+        }),
+      );
+
+      // 페이지네이션 정보 반환
+      return {
+        data: reviewsWithDetails,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `책 ID ${bookId}의 리뷰 조회 중 오류 발생: ${error.message}`,
+      );
+      throw error;
+    }
   }
 }

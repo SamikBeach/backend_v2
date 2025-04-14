@@ -19,6 +19,7 @@ async function bootstrap() {
       'tag.seed.ts',
       'library.seed.ts',
       'review.seed.ts',
+      'reading-status.seed.ts',
       'notification.seed.ts',
       'search.seed.ts',
     ];

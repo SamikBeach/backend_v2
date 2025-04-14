@@ -172,13 +172,16 @@ export class BookService {
   }
 
   /**
-   * ISBN으로 도서 검색
+   * ISBN 또는 ISBN13으로 도서 검색
    */
-  async findByIsbn(isbn: string): Promise<Book | null> {
-    return this.bookRepository.findOne({
-      where: { isbn },
+  async findByIsbn(isbnParam: string): Promise<Book | null> {
+    // 입력된 ISBN으로 먼저 검색
+    let book = await this.bookRepository.findOne({
+      where: [{ isbn: isbnParam }, { isbn13: isbnParam }],
       relations: ['category', 'subcategory'],
     });
+
+    return book;
   }
 
   /**
@@ -1195,12 +1198,14 @@ export class BookService {
   }
 
   /**
-   * ISBN으로 도서 상세 정보 조회
-   * 책이 DB에 없으면 알라딘 API에서 가져와서 DB에 저장합니다.
+   * ISBN으로 책 상세정보 조회 (DB에 없으면 알라딘 API에서 가져오고 saveToDb가 true면 저장)
    */
-  async getBookDetailByIsbn(isbn: string): Promise<Book> {
-    // 이미 DB에 있는지 확인
-    let book = await this.findByIsbn(isbn);
+  async getBookDetailByIsbn(
+    isbnParam: string,
+    saveToDb: boolean = false,
+  ): Promise<Book> {
+    // 이미 DB에 있는지 확인 (ISBN 또는 ISBN13으로 검색)
+    let book = await this.findByIsbn(isbnParam);
 
     if (book) {
       return book;
@@ -1209,8 +1214,8 @@ export class BookService {
     try {
       // 알라딘 API로 도서 정보 가져오기
       const result = await this.aladinService.getBookDetail({
-        itemId: isbn,
-        itemIdType: isbn.length === 13 ? 'ISBN13' : 'ISBN',
+        itemId: isbnParam,
+        itemIdType: isbnParam.length === 13 ? 'ISBN13' : 'ISBN',
         cover: 'Big',
         optResult: [
           'toc',
@@ -1223,7 +1228,7 @@ export class BookService {
 
       if (!result || !result.item || result.item.length === 0) {
         throw new NotFoundException(
-          `ISBN ${isbn}으로 도서를 찾을 수 없습니다.`,
+          `ISBN ${isbnParam}으로 도서를 찾을 수 없습니다.`,
         );
       }
 
@@ -1233,39 +1238,58 @@ export class BookService {
       // 카테고리 처리 (기본값 사용)
       const category = await this.categoryService.findOne(1);
 
-      // 책 데이터 DB에 저장
+      // 책 데이터 객체 생성
       const bookObject = {
         ...bookData,
         category,
         // ISBN과 ISBN13이 항상 포함되도록 명시
-        isbn: bookData.isbn || isbn,
-        isbn13: bookData.isbn13 || (isbn.length === 13 ? isbn : undefined),
+        isbn: bookData.isbn || isbnParam,
+        isbn13:
+          bookData.isbn13 || (isbnParam.length === 13 ? isbnParam : undefined),
         // 나머지 필드도 명시적으로 설정
         title: bookData.title,
         author: bookData.author,
+        translator: bookData.translator,
         coverImage: bookData.coverImage,
         publisher: bookData.publisher,
         publishDate: bookData.publishDate,
         description: bookData.description,
         rating: bookData.rating || 0,
         reviews: bookData.reviews || 0,
+        totalRatings: bookData.totalRatings || 0,
+        pageCount: bookData.pageCount,
+        tags: bookData.tags,
         priceSales: bookData.priceSales,
         priceStandard: bookData.priceStandard,
         isFeatured: false,
         isDiscovered: false,
       };
 
-      // 새 Book 엔티티 생성 및 저장
-      const newBook = this.bookRepository.create(bookObject) as unknown as Book;
-      const savedBook = await this.bookRepository.save(newBook);
+      if (saveToDb) {
+        // DB에 책 저장
+        const savedBook = await this.bookRepository.save(bookObject);
+        this.logger.log(
+          `[ISBN 도서 조회] ${isbnParam}: ${savedBook.title} by ${savedBook.author}를 알라딘 API에서 가져와 DB에 저장했습니다. (ID: ${savedBook.id})`,
+        );
+        return savedBook;
+      } else {
+        // 메모리 상에서만 Book 엔티티 객체 생성 (DB에 저장하지 않음)
+        const tempBook = this.bookRepository.create({
+          id: -1, // 임시 ID 설정 (DB에 없는 책임을 나타내는 음수값)
+          ...bookObject,
+        }) as unknown as Book;
 
-      this.logger.log(
-        `[ISBN 도서 저장] ${isbn}: ${savedBook.title} by ${savedBook.author}가 DB에 저장되었습니다.`,
-      );
-      return savedBook;
+        this.logger.log(
+          `[ISBN 도서 조회] ${isbnParam}: ${tempBook.title} by ${tempBook.author}를 알라딘 API에서 가져왔습니다. (DB 저장 안함, 임시 ID: ${tempBook.id})`,
+        );
+
+        return tempBook;
+      }
     } catch (error) {
       this.logger.error(`도서 상세 정보 조회 오류: ${error.message}`);
-      throw new NotFoundException(`ISBN ${isbn}으로 도서를 찾을 수 없습니다.`);
+      throw new NotFoundException(
+        `ISBN ${isbnParam}으로 도서를 찾을 수 없습니다.`,
+      );
     }
   }
 
@@ -1342,5 +1366,40 @@ export class BookService {
       // 책 ID가 없는 경우 검색어만 저장
       await this.searchService.saveSearchTerm(term, userId);
     }
+  }
+
+  /**
+   * 임시 ID를 가진 책을 저장
+   */
+  async saveBookWithTempId(book: Book | any): Promise<Book> {
+    // id가 음수인 경우 (임시 ID)
+    if (book && book.id < 0) {
+      // id 필드를 제거하여 새로운 ID가 생성되게 함
+      const { id, ...bookData } = book;
+
+      // 카테고리 참조 확인
+      let category = book.category;
+      if (!category && book.categoryId) {
+        category = await this.categoryService.findOne(book.categoryId);
+      }
+      // 카테고리가 없으면 기본값 설정
+      if (!category) {
+        category = await this.categoryService.findOne(1);
+      }
+
+      // 책 저장
+      const savedBook = await this.bookRepository.save({
+        ...bookData,
+        category,
+      });
+
+      this.logger.log(
+        `임시 ID ${id}를 가진 책을 DB에 저장했습니다. 새 ID: ${savedBook.id}, 제목: ${savedBook.title}`,
+      );
+
+      return savedBook;
+    }
+
+    throw new Error('유효하지 않은 임시 책 데이터입니다.');
   }
 }

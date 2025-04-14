@@ -1,13 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { AppModule } from '../app.module';
-import { UserService } from '../user/user.service';
 import { User, UserStatus, AuthProvider } from '../user/entities/user.entity';
 import { Repository } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 
 interface UserSeed {
+  id?: number; // ID를 명시적으로 지정할 수 있도록 추가
   email: string;
   password: string;
   username: string;
@@ -25,9 +25,6 @@ async function bootstrap() {
     // 직접 Repository 접근 방식 (비밀번호 암호화 등 서비스 로직 없이 raw 데이터 생성)
     const userRepository = app.get<Repository<User>>(getRepositoryToken(User));
 
-    // UserService 사용 방식 (비밀번호 암호화 등 서비스 로직 포함)
-    const userService = app.get(UserService);
-
     // 기존 사용자 존재 여부 확인
     const existingUsers = await userRepository.count();
     if (existingUsers > 0) {
@@ -38,9 +35,10 @@ async function bootstrap() {
       return;
     }
 
-    // 테스트용 사용자 데이터
+    // 테스트용 사용자 데이터 (10개의 사용자 데이터 생성)
     const users: UserSeed[] = [
       {
+        id: 1,
         email: 'user1@example.com',
         password: 'password123',
         username: '책벌레',
@@ -48,25 +46,76 @@ async function bootstrap() {
         marketingConsent: true,
       },
       {
+        id: 2,
         email: 'user2@example.com',
         password: 'password123',
-        username: '독서광',
-        isActive: true,
-        marketingConsent: false,
-      },
-      {
-        email: 'user3@example.com',
-        password: 'password123',
-        username: '문학청년',
+        username: '문학소녀',
         isActive: true,
         marketingConsent: true,
       },
       {
-        email: 'inactive@example.com',
+        id: 3,
+        email: 'user3@example.com',
         password: 'password123',
-        username: '명상가',
-        isActive: true, // 모든 사용자를 활성 상태로 변경
+        username: '고전광',
+        isActive: true,
         marketingConsent: false,
+      },
+      {
+        id: 4,
+        email: 'user4@example.com',
+        password: 'password123',
+        username: '철학자',
+        isActive: true,
+        marketingConsent: true,
+      },
+      {
+        id: 5,
+        email: 'user5@example.com',
+        password: 'password123',
+        username: '역사탐험가',
+        isActive: true,
+        marketingConsent: false,
+      },
+      {
+        id: 6,
+        email: 'user6@example.com',
+        password: 'password123',
+        username: '독서마니아',
+        isActive: true,
+        marketingConsent: true,
+      },
+      {
+        id: 7,
+        email: 'user7@example.com',
+        password: 'password123',
+        username: '서재지기',
+        isActive: true,
+        marketingConsent: true,
+      },
+      {
+        id: 8,
+        email: 'user8@example.com',
+        password: 'password123',
+        username: '지식탐험가',
+        isActive: true,
+        marketingConsent: false,
+      },
+      {
+        id: 9,
+        email: 'user9@example.com',
+        password: 'password123',
+        username: '책향기',
+        isActive: true,
+        marketingConsent: true,
+      },
+      {
+        id: 10,
+        email: 'user10@example.com',
+        password: 'password123',
+        username: '문장수집가',
+        isActive: true,
+        marketingConsent: true,
       },
     ];
 
@@ -79,6 +128,7 @@ async function bootstrap() {
 
         // 직접 사용자 생성 (UserService 사용하지 않고 저장소에 직접 저장)
         const user = userRepository.create({
+          id: userData.id, // ID를 명시적으로 설정
           email: userData.email,
           password: hashedPassword,
           username: userData.username,
@@ -90,41 +140,12 @@ async function bootstrap() {
 
         await userRepository.save(user);
 
-        logger.log(`사용자 ${userData.email} 생성 완료 (상태: ${user.status})`);
+        logger.log(
+          `사용자 ${userData.email} (ID: ${userData.id}) 생성 완료 (상태: ${user.status})`,
+        );
       } catch (error) {
         logger.error(`사용자 ${userData.email} 생성 중 오류: ${error.message}`);
       }
-    }
-
-    // 소셜 로그인 사용자 추가 (예시)
-    try {
-      // 소셜 로그인 사용자 (Google)
-      const googleUser = userRepository.create({
-        email: 'google@example.com',
-        username: 'Google 사용자',
-        provider: AuthProvider.GOOGLE,
-        providerId: 'google-mock-id-123456',
-        status: UserStatus.ACTIVE,
-        isEmailVerified: true,
-        marketingConsent: false,
-      });
-      await userRepository.save(googleUser);
-      logger.log(`Google 소셜 로그인 사용자 생성 완료`);
-
-      // 소셜 로그인 사용자 (Apple)
-      const appleUser = userRepository.create({
-        email: 'apple@example.com',
-        username: 'Apple 사용자',
-        provider: AuthProvider.APPLE,
-        providerId: 'apple-mock-id-123456',
-        status: UserStatus.ACTIVE,
-        isEmailVerified: true,
-        marketingConsent: false,
-      });
-      await userRepository.save(appleUser);
-      logger.log(`Apple 소셜 로그인 사용자 생성 완료`);
-    } catch (error) {
-      logger.error(`소셜 로그인 사용자 생성 중 오류: ${error.message}`);
     }
 
     logger.log('사용자 초기 데이터 생성 완료!');

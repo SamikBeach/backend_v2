@@ -63,6 +63,25 @@ export class ReviewController {
   }
 
   /**
+   * 특정 책에 대한 리뷰 목록 조회
+   */
+  @Get('book/:bookId')
+  @IsPublic()
+  async findReviewsByBookId(
+    @GetUser() user: User,
+    @Param('bookId', ParseIntPipe) bookId: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.reviewService.findReviewsByBookId(
+      bookId,
+      user?.id,
+      page ? +page : 1,
+      limit ? +limit : 10,
+    );
+  }
+
+  /**
    * 리뷰 상세 조회
    */
   @Get(':id')

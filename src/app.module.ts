@@ -33,6 +33,10 @@ import { SearchModule } from './search/search.module';
 import { SearchLog, PopularSearch, RecentSearch } from './search/search.entity';
 import { NotificationModule } from './notification/notification.module';
 import { Notification } from './notification/entities/notification.entity';
+import { ReadingStatus } from './reading-status/entities/reading-status.entity';
+import { RatingModule } from './rating/rating.module';
+import { ReadingStatusModule } from './reading-status/reading-status.module';
+import { Rating } from './rating/entities/rating.entity';
 
 @Module({
   imports: [
@@ -72,6 +76,8 @@ import { Notification } from './notification/entities/notification.entity';
           PopularSearch,
           RecentSearch,
           Notification,
+          ReadingStatus,
+          Rating,
         ],
         synchronize: true,
         namingStrategy: new SnakeNamingStrategy(),
@@ -88,6 +94,8 @@ import { Notification } from './notification/entities/notification.entity';
     ReviewModule,
     SearchModule,
     NotificationModule,
+    RatingModule,
+    ReadingStatusModule,
   ],
 })
 export class AppModule implements NestModule {
