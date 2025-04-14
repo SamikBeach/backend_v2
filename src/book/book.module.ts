@@ -7,6 +7,8 @@ import { CommonModule } from '../common/common.module';
 import { CategoryModule } from '../category/category.module';
 import { DiscoverCategoryModule } from '../discover-category/discover-category.module';
 import { SearchModule } from '../search/search.module';
+import { ReadingStatusModule } from '../reading-status/reading-status.module';
+import { RatingModule } from '../rating/rating.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { SearchModule } from '../search/search.module';
     CategoryModule,
     DiscoverCategoryModule,
     forwardRef(() => SearchModule),
+    ReadingStatusModule,
+    RatingModule,
   ],
   controllers: [BookController],
   providers: [BookService],

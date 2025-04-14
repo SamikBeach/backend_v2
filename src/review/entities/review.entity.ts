@@ -8,12 +8,12 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
-import { PostImage } from './post-image.entity';
-import { PostBook } from './post-book.entity';
-import { PostLike } from './post-like.entity';
+import { ReviewImage } from './review-image.entity';
+import { ReviewBook } from './review-book.entity';
+import { ReviewLike } from './review-like.entity';
 import { Comment } from './comment.entity';
 
-export type PostType =
+export type ReviewType =
   | 'general'
   | 'discussion'
   | 'review'
@@ -21,7 +21,7 @@ export type PostType =
   | 'meetup';
 
 @Entity()
-export class Post {
+export class Review {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -33,24 +33,24 @@ export class Post {
     enum: ['general', 'discussion', 'review', 'question', 'meetup'],
     default: 'general',
   })
-  type: PostType;
+  type: ReviewType;
 
-  @ManyToOne(() => User, (user) => user.posts)
+  @ManyToOne(() => User, (user) => user.reviews)
   author: User;
 
   @Column()
   authorId: number;
 
-  @OneToMany(() => PostImage, (image) => image.post, { cascade: true })
-  images: PostImage[];
+  @OneToMany(() => ReviewImage, (image) => image.review, { cascade: true })
+  images: ReviewImage[];
 
-  @OneToMany(() => PostBook, (book) => book.post, { cascade: true })
-  books: PostBook[];
+  @OneToMany(() => ReviewBook, (book) => book.review, { cascade: true })
+  books: ReviewBook[];
 
-  @OneToMany(() => PostLike, (like) => like.post)
-  likes: PostLike[];
+  @OneToMany(() => ReviewLike, (like) => like.review)
+  likes: ReviewLike[];
 
-  @OneToMany(() => Comment, (comment) => comment.post)
+  @OneToMany(() => Comment, (comment) => comment.review)
   comments: Comment[];
 
   @Column({ default: 0 })

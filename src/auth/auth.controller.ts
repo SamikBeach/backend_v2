@@ -44,7 +44,6 @@ export class AuthController {
     return this.authService.refreshTokens(refreshTokenDto);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('logout')
   async logout(@GetUser() user: User) {
     return this.authService.logout(user.id);
@@ -124,7 +123,6 @@ export class AuthController {
     );
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('update-user-info')
   async updateUserInfo(
     @GetUser() user: User,

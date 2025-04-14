@@ -1,9 +1,9 @@
-import { PostType } from '../entities/post.entity';
+import { ReviewType } from '../entities/review.entity';
 
-export class PostResponseDto {
+export class ReviewResponseDto {
   id: number;
   content: string;
-  type: PostType;
+  type: ReviewType;
   author: {
     id: number;
     username: string;
@@ -20,6 +20,12 @@ export class PostResponseDto {
     author: string;
     coverImage: string;
     publisher: string;
+  }[];
+  // 리뷰 작성자의 해당 책에 대한 평점 정보
+  authorRatings?: {
+    bookId: number;
+    rating: number;
+    comment?: string;
   }[];
   likeCount: number;
   commentCount: number;

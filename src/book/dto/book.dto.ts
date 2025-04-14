@@ -7,11 +7,15 @@ export class BookDto {
   subcategoryId: number;
   rating?: number;
   reviews?: number;
+  totalRatings?: number;
   description?: string;
   publishDate?: Date;
   publisher: string;
+  translator?: string;
+  pageCount?: number;
   isbn: string;
   isbn13?: string;
+  tags?: string[];
   isFeatured?: boolean;
   isDiscovered?: boolean;
 }
@@ -24,11 +28,15 @@ export class CreateBookDto {
   subcategoryId: number;
   rating?: number;
   reviews?: number;
+  totalRatings?: number;
   description?: string;
   publishDate?: Date;
   publisher: string;
+  translator?: string;
+  pageCount?: number;
   isbn: string;
   isbn13?: string;
+  tags?: string[];
   isFeatured?: boolean;
   isDiscovered?: boolean;
 }
@@ -41,11 +49,15 @@ export class UpdateBookDto {
   subcategoryId?: number;
   rating?: number;
   reviews?: number;
+  totalRatings?: number;
   description?: string;
   publishDate?: Date;
   publisher?: string;
+  translator?: string;
+  pageCount?: number;
   isbn?: string;
   isbn13?: string;
+  tags?: string[];
   isFeatured?: boolean;
   isDiscovered?: boolean;
 }

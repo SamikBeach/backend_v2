@@ -46,7 +46,7 @@ export class Notification {
   sourceId: number; // 알림의 출처 ID (예: 댓글 ID, 서재 ID 등)
 
   @Column({ nullable: true })
-  sourceType: string; // 알림의 출처 타입 (예: 'post', 'library', 'user' 등)
+  sourceType: string; // 알림의 출처 타입 (예: 'review', 'library', 'user' 등)
 
   @Column({ nullable: true })
   actorId: number; // 액션을 취한 사용자 ID (예: 댓글을 단 사용자)

@@ -6,18 +6,15 @@ import {
   Patch,
   Param,
   Delete,
-  UseGuards,
   Query,
   ParseIntPipe,
 } from '@nestjs/common';
 import { NotificationService } from './notification.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
 
 @Controller('notifications')
-@UseGuards(JwtAuthGuard)
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 

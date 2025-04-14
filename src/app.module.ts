@@ -23,16 +23,20 @@ import { LibrarySubscription } from './library/entities/library-subscription.ent
 import { LibraryUpdateHistory } from './library/entities/library-update-history.entity';
 import { TagModule } from './tag/tag.module';
 import { Tag } from './library/entities/tag.entity';
-import { PostModule } from './post/post.module';
-import { Post } from './post/entities/post.entity';
-import { PostImage } from './post/entities/post-image.entity';
-import { PostBook } from './post/entities/post-book.entity';
-import { PostLike } from './post/entities/post-like.entity';
-import { Comment } from './post/entities/comment.entity';
+import { ReviewModule } from './review/review.module';
+import { Review } from './review/entities/review.entity';
+import { ReviewImage } from './review/entities/review-image.entity';
+import { ReviewBook } from './review/entities/review-book.entity';
+import { ReviewLike } from './review/entities/review-like.entity';
+import { Comment } from './review/entities/comment.entity';
 import { SearchModule } from './search/search.module';
 import { SearchLog, PopularSearch, RecentSearch } from './search/search.entity';
 import { NotificationModule } from './notification/notification.module';
 import { Notification } from './notification/entities/notification.entity';
+import { ReadingStatus } from './reading-status/entities/reading-status.entity';
+import { RatingModule } from './rating/rating.module';
+import { ReadingStatusModule } from './reading-status/reading-status.module';
+import { Rating } from './rating/entities/rating.entity';
 
 @Module({
   imports: [
@@ -63,15 +67,17 @@ import { Notification } from './notification/entities/notification.entity';
           LibrarySubscription,
           LibraryUpdateHistory,
           Tag,
-          Post,
-          PostImage,
-          PostBook,
-          PostLike,
+          Review,
+          ReviewImage,
+          ReviewBook,
+          ReviewLike,
           Comment,
           SearchLog,
           PopularSearch,
           RecentSearch,
           Notification,
+          ReadingStatus,
+          Rating,
         ],
         synchronize: true,
         namingStrategy: new SnakeNamingStrategy(),
@@ -85,9 +91,11 @@ import { Notification } from './notification/entities/notification.entity';
     DiscoverCategoryModule,
     LibraryModule,
     TagModule,
-    PostModule,
+    ReviewModule,
     SearchModule,
     NotificationModule,
+    RatingModule,
+    ReadingStatusModule,
   ],
 })
 export class AppModule implements NestModule {

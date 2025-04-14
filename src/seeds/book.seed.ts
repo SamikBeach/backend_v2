@@ -30,193 +30,290 @@ async function bootstrap() {
   // 샘플 도서 데이터
   const books: CreateBookDto[] = [
     {
-      title: '소크라테스의 변명',
-      author: '플라톤',
+      title: '사피엔스',
+      author: '유발 하라리',
       coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002175',
-      isbn13: '9788931002175',
-      publisher: '이제이북스',
-      publishDate: new Date('2018-01-15'),
-      rating: 4.5,
-      reviews: 120,
+        'https://image.aladin.co.kr/product/92/29/cover500/8925400669_2.jpg',
+      isbn: '8925400669',
+      isbn13: '9788925400662',
+      publisher: '김영사',
+      publishDate: new Date('2015-11-24'),
+      rating: 4.7,
+      reviews: 324,
       description:
-        '플라톤의 대화편 중 가장 유명한 작품으로, 소크라테스의 재판 과정과 그의 죽음 직전 모습을 담고 있습니다.',
+        '인류의 역사와 문명의 진화, 그리고 미래에 대한 통찰을 다룬 베스트셀러',
       categoryId: 1, // 철학
       subcategoryId: 1, // 서양철학
       isFeatured: true,
-      isDiscovered: true, // Discovered 도서로 설정
+      isDiscovered: true,
+    },
+    {
+      title: '호모 데우스',
+      author: '유발 하라리',
+      coverImage:
+        'https://image.aladin.co.kr/product/8955/51/cover500/892541077x_1.jpg',
+      isbn: '892541077X',
+      isbn13: '9788925410777',
+      publisher: '김영사',
+      publishDate: new Date('2017-05-15'),
+      rating: 4.6,
+      reviews: 278,
+      description:
+        '인류의 미래와 인공지능, 생명공학의 발전이 가져올 변화에 대한 탐구',
+      categoryId: 1, // 철학
+      subcategoryId: 1, // 서양철학
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '21세기를 위한 21가지 제언',
+      author: '유발 하라리',
+      coverImage:
+        'https://image.aladin.co.kr/product/30258/88/cover500/8925417316_1.jpg',
+      isbn: '8925417316',
+      isbn13: '9788925417318',
+      publisher: '김영사',
+      publishDate: new Date('2023-03-01'),
+      rating: 4.5,
+      reviews: 156,
+      description:
+        '변화하는 세계에서 우리가 직면한 도전과 그 대응책에 대한 통찰',
+      categoryId: 1, // 철학
+      subcategoryId: 1, // 서양철학
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '정의란 무엇인가',
+      author: '마이클 샌델',
+      coverImage:
+        'https://image.aladin.co.kr/product/8298/15/cover500/8930087272_1.jpg',
+      isbn: '8930087272',
+      isbn13: '9788930087278',
+      publisher: '와이즈베리',
+      publishDate: new Date('2014-11-20'),
+      rating: 4.8,
+      reviews: 412,
+      description:
+        '정의의 다양한 관점과 윤리적 딜레마를 통해 생각해보는 철학 입문서',
+      categoryId: 1, // 철학
+      subcategoryId: 1, // 서양철학
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '공정하다는 착각',
+      author: '마이클 샌델',
+      coverImage:
+        'https://image.aladin.co.kr/product/8298/20/cover500/8930087280_1.jpg',
+      isbn: '8930087280',
+      isbn13: '9788930087285',
+      publisher: '와이즈베리',
+      publishDate: new Date('2020-12-01'),
+      rating: 4.5,
+      reviews: 287,
+      description:
+        '능력주의 사회의 모순과 불평등, 그리고 새로운 정의에 대한 성찰',
+      categoryId: 1, // 철학
+      subcategoryId: 1, // 서양철학
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '소크라테스의 변명',
+      author: '플라톤',
+      coverImage:
+        'https://image.aladin.co.kr/product/291/92/cover500/8949705060_1.jpg',
+      isbn: '8949705060',
+      isbn13: '9788949705064',
+      publisher: '문예출판사',
+      publishDate: new Date('2003-08-15'),
+      rating: 4.6,
+      reviews: 198,
+      description: '진리를 향한 소크라테스의 마지막 변론과 철학적 신념',
+      categoryId: 1, // 철학
+      subcategoryId: 1, // 서양철학
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '국가',
+      author: '플라톤',
+      coverImage:
+        'https://image.aladin.co.kr/product/10684/17/cover500/8949716003_1.jpg',
+      isbn: '8949716003',
+      isbn13: '9788949716008',
+      publisher: '문예출판사',
+      publishDate: new Date('2017-05-20'),
+      rating: 4.7,
+      reviews: 165,
+      description: '이상적인 국가와 정의에 대한 플라톤의 대화편',
+      categoryId: 4, // 정치
+      subcategoryId: 9, // 정치철학
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '군주론',
+      author: '니콜로 마키아벨리',
+      coverImage:
+        'https://image.aladin.co.kr/product/775/17/cover500/8957331867_1.jpg',
+      isbn: '8957331867',
+      isbn13: '9788957331866',
+      publisher: '까치',
+      publishDate: new Date('2011-04-15'),
+      rating: 4.4,
+      reviews: 143,
+      description: '권력과 통치의 본질에 대한 현실주의적 분석',
+      categoryId: 4, // 정치
+      subcategoryId: 9, // 정치철학
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '죽음에 관하여',
+      author: '세네카',
+      coverImage:
+        'https://image.aladin.co.kr/product/1114/72/cover500/8964069188_1.jpg',
+      isbn: '8964069188',
+      isbn13: '9788964069189',
+      publisher: '사람과나무사이',
+      publishDate: new Date('2018-06-10'),
+      rating: 4.5,
+      reviews: 112,
+      description: '스토아 철학자 세네카의 죽음과 삶에 대한 성찰',
+      categoryId: 1, // 철학
+      subcategoryId: 1, // 서양철학
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '모든 것이 되는 법',
+      author: '바버라 오클리',
+      coverImage:
+        'https://image.aladin.co.kr/product/4213/78/cover500/8968171335_1.jpg',
+      isbn: '8968171335',
+      isbn13: '9788968171338',
+      publisher: '와이즈베리',
+      publishDate: new Date('2015-09-20'),
+      rating: 4.6,
+      reviews: 189,
+      description: '학습과 뇌의 메커니즘을 통해 알아보는 효과적인 학습 방법',
+      categoryId: 3, // 교육
+      subcategoryId: 4, // 교육심리
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '도덕경',
+      author: '노자',
+      coverImage:
+        'https://image.aladin.co.kr/product/39/89/cover500/8970133860_2.jpg',
+      isbn: '8970133860',
+      isbn13: '9788970133867',
+      publisher: '현암사',
+      publishDate: new Date('2002-01-01'),
+      rating: 4.7,
+      reviews: 210,
+      description: '도와 덕에 관한 동양 철학의 고전',
+      categoryId: 1, // 철학
+      subcategoryId: 2, // 동양철학
+      isFeatured: true,
+      isDiscovered: true,
     },
     {
       title: '논어',
       author: '공자',
       coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002176',
-      isbn13: '9788931002176',
-      publisher: '이제이북스',
-      publishDate: new Date('2018-02-20'),
-      rating: 4.7,
-      reviews: 150,
-      description:
-        '동양철학의 기초가 되는 공자의 가르침을 담은 고전으로, 인(仁)과 예(禮)의 개념을 중심으로 인간의 도덕적 삶을 논합니다.',
+        'https://image.aladin.co.kr/product/875/67/cover500/8970137882_2.jpg',
+      isbn: '8970137882',
+      isbn13: '9788970137889',
+      publisher: '현암사',
+      publishDate: new Date('2012-05-15'),
+      rating: 4.6,
+      reviews: 178,
+      description: '공자와 제자들의 대화를 통해 배우는 삶의 지혜',
       categoryId: 1, // 철학
       subcategoryId: 2, // 동양철학
       isFeatured: true,
-      isDiscovered: true, // Discovered 도서로 설정
+      isDiscovered: true,
     },
     {
-      title: '홍길동전',
-      author: '허균',
+      title: '사기열전',
+      author: '사마천',
       coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002177',
-      isbn13: '9788931002177',
-      publisher: '이제이북스',
-      publishDate: new Date('2018-03-10'),
-      rating: 4.3,
-      reviews: 90,
-      description:
-        '조선 시대의 대표적인 한글 소설로, 정의로운 도적 홍길동의 활약을 그린 작품입니다.',
-      categoryId: 2, // 문학
-      subcategoryId: 3, // 한국문학
-      isFeatured: true,
-      isDiscovered: true, // Discovered 도서로 설정
-    },
-    {
-      title: '1984',
-      author: '조지 오웰',
-      coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002178',
-      isbn13: '9788931002178',
-      publisher: '이제이북스',
-      publishDate: new Date('2018-04-05'),
+        'https://image.aladin.co.kr/product/10044/22/cover500/8979661304_1.jpg',
+      isbn: '8979661304',
+      isbn13: '9788979661309',
+      publisher: '민음사',
+      publishDate: new Date('2016-08-25'),
       rating: 4.8,
-      reviews: 200,
-      description:
-        '디스토피아 소설의 대표작으로, 전체주의 사회에서의 감시와 통제, 그리고 인간의 자유에 대한 문제를 다룹니다.',
-      categoryId: 2, // 문학
-      subcategoryId: 4, // 외국문학
+      reviews: 156,
+      description: '중국 역사상 다양한 인물들의 삶과 업적을 기록한 역사서',
+      categoryId: 3, // 역사
+      subcategoryId: 6, // 중국사
       isFeatured: true,
-      isDiscovered: true, // Discovered 도서로 설정
+      isDiscovered: true,
     },
     {
-      title: '조선왕조실록',
-      author: '조선왕조실록편찬위원회',
+      title: '열하일기',
+      author: '박지원',
       coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002179',
-      isbn13: '9788931002179',
-      publisher: '이제이북스',
-      publishDate: new Date('2018-05-15'),
-      rating: 4.6,
-      reviews: 110,
-      description:
-        '조선 시대의 공식 역사 기록으로, 1392년부터 1863년까지의 조선 왕조의 역사를 담고 있습니다.',
+        'https://image.aladin.co.kr/product/25632/27/cover500/8979661975_2.jpg',
+      isbn: '8979661975',
+      isbn13: '9788979661972',
+      publisher: '민음사',
+      publishDate: new Date('2020-06-15'),
+      rating: 4.5,
+      reviews: 124,
+      description: '조선 후기 실학자 연암 박지원의 중국 여행기',
       categoryId: 3, // 역사
       subcategoryId: 5, // 한국사
       isFeatured: true,
-      isDiscovered: true, // Discovered 도서로 설정
-    },
-    {
-      title: '로마인의 이야기',
-      author: '시오노 나나미',
-      coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002180',
-      isbn13: '9788931002180',
-      publisher: '이제이북스',
-      publishDate: new Date('2018-06-20'),
-      rating: 4.4,
-      reviews: 130,
-      description:
-        '고대 로마의 역사를 소설적으로 재구성한 작품으로, 로마 제국의 흥망성쇠를 다룹니다.',
-      categoryId: 3, // 역사
-      subcategoryId: 6, // 서양사
-      isFeatured: true,
-      isDiscovered: true, // Discovered 도서로 설정
-    },
-    {
-      title: '민주주의론',
-      author: '알렉시 드 토크빌',
-      coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002181',
-      isbn13: '9788931002181',
-      publisher: '이제이북스',
-      publishDate: new Date('2018-07-10'),
-      rating: 4.5,
-      reviews: 95,
-      description:
-        '19세기 프랑스 정치학자가 미국의 민주주의를 분석한 고전으로, 민주주의의 장단점을 다룹니다.',
-      categoryId: 4, // 정치
-      subcategoryId: 7, // 정치학
-      isFeatured: true,
-      isDiscovered: true, // Discovered 도서로 설정
+      isDiscovered: true,
     },
     {
       title: '국부론',
       author: '애덤 스미스',
       coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002182',
-      isbn13: '9788931002182',
-      publisher: '이제이북스',
-      publishDate: new Date('2018-08-15'),
+        'https://image.aladin.co.kr/product/36/73/cover500/8981682798_1.gif',
+      isbn: '8981682798',
+      isbn13: '9788981682798',
+      publisher: '동서문화사',
+      publishDate: new Date('2001-03-10'),
       rating: 4.7,
-      reviews: 160,
-      description:
-        '현대 경제학의 기초가 되는 고전으로, 자유시장 경제의 원리와 국부(國富)의 성장에 대해 논합니다.',
+      reviews: 167,
+      description: '현대 자본주의 경제학의 기초를 다진 고전',
       categoryId: 5, // 경제
       subcategoryId: 8, // 경제이론
       isFeatured: true,
-      isDiscovered: true, // Discovered 도서로 설정
-    },
-    {
-      title: '사회계약론',
-      author: '장자크 루소',
-      coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002183',
-      isbn13: '9788931002183',
-      publisher: '이제이북스',
-      publishDate: new Date('2018-09-20'),
-      rating: 4.6,
-      reviews: 120,
-      description:
-        '시민사회와 국가의 기원, 그리고 정치적 권위의 정당성에 대해 논하는 정치철학의 고전입니다.',
-      categoryId: 4, // 정치
-      subcategoryId: 9, // 정치철학
-      isFeatured: true,
-      isDiscovered: true, // Discovered 도서로 설정
+      isDiscovered: true,
     },
     {
       title: '자본론',
       author: '카를 마르크스',
       coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002184',
-      isbn13: '9788931002184',
-      publisher: '이제이북스',
-      publishDate: new Date('2018-10-10'),
-      rating: 4.5,
-      reviews: 140,
-      description:
-        '자본주의 경제 체제의 모순과 발전 과정을 분석한 마르크스 경제학의 핵심 저작입니다.',
+        'https://image.aladin.co.kr/product/5/54/cover500/8982870547_1.jpg',
+      isbn: '8982870547',
+      isbn13: '9788982870545',
+      publisher: '비봉출판사',
+      publishDate: new Date('2008-11-20'),
+      rating: 4.6,
+      reviews: 145,
+      description: '자본주의 경제체제에 대한 비판적 분석',
       categoryId: 5, // 경제
       subcategoryId: 8, // 경제이론
       isFeatured: true,
-      isDiscovered: true, // Discovered 도서로 설정
+      isDiscovered: true,
     },
     {
       title: '사회학적 상상력',
       author: 'C. 라이트 밀스',
       coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002185',
-      isbn13: '9788931002185',
-      publisher: '이제이북스',
+        'https://image.aladin.co.kr/product/9013/39/cover500/8990042194_1.jpg',
+      isbn: '8990042194',
+      isbn13: '9788990042194',
+      publisher: '사회비평사',
       publishDate: new Date('2018-11-15'),
       rating: 4.4,
       reviews: 100,
@@ -225,15 +322,16 @@ async function bootstrap() {
       categoryId: 6, // 사회
       subcategoryId: 10, // 사회학
       isFeatured: true,
+      isDiscovered: true,
     },
     {
       title: '심리학의 이해',
       author: '데이비드 마이어스',
       coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002186',
-      isbn13: '9788931002186',
-      publisher: '이제이북스',
+        'https://image.aladin.co.kr/product/24784/23/cover500/8958286342_1.jpg',
+      isbn: '8958286342',
+      isbn13: '9788958286349',
+      publisher: '시그마프레스',
       publishDate: new Date('2018-12-20'),
       rating: 4.6,
       reviews: 150,
@@ -242,15 +340,16 @@ async function bootstrap() {
       categoryId: 6, // 사회
       subcategoryId: 11, // 심리학
       isFeatured: true,
+      isDiscovered: true,
     },
     {
       title: '종교의 기원',
       author: '에밀 뒤르켐',
       coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002187',
-      isbn13: '9788931002187',
-      publisher: '이제이북스',
+        'https://image.aladin.co.kr/product/3747/71/cover500/8958620927_1.jpg',
+      isbn: '8958620927',
+      isbn13: '9788958620921',
+      publisher: '길',
       publishDate: new Date('2019-01-10'),
       rating: 4.5,
       reviews: 110,
@@ -259,15 +358,16 @@ async function bootstrap() {
       categoryId: 8, // 종교
       subcategoryId: 15, // 종교학
       isFeatured: true,
+      isDiscovered: true,
     },
     {
       title: '불교철학',
       author: '나가르주나',
       coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002188',
-      isbn13: '9788931002188',
-      publisher: '이제이북스',
+        'https://image.aladin.co.kr/product/109/45/cover500/8935615064_1.jpg',
+      isbn: '8935615064',
+      isbn13: '9788935615063',
+      publisher: '민음사',
       publishDate: new Date('2019-02-15'),
       rating: 4.4,
       reviews: 90,
@@ -276,15 +376,16 @@ async function bootstrap() {
       categoryId: 8, // 종교
       subcategoryId: 12, // 불교
       isFeatured: true,
+      isDiscovered: true,
     },
     {
-      title: '물리학의 이해',
+      title: '파인만 물리학 강의',
       author: '리처드 파인만',
       coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002189',
-      isbn13: '9788931002189',
-      publisher: '이제이북스',
+        'https://image.aladin.co.kr/product/8242/90/cover500/8934403888_1.jpg',
+      isbn: '8934403888',
+      isbn13: '9788934403883',
+      publisher: '승산',
       publishDate: new Date('2019-03-20'),
       rating: 4.7,
       reviews: 130,
@@ -293,23 +394,164 @@ async function bootstrap() {
       categoryId: 7, // 과학
       subcategoryId: 13, // 물리학
       isFeatured: true,
+      isDiscovered: true,
     },
     {
-      title: '생물학의 원리',
+      title: '종의 기원',
       author: '찰스 다윈',
       coverImage:
-        'https://image.aladin.co.kr/product/27/97/cover/s11258283418_1.jpg',
-      isbn: '9788931002190',
-      isbn13: '9788931002190',
-      publisher: '이제이북스',
-      publishDate: new Date('2019-04-10'),
-      rating: 4.6,
-      reviews: 120,
+        'https://image.aladin.co.kr/product/65/73/cover500/890208835x_1.jpg',
+      isbn: '890208835X',
+      isbn13: '9788902088357',
+      publisher: '동서문화사',
+      publishDate: new Date('2019-04-15'),
+      rating: 4.8,
+      reviews: 140,
       description:
-        '자연선택과 진화론을 통해 생물학의 기본 원리를 설명하는 다윈의 대표작입니다.',
+        '생물 진화론의 기초가 된 다윈의 대표 저작으로, 자연선택설을 통해 종의 진화 과정을 설명합니다.',
       categoryId: 7, // 과학
       subcategoryId: 14, // 생물학
       isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '코스모스',
+      author: '칼 세이건',
+      coverImage:
+        'https://image.aladin.co.kr/product/18/3/cover/8983711418_2.jpg',
+      isbn: '8983711418',
+      publisher: '사이언스북스',
+      publishDate: new Date('2006-12-20'),
+      rating: 4.8,
+      reviews: 1842,
+      totalRatings: 2154,
+      translator: '홍승수',
+      pageCount: 752,
+      tags: ['과학', '천문학', '우주', '교양과학'],
+      description:
+        '현대 천문학의 아버지이자 과학의 대중화에 큰 역할을 한 저자가 우주의 신비와 그 안에서의 인류의 위치를 깊이 있게 탐구하는 과학 교양서입니다.',
+      categoryId: 4,
+      subcategoryId: 10,
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '프로그래머의 뇌',
+      author: '펠리너 헤르만스',
+      coverImage:
+        'https://image.aladin.co.kr/product/28/16/cover/k652734565_1.jpg',
+      isbn: '1617298670',
+      publisher: '한빛미디어',
+      publishDate: new Date('2021-07-26'),
+      rating: 4.5,
+      reviews: 325,
+      totalRatings: 456,
+      translator: '이미령',
+      pageCount: 328,
+      tags: ['프로그래밍', '소프트웨어 개발', '인지과학', '자기계발'],
+      description:
+        '인지 신경과학과 학습 이론을 바탕으로 개발자가 더 효율적으로 코드를 읽고, 쓰고, 이해하는 방법을 설명하는 책입니다.',
+      categoryId: 1,
+      subcategoryId: 2,
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '클린 코드',
+      author: '로버트 C. 마틴',
+      coverImage:
+        'https://image.aladin.co.kr/product/9/13/cover/8966262147_1.jpg',
+      isbn: '8966262147',
+      publisher: '인사이트',
+      publishDate: new Date('2013-12-24'),
+      rating: 4.6,
+      reviews: 756,
+      totalRatings: 985,
+      translator: '박재호, 이해영',
+      pageCount: 584,
+      tags: ['프로그래밍', '소프트웨어 개발', '코딩', '애자일'],
+      description:
+        '프로그래밍 분야의 대가가 알려주는 더 나은 코드를 작성하는 방법과 원칙을 담고 있는 필독서입니다.',
+      categoryId: 1,
+      subcategoryId: 2,
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '데이터 과학 입문',
+      author: '레이철 슈트',
+      coverImage:
+        'https://image.aladin.co.kr/product/13/61/cover/k972534525_1.jpg',
+      isbn: '1491957662',
+      publisher: '한빛미디어',
+      publishDate: new Date('2017-05-30'),
+      rating: 4.2,
+      reviews: 285,
+      totalRatings: 312,
+      translator: '오현석',
+      pageCount: 398,
+      tags: ['데이터 과학', '프로그래밍', '통계', 'Python'],
+      description:
+        '파이썬을 활용한 데이터 과학의 기초를 다루며, 실무에서 활용할 수 있는 다양한 기법을 소개합니다.',
+      categoryId: 4,
+      subcategoryId: 12,
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '인공지능: 현대적 접근',
+      author: '스튜어트 러셀',
+      coverImage:
+        'https://image.aladin.co.kr/product/26/88/cover/8970509208_1.jpg',
+      isbn: '8970509208',
+      publisher: '한빛아카데미',
+      publishDate: new Date('2016-08-10'),
+      rating: 4.7,
+      reviews: 421,
+      totalRatings: 578,
+      translator: '류광',
+      pageCount: 1132,
+      tags: ['인공지능', '컴퓨터 과학', '기계학습', '딥러닝'],
+      description:
+        '인공지능의 기초부터 최신 연구 동향까지 포괄적으로 다루는 인공지능 분야의 바이블입니다.',
+      categoryId: 4,
+      subcategoryId: 12,
+      isFeatured: true,
+      isDiscovered: true,
+    },
+    {
+      title: '소셜 미디어와 사회',
+      author: '데이비드 키킬로',
+      coverImage:
+        'https://image.aladin.co.kr/product/27935/73/cover500/k592835620_1.jpg',
+      isbn: '1554812690',
+      publisher: '커뮤니케이션북스',
+      publishDate: new Date('2020-03-15'),
+      rating: 4.1,
+      reviews: 75,
+      description:
+        '소셜 미디어가 현대 사회에 미치는 영향과 문제점에 대해 탐구한 책입니다.',
+      categoryId: 4, // 사회학
+      subcategoryId: 13, // 미디어
+      isFeatured: false,
+      isDiscovered: true,
+    },
+    {
+      title: '경제학 원론',
+      author: '그레고리 맨큐',
+      coverImage:
+        'https://image.aladin.co.kr/product/26487/43/cover500/k292635156_2.jpg',
+      isbn: '8952744632',
+      publisher: '센게이지러닝코리아',
+      publishDate: new Date('2018-08-31'),
+      rating: 4.7,
+      reviews: 130,
+      description:
+        '현대 경제학의 기본 개념과 원리를 쉽게 설명한 경제학 입문서입니다.',
+      categoryId: 5, // 경제학
+      subcategoryId: 15, // 경제이론
+      isFeatured: true,
+      isDiscovered: true,
     },
   ];
 

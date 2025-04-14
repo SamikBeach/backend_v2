@@ -303,17 +303,64 @@ export class AladinService {
    * 알라딘 API 응답에서 Book 엔티티에 필요한 정보만 추출합니다.
    */
   extractBookData(item: AladinBook): any {
+    // 저자 및 번역자 정보 처리
+    let translator = null;
+    const authorInfo = item.author.split(',');
+    if (
+      authorInfo.length > 1 &&
+      authorInfo.some((info) => info.includes('역'))
+    ) {
+      // 번역자 정보가 있으면 분리
+      const translators = authorInfo.filter((info) => info.includes('역'));
+      translator = translators
+        .map((t) => t.trim().replace('역', ''))
+        .join(', ');
+    }
+
+    // 장르/태그 정보 추출
+    let tags = null;
+    if (item.subInfo?.categoryIdList) {
+      const categories = Array.isArray(item.subInfo.categoryIdList)
+        ? item.subInfo.categoryIdList
+        : [item.subInfo.categoryIdList];
+
+      // 카테고리 이름만 추출하여 태그로 사용
+      tags = categories
+        .filter((cat) => cat && typeof cat === 'object' && cat.name)
+        .map((cat) => cat.name);
+    }
+
+    // 페이지 수 추출 (상세 설명에서 페이지 정보 찾기)
+    let pageCount = null;
+    if (item.subInfo?.fullDescription) {
+      const pageMatch = item.subInfo.fullDescription.match(
+        /(\d+)페이지|(\d+)쪽|(\d+)\s*p/i,
+      );
+      if (pageMatch) {
+        pageCount = parseInt(pageMatch[1] || pageMatch[2] || pageMatch[3], 10);
+      }
+    }
+
     return {
       title: item.title,
-      author: item.author,
+      author: authorInfo
+        .filter((info) => !info.includes('역'))
+        .join(', ')
+        .trim(),
+      translator,
       coverImage: item.cover || null,
       isbn: item.isbn,
       isbn13: item.isbn13,
       publisher: item.publisher,
-      publishDate: item.pubDate,
+      publishDate: item.pubDate ? new Date(item.pubDate) : null,
       rating: item.customerReviewRank / 2, // 알라딘은 10점 만점, 우리는 5점 만점
       reviews: 0, // 초기값
-      description: item.description,
+      totalRatings: 0, // 초기값
+      pageCount,
+      tags,
+      description:
+        item.description ||
+        (item.subInfo?.fullDescription || '').substring(0, 500),
       priceSales: item.priceSales,
       priceStandard: item.priceStandard,
     };

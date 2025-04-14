@@ -5,10 +5,10 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Post } from './post.entity';
+import { Review } from './review.entity';
 
 @Entity()
-export class PostImage {
+export class ReviewImage {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -18,11 +18,11 @@ export class PostImage {
   @Column({ nullable: true })
   caption: string;
 
-  @ManyToOne(() => Post, (post) => post.images, { onDelete: 'CASCADE' })
-  post: Post;
+  @ManyToOne(() => Review, (review) => review.images, { onDelete: 'CASCADE' })
+  review: Review;
 
   @Column()
-  postId: number;
+  reviewId: number;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -10,6 +10,9 @@ import * as bcrypt from 'bcrypt';
 import { User, UserStatus, AuthProvider } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { randomBytes } from 'crypto';
+import { UserDetailResponseDto } from './dto/user.dto';
+import { Library } from '../library/entities/library.entity';
+import { Review } from '../review/entities/review.entity';
 
 @Injectable()
 export class UserService {
@@ -321,5 +324,124 @@ export class UserService {
     user.verificationToken = null;
 
     return this.userRepository.save(user);
+  }
+
+  async getUserProfile(
+    id: number,
+    isOwnProfile: boolean,
+  ): Promise<UserDetailResponseDto> {
+    try {
+      console.log(
+        `getUserProfile called for id=${id}, isOwnProfile=${isOwnProfile}`,
+      );
+
+      // 1. 사용자 기본 정보 로드
+      const user = await this.userRepository.findOne({
+        where: { id },
+      });
+
+      if (!user) {
+        throw new NotFoundException(`User with ID ${id} not found`);
+      }
+
+      // 2. 카운트 정보 초기화
+      let libraryCount = 0;
+      let readCount = 0;
+      let reviewCount = 0;
+      let subscribedLibraryCount = 0;
+
+      // 3. 사용자의 서재 정보 조회
+      try {
+        const libraryQueryResult = await this.userRepository.manager.query(
+          `SELECT COUNT(id) as count FROM library WHERE owner_id = ?`,
+          [id],
+        );
+        libraryCount = parseInt(libraryQueryResult[0]?.count || '0', 10);
+
+        // 다른 사용자의 프로필을 볼 때는 공개 서재만 카운트
+        if (!isOwnProfile) {
+          const publicLibraryQueryResult =
+            await this.userRepository.manager.query(
+              `SELECT COUNT(id) as count FROM library WHERE owner_id = ? AND is_public = true`,
+              [id],
+            );
+          libraryCount = parseInt(
+            publicLibraryQueryResult[0]?.count || '0',
+            10,
+          );
+        }
+      } catch (error) {
+        console.error('Error getting library count:', error);
+      }
+
+      // 4. 읽은 책 권수 조회
+      try {
+        const bookCountQuery = isOwnProfile
+          ? `SELECT COUNT(lb.id) as count FROM library_book lb
+             JOIN library l ON lb.library_id = l.id
+             WHERE l.owner_id = ?`
+          : `SELECT COUNT(lb.id) as count FROM library_book lb
+             JOIN library l ON lb.library_id = l.id
+             WHERE l.owner_id = ? AND l.is_public = true`;
+
+        const readCountResult = await this.userRepository.manager.query(
+          bookCountQuery,
+          [id],
+        );
+        readCount = parseInt(readCountResult[0]?.count || '0', 10);
+      } catch (error) {
+        console.error('Error getting read book count:', error);
+      }
+
+      // 5. 리뷰 개수 조회
+      try {
+        const reviewCountResult = await this.userRepository.manager.query(
+          `SELECT COUNT(id) as count FROM review WHERE author_id = ?`,
+          [id],
+        );
+        reviewCount = parseInt(reviewCountResult[0]?.count || '0', 10);
+      } catch (error) {
+        console.error('Error getting review count:', error);
+      }
+
+      // 6. 구독중인 서재 개수 조회
+      try {
+        const subscriptionCountResult = await this.userRepository.manager.query(
+          `SELECT COUNT(*) as count FROM library_subscription WHERE subscriber_id = ?`,
+          [id],
+        );
+        subscribedLibraryCount = parseInt(
+          subscriptionCountResult[0]?.count || '0',
+          10,
+        );
+      } catch (error) {
+        console.error('Error getting subscription count:', error);
+      }
+
+      console.log(
+        `Profile counts - libraries: ${libraryCount}, books: ${readCount}, reviews: ${reviewCount}, subscriptions: ${subscribedLibraryCount}`,
+      );
+
+      // 7. 프로필 데이터 반환
+      return {
+        user: {
+          id: user.id,
+          username: user.username || '사용자',
+          email: isOwnProfile ? user.email : undefined,
+          provider: user.provider,
+          createdAt: user.createdAt,
+        },
+        libraryCount,
+        readCount,
+        subscribedLibraryCount,
+        reviewCount,
+        followers: 0, // 추후 구현 예정
+        following: 0, // 추후 구현 예정
+        isEditable: isOwnProfile,
+      };
+    } catch (error) {
+      console.error('Error in getUserProfile:', error);
+      throw error;
+    }
   }
 }

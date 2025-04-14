@@ -7,7 +7,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { Post } from './post.entity';
+import { Review } from './review.entity';
 import { User } from '../../user/entities/user.entity';
 
 @Entity()
@@ -18,11 +18,11 @@ export class Comment {
   @Column('text')
   content: string;
 
-  @ManyToOne(() => Post, (post) => post.comments, { onDelete: 'CASCADE' })
-  post: Post;
+  @ManyToOne(() => Review, (review) => review.comments, { onDelete: 'CASCADE' })
+  review: Review;
 
   @Column()
-  postId: number;
+  reviewId: number;
 
   @ManyToOne(() => User)
   author: User;
