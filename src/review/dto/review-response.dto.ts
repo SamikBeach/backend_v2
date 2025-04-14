@@ -21,7 +21,8 @@ export class ReviewResponseDto {
     coverImage: string;
     publisher: string;
   }[];
-  userRatings?: {
+  // 리뷰 작성자의 해당 책에 대한 평점 정보
+  authorRatings?: {
     bookId: number;
     rating: number;
     comment?: string;
