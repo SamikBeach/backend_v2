@@ -59,6 +59,15 @@ export class CreateReadingStatusDto {
   @IsOptional()
   @IsString()
   readingMemo?: string;
+
+  @ApiProperty({
+    example: '9788901234567',
+    description: 'ISBN 또는 ISBN13 (선택사항, bookId가 -1일 때 사용)',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  isbn?: string;
 }
 
 export class UpdateReadingStatusDto {

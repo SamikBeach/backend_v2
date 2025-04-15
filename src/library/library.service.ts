@@ -501,40 +501,56 @@ export class LibraryService {
         );
       }
 
-      // 책 존재 여부 확인
+      // 책 처리
       let book: any;
-      try {
-        // 기존 DB에서 책 찾기
-        book = await this.bookService.findById(addBookToLibraryDto.bookId);
-      } catch (error) {
-        if (error instanceof NotFoundException) {
-          // ID로 책을 찾을 수 없는 경우, ISBN으로 알라딘 API 검색 결과일 수 있음
-          if (addBookToLibraryDto.isbn) {
-            this.logger.log(
-              `책 ID ${addBookToLibraryDto.bookId}를 찾을 수 없어 ISBN ${addBookToLibraryDto.isbn}으로 검색합니다.`,
-            );
 
-            // 이미 ISBN으로 저장된 책이 있는지 확인
-            let existingBook = await this.bookService.findByIsbn(
-              addBookToLibraryDto.isbn,
-            );
+      // bookId가 -1이고 ISBN이 제공된 경우: ISBN으로 책을 검색하거나 새로 등록
+      if (addBookToLibraryDto.bookId === -1 && addBookToLibraryDto.isbn) {
+        this.logger.log(
+          `bookId가 -1이고 ISBN ${addBookToLibraryDto.isbn}이 제공되어 책을 조회합니다.`,
+        );
 
-            if (!existingBook) {
-              // 알라딘 API에서 책 정보 가져와서 DB에 저장
+        try {
+          // ISBN으로 책 조회 또는 생성 (saveToDb=true로 설정하여 DB에 저장)
+          book = await this.bookService.getBookDetailByIsbn(
+            addBookToLibraryDto.isbn,
+            true,
+          );
+          this.logger.log(
+            `ISBN ${addBookToLibraryDto.isbn}로 책을 찾았거나 생성했습니다. ID: ${book.id}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `ISBN ${addBookToLibraryDto.isbn}로 책을 찾을 수 없습니다: ${error.message}`,
+          );
+          throw new NotFoundException(
+            `ISBN ${addBookToLibraryDto.isbn}로 책을 찾을 수 없습니다.`,
+          );
+        }
+      }
+      // 일반적인 경우: 기존 DB에서 책 ID로 검색
+      else {
+        try {
+          book = await this.bookService.findById(addBookToLibraryDto.bookId);
+        } catch (error) {
+          if (error instanceof NotFoundException) {
+            // ID로 책을 찾을 수 없는 경우, ISBN이 제공되었다면 ISBN으로 검색
+            if (addBookToLibraryDto.isbn) {
               this.logger.log(
-                `ISBN ${addBookToLibraryDto.isbn}의 책을 알라딘 API에서 가져와 저장합니다.`,
+                `책 ID ${addBookToLibraryDto.bookId}를 찾을 수 없어 ISBN ${addBookToLibraryDto.isbn}으로 검색합니다.`,
               );
-              existingBook = await this.bookService.getBookDetailByIsbn(
-                addBookToLibraryDto.isbn,
-              );
-            }
 
-            book = existingBook;
+              // ISBN으로 책을 가져와 저장
+              book = await this.bookService.getBookDetailByIsbn(
+                addBookToLibraryDto.isbn,
+                true,
+              );
+            } else {
+              throw new NotFoundException('책을 찾을 수 없습니다.');
+            }
           } else {
-            throw new NotFoundException('책을 찾을 수 없습니다.');
+            throw error; // 다른 에러는 그대로 전파
           }
-        } else {
-          throw error; // 다른 에러는 그대로 전파
         }
       }
 

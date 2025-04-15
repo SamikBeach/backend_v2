@@ -20,4 +20,8 @@ export class CreateReviewDto {
   @IsNumber()
   @IsOptional()
   bookId?: number;
+
+  @IsString()
+  @IsOptional()
+  isbn?: string;
 }

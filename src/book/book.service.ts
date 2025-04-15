@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Book } from './entities/book.entity';
@@ -28,6 +34,7 @@ export class BookService {
     private readonly categoryService: CategoryService,
     private readonly subCategoryService: SubCategoryService,
     private readonly discoverCategoryService: DiscoverCategoryService,
+    @Inject(forwardRef(() => SearchService))
     private readonly searchService: SearchService,
   ) {}
 

@@ -69,8 +69,33 @@ export class ReviewService {
         await this.addImagesToReview(savedReview.id, files);
       }
 
-      // 책 연결
-      if (createReviewDto.bookId) {
+      // 책 처리: bookId가 -1이고 ISBN이 제공된 경우 ISBN으로 책을 등록
+      if (createReviewDto.bookId === -1 && createReviewDto.isbn) {
+        this.logger.log(
+          `bookId가 -1이고 ISBN ${createReviewDto.isbn}이 제공되어 책을 조회합니다.`,
+        );
+
+        try {
+          // ISBN으로 책 조회 또는 생성 (saveToDb=true로 설정하여 DB에 저장)
+          const book = await this.bookService.getBookDetailByIsbn(
+            createReviewDto.isbn,
+            true,
+          );
+          this.logger.log(
+            `ISBN ${createReviewDto.isbn}로 책을 찾았거나 생성했습니다. ID: ${book.id}`,
+          );
+
+          // 생성된 책을 리뷰에 연결
+          await this.addBookToReview(savedReview.id, book.id);
+        } catch (error) {
+          this.logger.error(
+            `ISBN ${createReviewDto.isbn}로 책을 찾을 수 없습니다: ${error.message}`,
+          );
+          // 책 정보 없이 진행 (책 연결 실패해도 리뷰는 유지)
+        }
+      }
+      // 일반적인 경우: 유효한 bookId가 제공된 경우
+      else if (createReviewDto.bookId && createReviewDto.bookId > 0) {
         await this.addBookToReview(savedReview.id, createReviewDto.bookId);
       }
 
@@ -486,8 +511,16 @@ export class ReviewService {
     bookId: number,
   ): Promise<void> {
     try {
-      if (!reviewId || !bookId) {
-        throw new BadRequestException('유효한 reviewId와 bookId가 필요합니다.');
+      if (!reviewId) {
+        throw new BadRequestException('유효한 reviewId가 필요합니다.');
+      }
+
+      // bookId가 -1인 경우는 ISBN으로 책을 찾아서 연결하는 경우이므로 예외 처리 없이 반환
+      if (bookId === -1) {
+        this.logger.log(
+          `리뷰 ID ${reviewId}에 bookId가 -1인 경우, ISBN으로 이미 처리됨`,
+        );
+        return;
       }
 
       // 리뷰가 존재하는지 확인
@@ -503,7 +536,7 @@ export class ReviewService {
       const book = await this.bookService.findById(bookId);
 
       if (!book) {
-        throw new BadRequestException(`책 ID ${bookId}를 찾을 수 없습니다.`);
+        throw new NotFoundException(`Book with ID ${bookId} not found`);
       }
 
       // 책과 리뷰 연결 - 직접 SQL을 사용하여 명확하게 값을 설정
