@@ -688,7 +688,8 @@ export class ReviewService {
             const userLike = await this.reviewLikeRepository.findOne({
               where: { reviewId: review.id, userId },
             });
-            userLiked = !!userLike;
+
+            console.log({ userLike });
           }
 
           // 책 정보 가져오기

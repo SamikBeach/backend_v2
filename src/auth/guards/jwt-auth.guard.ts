@@ -2,6 +2,7 @@ import {
   ExecutionContext,
   Injectable,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
@@ -10,6 +11,8 @@ import { Observable } from 'rxjs';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
+  private readonly logger = new Logger(JwtAuthGuard.name);
+
   constructor(private reflector: Reflector) {
     super();
   }
@@ -24,21 +27,44 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
 
     if (isPublic) {
       // 공개 라우트의 경우 항상 접근을 허용하되,
-      // 요청에 유효한 JWT가 있는 경우에만 사용자 정보를 설정
-      this.tryAuthenticate(context);
+      // 요청에 유효한 JWT가 있는 경우 사용자 정보를 설정하기 위해
+      // 실제 canActivate 결과를 처리
+      const result = super.canActivate(context);
+
+      // Promise 형태로 반환된 경우 처리
+      if (result instanceof Promise) {
+        return result.then(
+          () => true, // 성공 시 true
+          (error) => {
+            this.logger.debug(`JWT 인증 실패 (공개 라우트): ${error.message}`);
+            return true; // 실패해도 공개 라우트이므로 true
+          },
+        );
+      }
+
+      // Observable 형태로 반환된 경우 (드물지만 가능)
+      if (result instanceof Observable) {
+        return new Observable((subscriber) => {
+          result.subscribe({
+            next: (value) => {
+              subscriber.next(true);
+              subscriber.complete();
+            },
+            error: (error) => {
+              this.logger.debug(
+                `JWT 인증 실패 (공개 라우트): ${error.message}`,
+              );
+              subscriber.next(true);
+              subscriber.complete();
+            },
+          });
+        });
+      }
+
       return true;
     }
 
     return super.canActivate(context);
-  }
-
-  private tryAuthenticate(context: ExecutionContext): void {
-    try {
-      // JWT 인증을 시도하지만 결과는 무시
-      super.canActivate(context);
-    } catch (error) {
-      // 인증 오류는 무시 (공개 라우트이므로)
-    }
   }
 
   handleRequest(err, user, info, context: ExecutionContext) {
@@ -47,18 +73,31 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       context.getClass(),
     ]);
 
+    const req = context.switchToHttp().getRequest();
+    const token = req.headers.authorization;
+
     if (isPublic) {
-      // 공개 라우트는 인증 여부와 상관없이 사용자 정보 반환
-      // (user가 없으면 undefined로 처리됨)
-      return user;
+      // 공개 라우트이지만 유효한 토큰이 있는 경우
+      if (token && user) {
+        this.logger.debug(
+          `공개 라우트: 유효한 토큰으로 사용자 정보 설정 - ID: ${user.id}`,
+        );
+        return user;
+      }
+
+      // 토큰이 없거나 유효하지 않은 경우
+      this.logger.debug('공개 라우트: 사용자 인증 정보 없음');
+      return undefined;
     }
 
     // 보호된 라우트의 경우 인증 확인
     if (err) {
+      this.logger.error(`인증 오류: ${err.message}`);
       throw err;
     }
 
     if (!user) {
+      this.logger.warn('인증 실패: 사용자 정보 없음');
       throw new UnauthorizedException('인증이 필요합니다');
     }
 

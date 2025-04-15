@@ -69,11 +69,13 @@ export class BookController {
     @GetUser() user?: User,
   ): Promise<any> {
     try {
+      console.log('==========[findByIsbn]==========');
       console.log('요청 정보 - ISBN:', isbn);
       console.log(
         '인증 유저 정보:',
-        user ? `ID: ${user.id}, Email: ${user.email}` : '로그인하지 않음',
+        user ? `ID: ${user.id}, Email: ${user.email}` : '인증된 사용자 없음',
       );
+      console.log('================================');
 
       // getBookDetailByIsbn 메서드는 DB에 없으면 알라딘에서 가져와 동일한 Book 형식으로 반환합니다.
       const book = await this.bookService.getBookDetailByIsbn(isbn);
