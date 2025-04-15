@@ -635,10 +635,43 @@ export class ReviewService {
     page: number = 1,
     limit: number = 10,
     sort: 'likes' | 'comments' | 'recent' = 'likes',
+    isbn?: string,
   ): Promise<any> {
     const skip = (page - 1) * limit;
 
     try {
+      // bookId가 -1이고 ISBN이 제공된 경우, ISBN으로 책을 찾음
+      if (bookId === -1 && isbn) {
+        this.logger.log(
+          `bookId가 -1이고 ISBN ${isbn}이 제공되어 책을 조회합니다.`,
+        );
+
+        try {
+          // ISBN으로 책 정보 가져오기 (이미 DB에 존재하거나 새로 추가)
+          const book = await this.bookService.getBookDetailByIsbn(isbn, true);
+          this.logger.log(
+            `ISBN ${isbn}로 책을 찾았거나 생성했습니다. ID: ${book.id}`,
+          );
+
+          // 실제 bookId로 검색 계속 진행
+          bookId = book.id;
+        } catch (error) {
+          this.logger.error(
+            `ISBN ${isbn}로 책을 찾을 수 없습니다: ${error.message}`,
+          );
+          return {
+            data: [],
+            meta: {
+              total: 0,
+              page,
+              limit,
+              totalPages: 0,
+              sort,
+            },
+          };
+        }
+      }
+
       // 책에 연결된 리뷰를 찾기 위해 ReviewBook 테이블을 통해 조회
       const queryBuilder = this.reviewRepository
         .createQueryBuilder('review')

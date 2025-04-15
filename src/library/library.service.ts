@@ -982,106 +982,141 @@ export class LibraryService {
     page: number = 1,
     limit: number = 10,
     userId?: number,
+    isbn?: string,
   ): Promise<any> {
     const skip = (page - 1) * limit;
 
-    // 서재 조인 쿼리 생성
-    const queryBuilder = this.libraryRepository
-      .createQueryBuilder('library')
-      .innerJoin('library_book', 'lb', 'library.id = lb.library_id')
-      .innerJoin('library.owner', 'owner')
-      .where('lb.book_id = :bookId', { bookId })
-      .andWhere('library.is_public = :isPublic', { isPublic: true })
-      .select([
-        'library.id',
-        'library.name',
-        'library.description',
-        'library.isPublic',
-        'library.createdAt',
-        'library.updatedAt',
-        'owner.id',
-        'owner.username',
-      ])
-      .orderBy('library.updatedAt', 'DESC')
-      .skip(skip)
-      .take(limit);
-
-    // 로그인한 사용자의 비공개 서재도 포함
-    if (userId) {
-      queryBuilder.orWhere(
-        'lb.book_id = :bookId AND library.owner_id = :ownerId',
-        { bookId, ownerId: userId },
-      );
-    }
-
-    // 서재 목록 조회
-    const [libraries, total] = await queryBuilder.getManyAndCount();
-
-    // 서재별 책 수, 구독자 수 정보 추가
-    const librariesWithDetails = await Promise.all(
-      libraries.map(async (library) => {
-        // 서재에 등록된 책 수 조회
-        const booksCount = await this.libraryBookRepository.count({
-          where: { libraryId: library.id },
-        });
-
-        // 서재 구독자 수 조회
-        const subscribersCount = await this.librarySubscriptionRepository.count(
-          {
-            where: { libraryId: library.id },
-          },
+    try {
+      // bookId가 -1이고 ISBN이 제공된 경우, ISBN으로 책을 찾음
+      if (bookId === -1 && isbn) {
+        this.logger.log(
+          `bookId가 -1이고 ISBN ${isbn}이 제공되어 책을 조회합니다.`,
         );
 
-        // 로그인한 사용자의 구독 여부 확인
-        let isSubscribed = false;
-        if (userId) {
-          const subscription = await this.librarySubscriptionRepository.findOne(
-            {
-              where: { libraryId: library.id, subscriberId: userId },
-            },
+        try {
+          // ISBN으로 책 정보 가져오기 (이미 DB에 존재하거나 새로 추가)
+          const book = await this.bookService.getBookDetailByIsbn(isbn, true);
+          this.logger.log(
+            `ISBN ${isbn}로 책을 찾았거나 생성했습니다. ID: ${book.id}`,
           );
-          isSubscribed = !!subscription;
+
+          // 실제 bookId로 검색 계속 진행
+          bookId = book.id;
+        } catch (error) {
+          this.logger.error(
+            `ISBN ${isbn}로 책을 찾을 수 없습니다: ${error.message}`,
+          );
+          return {
+            data: [],
+            meta: {
+              total: 0,
+              page,
+              limit,
+              totalPages: 0,
+            },
+          };
         }
+      }
 
-        // 서재 태그 정보 조회
-        const libraryTags = await this.libraryTagRepository.find({
-          where: { libraryId: library.id },
-          relations: ['tag'],
-        });
+      // 서재 조인 쿼리 생성
+      const queryBuilder = this.libraryRepository
+        .createQueryBuilder('library')
+        .innerJoin('library_book', 'lb', 'library.id = lb.library_id')
+        .innerJoin('library.owner', 'owner')
+        .where('lb.book_id = :bookId', { bookId })
+        .andWhere('library.is_public = :isPublic', { isPublic: true })
+        .select([
+          'library.id',
+          'library.name',
+          'library.description',
+          'library.isPublic',
+          'library.createdAt',
+          'library.updatedAt',
+          'owner.id',
+          'owner.username',
+        ])
+        .orderBy('library.updatedAt', 'DESC')
+        .skip(skip)
+        .take(limit);
 
-        const tags = libraryTags.map((lt) => ({
-          id: lt.tag.id,
-          name: lt.tag.name,
-        }));
+      // 로그인한 사용자의 비공개 서재도 포함
+      if (userId) {
+        queryBuilder.orWhere(
+          'lb.book_id = :bookId AND library.owner_id = :ownerId',
+          { bookId, ownerId: userId },
+        );
+      }
 
-        return {
-          id: library.id,
-          name: library.name,
-          description: library.description,
-          isPublic: library.isPublic,
-          createdAt: library.createdAt,
-          updatedAt: library.updatedAt,
-          owner: {
-            id: library.owner.id,
-            username: library.owner.username,
-          },
-          booksCount,
-          subscribersCount,
-          isSubscribed,
-          tags,
-        };
-      }),
-    );
+      // 서재 목록 조회
+      const [libraries, total] = await queryBuilder.getManyAndCount();
 
-    // 페이지네이션 정보와 함께 결과 반환
-    return {
-      data: librariesWithDetails,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+      // 서재별 책 수, 구독자 수 정보 추가
+      const librariesWithDetails = await Promise.all(
+        libraries.map(async (library) => {
+          // 서재에 등록된 책 수 조회
+          const booksCount = await this.libraryBookRepository.count({
+            where: { libraryId: library.id },
+          });
+
+          // 서재 구독자 수 조회
+          const subscribersCount =
+            await this.librarySubscriptionRepository.count({
+              where: { libraryId: library.id },
+            });
+
+          // 로그인한 사용자의 구독 여부 확인
+          let isSubscribed = false;
+          if (userId) {
+            const subscription =
+              await this.librarySubscriptionRepository.findOne({
+                where: { libraryId: library.id, subscriberId: userId },
+              });
+            isSubscribed = !!subscription;
+          }
+
+          // 서재 태그 정보 조회
+          const libraryTags = await this.libraryTagRepository.find({
+            where: { libraryId: library.id },
+            relations: ['tag'],
+          });
+
+          const tags = libraryTags.map((lt) => ({
+            id: lt.tag.id,
+            name: lt.tag.name,
+          }));
+
+          return {
+            id: library.id,
+            name: library.name,
+            description: library.description,
+            isPublic: library.isPublic,
+            createdAt: library.createdAt,
+            updatedAt: library.updatedAt,
+            owner: {
+              id: library.owner.id,
+              username: library.owner.username,
+            },
+            booksCount,
+            subscribersCount,
+            isSubscribed,
+            tags,
+          };
+        }),
+      );
+
+      // 페이지네이션 정보와 함께 결과 반환
+      return {
+        data: librariesWithDetails,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      this.logger.error(`라이브러리에서 책 조회 실패: ${error.message}`);
+      throw error;
+    }
   }
 }

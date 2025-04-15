@@ -90,6 +90,7 @@ export class ReviewController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('sort') sort?: 'likes' | 'comments' | 'recent',
+    @Query('isbn') isbn?: string,
   ) {
     return this.reviewService.findReviewsByBookId(
       bookId,
@@ -97,6 +98,7 @@ export class ReviewController {
       page ? +page : 1,
       limit ? +limit : 10,
       sort || 'likes', // 기본값은 좋아요순
+      isbn,
     );
   }
 

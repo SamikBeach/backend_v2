@@ -51,6 +51,7 @@ export class LibraryController {
     @Param('bookId', ParseIntPipe) bookId: number,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('isbn') isbn?: string,
     @GetUser() user?: User,
   ) {
     return this.libraryService.findLibrariesByBookId(
@@ -58,6 +59,7 @@ export class LibraryController {
       page ? +page : 1,
       limit ? +limit : 10,
       user?.id,
+      isbn,
     );
   }
 
