@@ -32,7 +32,6 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CommentResponseDto } from './dto/review-response.dto';
-import { HttpService } from '@nestjs/axios';
 
 @ApiTags('review')
 @Controller('review')
@@ -40,7 +39,6 @@ export class ReviewController {
   constructor(
     private readonly reviewService: ReviewService,
     private readonly commentService: CommentService,
-    private readonly httpService: HttpService,
   ) {}
 
   /**
@@ -93,23 +91,6 @@ export class ReviewController {
     @Query('limit') limit?: number,
     @Query('sort') sort?: 'likes' | 'comments' | 'recent',
   ) {
-    console.log('==========[findReviewsByBookId]==========');
-    console.log('요청 정보 - 책 ID:', bookId);
-    console.log(
-      '인증 유저 정보:',
-      user ? `ID: ${user.id}, Email: ${user.email}` : '인증된 사용자 없음',
-    );
-
-    // 요청 헤더 로깅
-    const req = this.httpService.req;
-    if (req) {
-      console.log(
-        'Authorization 헤더:',
-        req.headers.authorization ? '존재함' : '없음',
-      );
-    }
-    console.log('========================================');
-
     return this.reviewService.findReviewsByBookId(
       bookId,
       user?.id,
