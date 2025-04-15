@@ -4,18 +4,15 @@ import {
   Post,
   Body,
   Query,
-  UseGuards,
   Delete,
   Param,
 } from '@nestjs/common';
 import { SearchService } from './search.service';
 import { BookService } from '../book/book.service';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { SearchTarget, SortType, CoverSize } from '../book/dto/search-book.dto';
-import { OptionalAuth } from '../auth/decorators/optional-auth.decorator';
 
 @Controller('search')
 export class SearchController {
@@ -28,7 +25,7 @@ export class SearchController {
    * 통합 검색 API
    */
   @Get()
-  @OptionalAuth()
+  @IsPublic()
   async search(
     @Query('query') query: string,
     @Query('type') type?: string,
@@ -40,7 +37,6 @@ export class SearchController {
     @Query('cover') cover?: string,
     @Query('outOfStockFilter') outOfStockFilter?: boolean,
     @Query('recentPublishFilter') recentPublishFilter?: number,
-    @GetUser() user?: User,
   ): Promise<any> {
     if (!query) {
       return {
@@ -80,7 +76,7 @@ export class SearchController {
    * 이 정보는 Book 테이블에 저장되지 않고, 검색 로그 및 최근 검색어에 직접 저장됩니다.
    */
   @Post('log-book-selection')
-  @OptionalAuth()
+  @IsPublic()
   async logBookSelection(
     @Body('term') term: string,
     @Body('bookId') bookId: number,

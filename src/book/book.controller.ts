@@ -19,7 +19,6 @@ import { ReadingStatusService } from '../reading-status/reading-status.service';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { RatingService } from '../rating/rating.service';
-import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 
 @Controller('book')
 export class BookController {
@@ -64,7 +63,7 @@ export class BookController {
   }
 
   @Get('isbn/:isbn')
-  @UseGuards(OptionalJwtAuthGuard)
+  @IsPublic()
   async findByIsbn(
     @Param('isbn') isbn: string,
     @GetUser() user?: User,

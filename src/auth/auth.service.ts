@@ -428,7 +428,7 @@ export class AuthService {
 
     // 액세스 토큰 생성 (짧은 유효기간)
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: '1h',
+      expiresIn: '10s',
     });
 
     // 리프레시 토큰 생성 (긴 유효기간)

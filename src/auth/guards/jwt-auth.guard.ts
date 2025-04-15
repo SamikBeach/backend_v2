@@ -1,4 +1,8 @@
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import {
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 import { IS_PUBLIC_KEY } from '../decorators/is-public.decorator';
@@ -19,24 +23,22 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     ]);
 
     if (isPublic) {
-      // 공개 라우트의 경우 인증 시도를 하되, 인증 실패해도 요청을 차단하지 않음
-      const result = super.canActivate(context);
-
-      if (result instanceof Promise) {
-        return result.then(
-          () => true, // 인증 성공, 사용자 정보와 함께 진행
-          () => true, // 인증 실패, 사용자 정보 없이 진행
-        );
-      }
-
-      if (result instanceof Observable) {
-        // Observable 처리는 여기서 생략 (필요시 구현)
-      }
-
-      return true; // 인증 결과와 상관없이 진행
+      // 공개 라우트의 경우 항상 접근을 허용하되,
+      // 요청에 유효한 JWT가 있는 경우에만 사용자 정보를 설정
+      this.tryAuthenticate(context);
+      return true;
     }
 
     return super.canActivate(context);
+  }
+
+  private tryAuthenticate(context: ExecutionContext): void {
+    try {
+      // JWT 인증을 시도하지만 결과는 무시
+      super.canActivate(context);
+    } catch (error) {
+      // 인증 오류는 무시 (공개 라우트이므로)
+    }
   }
 
   handleRequest(err, user, info, context: ExecutionContext) {
@@ -46,15 +48,20 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     ]);
 
     if (isPublic) {
-      // 공개 라우트의 경우 인증 실패해도 예외를 던지지 않음
-      // 그냥 사용자 정보(이는 undefined일 수 있음)를 반환
+      // 공개 라우트는 인증 여부와 상관없이 사용자 정보 반환
+      // (user가 없으면 undefined로 처리됨)
       return user;
     }
 
-    // 보호된 라우트의 경우 기본 동작 유지
-    if (err || !user) {
-      throw err || new Error('인증되지 않음');
+    // 보호된 라우트의 경우 인증 확인
+    if (err) {
+      throw err;
     }
+
+    if (!user) {
+      throw new UnauthorizedException('인증이 필요합니다');
+    }
+
     return user;
   }
 }
