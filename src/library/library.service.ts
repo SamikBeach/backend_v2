@@ -994,14 +994,25 @@ export class LibraryService {
         );
 
         try {
-          // ISBN으로 책 정보 가져오기 (이미 DB에 존재하거나 새로 추가)
-          const book = await this.bookService.getBookDetailByIsbn(isbn, true);
-          this.logger.log(
-            `ISBN ${isbn}로 책을 찾았거나 생성했습니다. ID: ${book.id}`,
-          );
+          // ISBN으로 책 조회 (saveToDb=false로 설정하여 DB에 저장하지 않음)
+          const book = await this.bookService.getBookDetailByIsbn(isbn, false);
+          this.logger.log(`ISBN ${isbn}로 책을 찾았습니다. ID: ${book.id}`);
 
-          // 실제 bookId로 검색 계속 진행
-          bookId = book.id;
+          // DB에 이미 존재하는 책인 경우에만 실제 bookId로 검색 진행
+          if (book.id > 0) {
+            bookId = book.id;
+          } else {
+            // 책이 DB에 없는 경우 빈 결과 반환
+            return {
+              data: [],
+              meta: {
+                total: 0,
+                page,
+                limit,
+                totalPages: 0,
+              },
+            };
+          }
         } catch (error) {
           this.logger.error(
             `ISBN ${isbn}로 책을 찾을 수 없습니다: ${error.message}`,
