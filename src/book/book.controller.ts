@@ -9,7 +9,6 @@ import {
   Patch,
   Delete,
   NotFoundException,
-  UseGuards,
 } from '@nestjs/common';
 import { BookService } from './book.service';
 import { Book } from './entities/book.entity';
@@ -24,7 +23,7 @@ import { ReadingStatusService } from '../reading-status/reading-status.service';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { RatingService } from '../rating/rating.service';
-import { ApiTags, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
+import { ApiTags } from '@nestjs/swagger';
 
 @ApiTags('book')
 @Controller('book')
@@ -114,7 +113,7 @@ export class BookController {
                 response.userReadingStatus = readingStats.userReadingStatus;
               }
             }
-          } catch (error) {
+          } catch {
             // 독서 상태 통계 조회 실패 시 무시하고 계속 진행
           }
 
@@ -132,7 +131,7 @@ export class BookController {
                   comment: rating.comment,
                 };
               }
-            } catch (error) {
+            } catch {
               // 평점 조회 실패 시 무시하고 계속 진행
             }
           }
@@ -140,7 +139,7 @@ export class BookController {
       }
 
       return response;
-    } catch (error) {
+    } catch {
       throw new NotFoundException(`ISBN ${isbn}으로 도서를 찾을 수 없습니다.`);
     }
   }

@@ -13,7 +13,6 @@ import {
   UpdateBookDto,
   BookResponse,
   BookSearchResponse,
-  ReadingStats,
 } from './dto/book.dto';
 import {
   AladinService,
