@@ -320,6 +320,20 @@ export class ReviewService {
         }
       }
 
+      // 연결된 책들의 리뷰 수 감소
+      if (review.books && review.books.length > 0) {
+        for (const reviewBook of review.books) {
+          try {
+            await this.bookService.decrementReviewCount(reviewBook.bookId);
+            this.logger.log(`책 ID ${reviewBook.bookId}의 리뷰 수 감소 완료`);
+          } catch (error) {
+            this.logger.warn(
+              `책 ID ${reviewBook.bookId}의 리뷰 수 감소 실패: ${error.message}`,
+            );
+          }
+        }
+      }
+
       // review-book 관계 명시적 삭제
       await this.reviewBookRepository.delete({ reviewId: id });
       this.logger.log(`리뷰 ID ${id}와 연결된 책 관계 삭제 완료`);
@@ -550,7 +564,12 @@ export class ReviewService {
         })
         .execute();
 
-      this.logger.log(`리뷰 ID ${reviewId}에 책 ID ${bookId} 연결 완료`);
+      // 책의 리뷰 수 증가
+      await this.bookService.incrementReviewCount(bookId);
+
+      this.logger.log(
+        `리뷰 ID ${reviewId}에 책 ID ${bookId} 연결 완료 및 리뷰 수 증가`,
+      );
     } catch (error) {
       this.logger.error(`책 연결 중 오류: ${error.message}`);
       throw error;

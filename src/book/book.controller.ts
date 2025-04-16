@@ -13,13 +13,20 @@ import {
 } from '@nestjs/common';
 import { BookService } from './book.service';
 import { Book } from './entities/book.entity';
-import { CreateBookDto, UpdateBookDto } from './dto/book.dto';
+import {
+  CreateBookDto,
+  UpdateBookDto,
+  BookResponse,
+  ReadingStats,
+} from './dto/book.dto';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
 import { ReadingStatusService } from '../reading-status/reading-status.service';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { RatingService } from '../rating/rating.service';
+import { ApiTags, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 
+@ApiTags('book')
 @Controller('book')
 export class BookController {
   constructor(
@@ -67,13 +74,13 @@ export class BookController {
   async findByIsbn(
     @Param('isbn') isbn: string,
     @GetUser() user?: User,
-  ): Promise<any> {
+  ): Promise<BookResponse> {
     try {
       // getBookDetailByIsbn 메서드는 DB에 없으면 알라딘에서 가져와 동일한 Book 형식으로 반환합니다.
       const book = await this.bookService.getBookDetailByIsbn(isbn);
 
       // 응답 데이터 구성 - 기본 책 정보
-      const response: any = {
+      const response: BookResponse = {
         ...book,
         readingStats: null,
         userRating: null,
@@ -100,7 +107,7 @@ export class BookController {
                 averageReadingTime: readingStats.averageReadingTime,
                 difficulty: readingStats.difficulty,
                 readingStatusCounts: readingStats.readingStatusCounts,
-              };
+              } as ReadingStats;
 
               // 사용자 독서 상태 설정 (로그인한 경우)
               if (user) {
@@ -110,31 +117,26 @@ export class BookController {
           } catch (error) {
             // 독서 상태 통계 조회 실패 시 무시하고 계속 진행
           }
-        }
 
-        // 로그인한 사용자인 경우 평점 정보 조회 (DB에 저장된 책인 경우만)
-        if (user && book.id > 0) {
-          // 사용자의 평점 정보 조회 - null 반환 가능
-          try {
-            const userRating = await this.ratingService.findByUserAndBook(
-              user.id,
-              book.id,
-            );
-
-            // 평점 정보가 있으면 응답에 포함
-            response.userRating = userRating;
-          } catch (error) {
-            response.userRating = null;
+          // 사용자 평점 정보 조회 (로그인한 경우)
+          if (user) {
+            try {
+              const rating = await this.ratingService.findByUserAndBook(
+                user.id,
+                book.id,
+              );
+              if (rating) {
+                response.userRating = {
+                  bookId: book.id,
+                  rating: rating.rating,
+                  comment: rating.comment,
+                };
+              }
+            } catch (error) {
+              // 평점 조회 실패 시 무시하고 계속 진행
+            }
           }
-        } else {
-          // 비로그인 사용자이거나 임시 ID 책인 경우
-          response.userRating = null;
-          response.userReadingStatus = null;
         }
-      } else {
-        // 책 정보가 없거나 ID가 없는 경우
-        response.userRating = null;
-        response.userReadingStatus = null;
       }
 
       return response;

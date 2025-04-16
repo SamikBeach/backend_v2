@@ -13,6 +13,7 @@ import { IsPublic } from '../auth/decorators/is-public.decorator';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { SearchTarget, SortType, CoverSize } from '../book/dto/search-book.dto';
+import { BookSearchResponse } from '../book/dto/book.dto';
 
 @Controller('search')
 export class SearchController {
@@ -37,7 +38,8 @@ export class SearchController {
     @Query('cover') cover?: string,
     @Query('outOfStockFilter') outOfStockFilter?: boolean,
     @Query('recentPublishFilter') recentPublishFilter?: number,
-  ): Promise<any> {
+    @GetUser() user?: User,
+  ): Promise<BookSearchResponse> {
     if (!query) {
       return {
         books: [],
@@ -57,13 +59,14 @@ export class SearchController {
       recentPublishFilter,
     };
 
-    // 검색 결과 조회
+    // 검색 결과 조회 (사용자 ID 전달)
     const searchResults = await this.bookService.searchBooks(
       query,
       type || 'Keyword',
       page || 1,
       limit || 10,
       searchParams,
+      user?.id, // 로그인한 사용자의 ID 전달
     );
 
     // 검색 결과만 반환
@@ -126,14 +129,14 @@ export class SearchController {
     @GetUser() user: User,
     @Query('limit') limit?: number,
   ): Promise<any> {
-    const recentSearches = await this.searchService.getRecentSearchTerms(
+    const recentBooks = await this.searchService.getRecentSearchTerms(
       user.id,
       limit || 5,
     );
 
     return {
-      recentSearches,
-      count: recentSearches.length,
+      books: recentBooks,
+      count: recentBooks.length,
     };
   }
 
@@ -190,8 +193,14 @@ export class SearchController {
     @Query('categoryId') categoryId?: number,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-  ): Promise<any> {
-    return this.bookService.findBestsellers(categoryId, page || 1, limit || 10);
+    @GetUser() user?: User,
+  ): Promise<BookSearchResponse> {
+    return this.bookService.findBestsellers(
+      categoryId,
+      page || 1,
+      limit || 10,
+      user?.id,
+    );
   }
 
   /**
@@ -203,8 +212,14 @@ export class SearchController {
     @Query('categoryId') categoryId?: number,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-  ): Promise<any> {
-    return this.bookService.findNewBooks(categoryId, page || 1, limit || 10);
+    @GetUser() user?: User,
+  ): Promise<BookSearchResponse> {
+    return this.bookService.findNewBooks(
+      categoryId,
+      page || 1,
+      limit || 10,
+      user?.id,
+    );
   }
 
   /**
