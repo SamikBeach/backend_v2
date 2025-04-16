@@ -1055,6 +1055,7 @@ export class LibraryService {
     limit: number = 10,
     userId?: number,
     isbn?: string,
+    sortOption?: LibrarySortOption,
   ): Promise<any> {
     const skip = (page - 1) * limit;
 
@@ -1115,12 +1116,10 @@ export class LibraryService {
           'library.isPublic',
           'library.createdAt',
           'library.updatedAt',
+          'library.subscriberCount',
           'owner.id',
           'owner.username',
-        ])
-        .orderBy('library.updatedAt', 'DESC')
-        .skip(skip)
-        .take(limit);
+        ]);
 
       // 로그인한 사용자의 비공개 서재도 포함
       if (userId) {
@@ -1129,6 +1128,27 @@ export class LibraryService {
           { bookId, ownerId: userId },
         );
       }
+
+      // 정렬 옵션 적용
+      switch (sortOption) {
+        case LibrarySortOption.SUBSCRIBERS:
+          queryBuilder.orderBy('library.subscriberCount', 'DESC');
+          break;
+        case LibrarySortOption.BOOKS:
+          // 책 수로 정렬은 나중에 처리
+          queryBuilder.orderBy('library.updatedAt', 'DESC');
+          break;
+        case LibrarySortOption.RECENT:
+          queryBuilder.orderBy('library.createdAt', 'DESC');
+          break;
+        default:
+          // 기본은 최신 업데이트순
+          queryBuilder.orderBy('library.updatedAt', 'DESC');
+          break;
+      }
+
+      // 페이지네이션 적용
+      queryBuilder.skip(skip).take(limit);
 
       // 서재 목록 조회
       const [libraries, total] = await queryBuilder.getManyAndCount();
@@ -1186,6 +1206,11 @@ export class LibraryService {
           };
         }),
       );
+
+      // LibrarySortOption.BOOKS인 경우 JS에서 책 수로 정렬
+      if (sortOption === LibrarySortOption.BOOKS) {
+        librariesWithDetails.sort((a, b) => b.booksCount - a.booksCount);
+      }
 
       // 페이지네이션 정보와 함께 결과 반환
       return {
