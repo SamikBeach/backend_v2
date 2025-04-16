@@ -87,6 +87,8 @@ export interface ReadingStats {
  * 확장된 책 정보 응답 DTO (읽기 상태 및 평점 정보 포함)
  */
 export interface BookResponse extends Book {
+  searchId?: number;
+  bookId?: number;
   readingStats?: ReadingStats;
   userReadingStatus?: string;
   userRating?: {

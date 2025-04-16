@@ -17,6 +17,7 @@ import { AddTagToLibraryDto } from './dto/add-tag-to-library.dto';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
+import { LibrarySortOption } from './dto/library-response.dto';
 
 @Controller('library')
 export class LibraryController {
@@ -29,8 +30,11 @@ export class LibraryController {
 
   @Get()
   @IsPublic()
-  findAll(@Query('userId') userId?: string) {
-    return this.libraryService.findAll(userId ? +userId : undefined);
+  findAll(
+    @Query('userId') userId?: string,
+    @Query('sort') sort?: LibrarySortOption,
+  ) {
+    return this.libraryService.findAll(userId ? +userId : undefined, sort);
   }
 
   @Get('user/:userId')
@@ -38,10 +42,12 @@ export class LibraryController {
   findAllByUser(
     @Param('userId', ParseIntPipe) userId: number,
     @Query('requestingUserId') requestingUserId?: string,
+    @Query('sort') sort?: LibrarySortOption,
   ) {
     return this.libraryService.findAllByUser(
       userId,
       requestingUserId ? +requestingUserId : undefined,
+      sort,
     );
   }
 
@@ -64,8 +70,11 @@ export class LibraryController {
   }
 
   @Get('subscribed')
-  findSubscribedLibraries(@GetUser() user: User) {
-    return this.libraryService.findSubscribedLibraries(user.id);
+  findSubscribedLibraries(
+    @GetUser() user: User,
+    @Query('sort') sort?: LibrarySortOption,
+  ) {
+    return this.libraryService.findSubscribedLibraries(user.id, sort);
   }
 
   @Get(':id')

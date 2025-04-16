@@ -138,6 +138,40 @@ export class SearchService {
       await this.recentSearchRepository.remove(existingSearch);
     }
 
+    // ISBN 기반 중복 체크 (같은 책을 다른 검색어로 검색한 경우도 처리)
+    if (bookInfo && (bookInfo.isbn || bookInfo.isbn13)) {
+      try {
+        let existingBookSearch;
+
+        if (bookInfo.isbn) {
+          existingBookSearch = await this.recentSearchRepository.findOne({
+            where: { userId, isbn: bookInfo.isbn },
+          });
+        }
+
+        // ISBN으로 찾지 못했고 ISBN13이 있으면 ISBN13으로 검색
+        if (!existingBookSearch && bookInfo.isbn13) {
+          existingBookSearch = await this.recentSearchRepository.findOne({
+            where: { userId, isbn13: bookInfo.isbn13 },
+          });
+        }
+
+        // 이미 같은 ISBN의 책이 있으면 삭제
+        if (
+          existingBookSearch &&
+          existingBookSearch.id !== existingSearch?.id
+        ) {
+          this.logger.log(
+            `중복 ISBN(${bookInfo.isbn || bookInfo.isbn13}) 검색어 제거: "${existingBookSearch.term}" → "${term}" (userId: ${userId})`,
+          );
+          await this.recentSearchRepository.remove(existingBookSearch);
+        }
+      } catch (error) {
+        this.logger.error(`ISBN 중복 검색어 제거 중 오류: ${error.message}`);
+        // 오류가 발생해도 계속 진행
+      }
+    }
+
     // 최근 검색어 추가를 위한 기본 객체
     const recentSearch = {
       userId,
@@ -222,16 +256,18 @@ export class SearchService {
       order: { createdAt: 'DESC' },
       take: limit,
     });
+    console.log({ recentSearches });
 
     // 각 검색어에 대해 책 정보가 있으면 추가 정보 조회
     const enhancedSearches = await Promise.all(
       recentSearches.map(async (item) => {
         // 최근 검색어 관련 정보 임시 저장
         const recentSearchId = item.id;
-        const searchTerm = item.term;
+        console.log({ recentSearchId });
 
         const bookResponse: BookResponse = {
-          id: item.bookId || -1,
+          id: recentSearchId,
+          bookId: item.bookId || -1, // 명시적으로 bookId 필드 추가
           title: item.title || '',
           author: item.author || '',
           coverImage: item.coverImage || '',

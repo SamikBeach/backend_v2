@@ -28,6 +28,7 @@ import {
   SubscriberResponseDto,
   LibraryDetailResponseDto,
   UpdateHistoryItem,
+  LibrarySortOption,
 } from './dto/library-response.dto';
 import { UserService } from '../user/user.service';
 import { In } from 'typeorm';
@@ -122,7 +123,10 @@ export class LibraryService {
   }
 
   // 모든 서재 목록 조회 (공개된 서재만)
-  async findAll(userId?: number): Promise<LibraryListResponseDto[]> {
+  async findAll(
+    userId?: number,
+    sortOption?: LibrarySortOption,
+  ): Promise<LibraryListResponseDto[]> {
     // 공개 서재만 가져오거나, 사용자 ID가 제공된 경우 해당 사용자의 서재까지 가져옴
     let qb = this.libraryRepository
       .createQueryBuilder('library')
@@ -139,9 +143,27 @@ export class LibraryService {
       });
     }
 
+    // 정렬 옵션 적용
+    switch (sortOption) {
+      case LibrarySortOption.SUBSCRIBERS:
+        qb = qb.orderBy('library.subscriberCount', 'DESC');
+        break;
+      case LibrarySortOption.BOOKS:
+        // 책 수로 정렬하려면 추가 작업 필요
+        // 쿼리 결과를 가져온 후 JS에서 정렬
+        break;
+      case LibrarySortOption.RECENT:
+        qb = qb.orderBy('library.createdAt', 'DESC');
+        break;
+      default:
+        // 기본은 최신순
+        qb = qb.orderBy('library.createdAt', 'DESC');
+        break;
+    }
+
     const libraries = await qb.getMany();
 
-    return Promise.all(
+    let result = await Promise.all(
       libraries.map(async (library) => {
         const isSubscribed = userId
           ? await this.isUserSubscribed(userId, library.id)
@@ -184,12 +206,20 @@ export class LibraryService {
         };
       }),
     );
+
+    // 책 개수로 정렬해야 하는 경우 메모리에서 정렬
+    if (sortOption === LibrarySortOption.BOOKS) {
+      result = result.sort((a, b) => b.bookCount - a.bookCount);
+    }
+
+    return result;
   }
 
   // 특정 사용자의 서재 목록 조회
   async findAllByUser(
     userId: number,
     requestingUserId?: number,
+    sortOption?: LibrarySortOption,
   ): Promise<LibraryListResponseDto[]> {
     const user = await this.userService.findOne(userId);
 
@@ -198,8 +228,7 @@ export class LibraryService {
     }
 
     // 해당 사용자의 공개 서재 + (본인 요청시 비공개 서재도)
-    const isOwn = requestingUserId === userId;
-    const qb = this.libraryRepository
+    let qb = this.libraryRepository
       .createQueryBuilder('library')
       .leftJoinAndSelect('library.owner', 'owner')
       .leftJoinAndSelect('library.tags', 'tags')
@@ -208,13 +237,32 @@ export class LibraryService {
       .leftJoinAndSelect('libraryBooks.book', 'book')
       .where('library.ownerId = :ownerId', { ownerId: userId });
 
-    if (!isOwn) {
-      qb.andWhere('library.isPublic = :isPublic', { isPublic: true });
+    // 본인이 아닌 경우 공개 서재만 보여줌
+    if (requestingUserId !== userId) {
+      qb = qb.andWhere('library.isPublic = :isPublic', { isPublic: true });
+    }
+
+    // 정렬 옵션 적용
+    switch (sortOption) {
+      case LibrarySortOption.SUBSCRIBERS:
+        qb = qb.orderBy('library.subscriberCount', 'DESC');
+        break;
+      case LibrarySortOption.BOOKS:
+        // 책 수로 정렬하려면 추가 작업 필요
+        // 쿼리 결과를 가져온 후 JS에서 정렬
+        break;
+      case LibrarySortOption.RECENT:
+        qb = qb.orderBy('library.createdAt', 'DESC');
+        break;
+      default:
+        // 기본은 최신순
+        qb = qb.orderBy('library.createdAt', 'DESC');
+        break;
     }
 
     const libraries = await qb.getMany();
 
-    return Promise.all(
+    let result = await Promise.all(
       libraries.map(async (library) => {
         const isSubscribed = requestingUserId
           ? await this.isUserSubscribed(requestingUserId, library.id)
@@ -257,49 +305,66 @@ export class LibraryService {
         };
       }),
     );
-  }
 
-  // 사용자가 구독한 서재 목록 조회
-  async findSubscribedLibraries(
-    userId: number,
-  ): Promise<LibraryListResponseDto[]> {
-    const user = await this.userService.findOne(userId);
-
-    if (!user) {
-      throw new NotFoundException(`사용자 ID ${userId}를 찾을 수 없습니다.`);
+    // 책 개수로 정렬해야 하는 경우 메모리에서 정렬
+    if (sortOption === LibrarySortOption.BOOKS) {
+      result = result.sort((a, b) => b.bookCount - a.bookCount);
     }
 
-    // 구독 중인 라이브러리 ID 목록 가져오기
+    return result;
+  }
+
+  // 구독중인 서재 목록 조회
+  async findSubscribedLibraries(
+    userId: number,
+    sortOption?: LibrarySortOption,
+  ): Promise<LibraryListResponseDto[]> {
     const subscriptions = await this.librarySubscriptionRepository.find({
       where: { subscriberId: userId },
       relations: ['library'],
     });
 
-    // 구독 중인 서재가 없으면 빈 배열 반환
-    if (!subscriptions || subscriptions.length === 0) {
+    if (subscriptions.length === 0) {
       return [];
     }
 
-    // 서재 ID 목록
-    const libraryIds = subscriptions.map((sub) => sub.libraryId);
+    const libraryIds = subscriptions.map(
+      (subscription) => subscription.libraryId,
+    );
 
-    // 서재 정보 가져오기 (공개 서재만)
-    const libraries = await this.libraryRepository.find({
-      where: {
-        id: In(libraryIds),
-        isPublic: true,
-      },
-      relations: [
-        'owner',
-        'tags',
-        'tags.tag',
-        'libraryBooks',
-        'libraryBooks.book',
-      ],
-    });
+    let qb = this.libraryRepository
+      .createQueryBuilder('library')
+      .leftJoinAndSelect('library.owner', 'owner')
+      .leftJoinAndSelect('library.tags', 'tags')
+      .leftJoinAndSelect('tags.tag', 'tag')
+      .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
+      .leftJoinAndSelect('libraryBooks.book', 'book')
+      .where('library.id IN (:...ids)', { ids: libraryIds });
 
-    return Promise.all(
+    // 정렬 옵션 적용
+    switch (sortOption) {
+      case LibrarySortOption.SUBSCRIBERS:
+        qb = qb.orderBy('library.subscriberCount', 'DESC');
+        break;
+      case LibrarySortOption.BOOKS:
+        // 책 수로 정렬하려면 추가 작업 필요
+        // 쿼리 결과를 가져온 후 JS에서 정렬
+        break;
+      case LibrarySortOption.RECENT:
+        qb = qb.orderBy('library.createdAt', 'DESC');
+        break;
+      default:
+        // 기본은 최신순
+        qb = qb.orderBy('library.createdAt', 'DESC');
+        break;
+    }
+
+    const libraries = await qb.getMany();
+
+    let result = await Promise.all(
       libraries.map(async (library) => {
+        const isSubscribed = true; // 당연히 모두 구독 중인 서재들
+
         // 미리보기용 책 - 최근 추가된 3권으로 제한
         const previewBooks = library.libraryBooks
           ? library.libraryBooks
@@ -331,12 +396,19 @@ export class LibraryService {
             : [],
           bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
           previewBooks,
-          isSubscribed: true, // 구독 중인 서재들이므로 true
+          isSubscribed,
           createdAt: library.createdAt,
           updatedAt: library.updatedAt,
         };
       }),
     );
+
+    // 책 개수로 정렬해야 하는 경우 메모리에서 정렬
+    if (sortOption === LibrarySortOption.BOOKS) {
+      result = result.sort((a, b) => b.bookCount - a.bookCount);
+    }
+
+    return result;
   }
 
   // 특정 서재 상세 조회

@@ -70,3 +70,9 @@ export interface LibraryDetailResponseDto
   subscribers: SubscriberResponseDto[];
   recentUpdates: UpdateHistoryItem[];
 }
+
+export enum LibrarySortOption {
+  SUBSCRIBERS = 'subscribers', // 구독자 많은 순
+  BOOKS = 'books', // 담긴 책 많은 순
+  RECENT = 'recent', // 최신순
+}
