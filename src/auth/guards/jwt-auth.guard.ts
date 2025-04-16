@@ -1,4 +1,8 @@
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import {
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 import { IS_PUBLIC_KEY } from '../decorators/is-public.decorator';
@@ -19,21 +23,36 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     ]);
 
     if (isPublic) {
-      // 공개 라우트의 경우 인증 시도를 하되, 인증 실패해도 요청을 차단하지 않음
+      // 공개 라우트의 경우 항상 접근을 허용하되,
+      // 요청에 유효한 JWT가 있는 경우 사용자 정보를 설정하기 위해
+      // 실제 canActivate 결과를 처리
       const result = super.canActivate(context);
 
+      // Promise 형태로 반환된 경우 처리
       if (result instanceof Promise) {
         return result.then(
-          () => true, // 인증 성공, 사용자 정보와 함께 진행
-          () => true, // 인증 실패, 사용자 정보 없이 진행
+          () => true, // 성공 시 true
+          () => true, // 실패해도 공개 라우트이므로 true
         );
       }
 
+      // Observable 형태로 반환된 경우 (드물지만 가능)
       if (result instanceof Observable) {
-        // Observable 처리는 여기서 생략 (필요시 구현)
+        return new Observable((subscriber) => {
+          result.subscribe({
+            next: (value) => {
+              subscriber.next(true);
+              subscriber.complete();
+            },
+            error: () => {
+              subscriber.next(true);
+              subscriber.complete();
+            },
+          });
+        });
       }
 
-      return true; // 인증 결과와 상관없이 진행
+      return true;
     }
 
     return super.canActivate(context);
@@ -45,16 +64,28 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       context.getClass(),
     ]);
 
+    const req = context.switchToHttp().getRequest();
+    const token = req.headers.authorization;
+
     if (isPublic) {
-      // 공개 라우트의 경우 인증 실패해도 예외를 던지지 않음
-      // 그냥 사용자 정보(이는 undefined일 수 있음)를 반환
-      return user;
+      // 공개 라우트이지만 유효한 토큰이 있는 경우
+      if (token && user) {
+        return user;
+      }
+
+      // 토큰이 없거나 유효하지 않은 경우
+      return undefined;
     }
 
-    // 보호된 라우트의 경우 기본 동작 유지
-    if (err || !user) {
-      throw err || new Error('인증되지 않음');
+    // 보호된 라우트의 경우 인증 확인
+    if (err) {
+      throw err;
     }
+
+    if (!user) {
+      throw new UnauthorizedException('인증이 필요합니다');
+    }
+
     return user;
   }
 }

@@ -32,7 +32,6 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CommentResponseDto } from './dto/review-response.dto';
-import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 
 @ApiTags('review')
 @Controller('review')
@@ -78,7 +77,7 @@ export class ReviewController {
    * 특정 책에 대한 리뷰 목록 조회
    */
   @Get('book/:bookId')
-  @UseGuards(OptionalJwtAuthGuard)
+  @IsPublic()
   @ApiOperation({ summary: '특정 책에 대한 리뷰 목록 조회' })
   @ApiParam({ name: 'bookId', description: '책 ID', type: 'number' })
   @ApiResponse({
@@ -91,6 +90,7 @@ export class ReviewController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('sort') sort?: 'likes' | 'comments' | 'recent',
+    @Query('isbn') isbn?: string,
   ) {
     return this.reviewService.findReviewsByBookId(
       bookId,
@@ -98,6 +98,7 @@ export class ReviewController {
       page ? +page : 1,
       limit ? +limit : 10,
       sort || 'likes', // 기본값은 좋아요순
+      isbn,
     );
   }
 

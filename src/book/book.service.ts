@@ -1,8 +1,19 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Book } from './entities/book.entity';
-import { CreateBookDto, UpdateBookDto } from './dto/book.dto';
+import {
+  CreateBookDto,
+  UpdateBookDto,
+  BookResponse,
+  BookSearchResponse,
+} from './dto/book.dto';
 import {
   AladinService,
   AladinBookSearchParams,
@@ -16,6 +27,8 @@ import { SubCategoryService } from '../category/subcategory.service';
 import { DiscoverCategoryService } from '../discover-category/discover-category.service';
 import { SearchBookDto } from './dto/search-book.dto';
 import { SearchService } from '../search/search.service';
+import { RatingService } from '../rating/rating.service';
+import { ReadingStatusService } from '../reading-status/reading-status.service';
 
 @Injectable()
 export class BookService {
@@ -28,7 +41,10 @@ export class BookService {
     private readonly categoryService: CategoryService,
     private readonly subCategoryService: SubCategoryService,
     private readonly discoverCategoryService: DiscoverCategoryService,
+    @Inject(forwardRef(() => SearchService))
     private readonly searchService: SearchService,
+    private readonly ratingService: RatingService,
+    private readonly readingStatusService: ReadingStatusService,
   ) {}
 
   /**
@@ -914,12 +930,8 @@ export class BookService {
     page: number = 1,
     limit: number = 10,
     searchParams: Partial<SearchBookDto> = {},
-  ): Promise<{
-    books: Book[];
-    total: number;
-    page: number;
-    totalPages: number;
-  }> {
+    userId?: number,
+  ): Promise<BookSearchResponse> {
     try {
       this.logger.log(`알라딘 API로 도서 검색: ${query}, 타입: ${type}`);
 
@@ -954,8 +966,9 @@ export class BookService {
       // 검색 결과 처리
       const books = await Promise.all(
         result.item.map(async (item) => {
-          // 이미 등록된 책인지 확인
+          // 이미 등록된 책인지 확인 (ISBN 또는 ISBN13으로 검색)
           let book = await this.findByIsbn(item.isbn13 || item.isbn);
+          let isDbBook = false;
 
           if (!book) {
             // 새 책 정보 생성
@@ -993,7 +1006,7 @@ export class BookService {
                 reviews: bookData.reviews || 0,
                 priceSales: bookData.priceSales,
                 priceStandard: bookData.priceStandard,
-                isFeatured: false,
+                isFeatured: true,
                 isDiscovered: false,
               };
 
@@ -1001,19 +1014,71 @@ export class BookService {
                 bookObject,
               ) as unknown as Book;
 
-              // 관계 객체 설정 (TypeORM은 save 없이도 관계 객체를 설정할 수 있음)
+              // 관계 객체 설정
               book = tempBook;
             } catch (error) {
-              this.logger.error(`도서 객체 생성 오류: ${error.message}`);
-              // 오류 발생 시 임시 Book 객체 생성
+              this.logger.error(`책 객체 생성 오류: ${error.message}`);
               const tempBook = this.bookRepository.create(
                 bookData,
               ) as unknown as Book;
               book = tempBook;
             }
+          } else {
+            isDbBook = book.id > 0;
           }
 
-          return book;
+          // 데이터베이스에 저장된 책이고 (id > 0) 사용자 ID가 제공된 경우,
+          // 읽기 상태 및 평점 정보 추가
+          if (isDbBook) {
+            const bookResponse: BookResponse = { ...book };
+
+            try {
+              // 1. 읽기 상태 통계 정보 가져오기
+              const readingStats =
+                await this.readingStatusService.getBookReadingStats(
+                  book.id,
+                  userId,
+                );
+              if (readingStats) {
+                bookResponse.readingStats = {
+                  currentReaders: readingStats.currentReaders,
+                  completedReaders: readingStats.completedReaders,
+                  averageReadingTime: readingStats.averageReadingTime,
+                  difficulty: readingStats.difficulty,
+                  readingStatusCounts: readingStats.readingStatusCounts,
+                };
+
+                // 사용자의 읽기 상태가 있으면 포함
+                if (userId && readingStats.userReadingStatus) {
+                  bookResponse.userReadingStatus =
+                    readingStats.userReadingStatus;
+                }
+              }
+            } catch (error) {
+              this.logger.error(`읽기 상태 조회 오류: ${error.message}`);
+              // 오류가 발생해도 계속 진행
+            }
+
+            // 2. 사용자가 로그인 상태이면 평점 정보 가져오기
+            if (userId) {
+              try {
+                const userRating = await this.ratingService.findByUserAndBook(
+                  userId,
+                  book.id,
+                );
+                if (userRating) {
+                  bookResponse.userRating = userRating;
+                }
+              } catch (error) {
+                this.logger.error(`평점 조회 오류: ${error.message}`);
+                // 오류가 발생해도 계속 진행
+              }
+            }
+
+            return bookResponse;
+          }
+
+          return book as BookResponse;
         }),
       );
 
@@ -1036,12 +1101,8 @@ export class BookService {
     categoryId?: number,
     page: number = 1,
     limit: number = 10,
-  ): Promise<{
-    books: Book[];
-    total: number;
-    page: number;
-    totalPages: number;
-  }> {
+    userId?: number,
+  ): Promise<BookSearchResponse> {
     try {
       // 알라딘 API 호출 파라미터 구성
       const aladinParams = {
@@ -1071,6 +1132,7 @@ export class BookService {
         result.item.map(async (item) => {
           // 이미 등록된 책인지 확인
           let book = await this.findByIsbn(item.isbn13 || item.isbn);
+          let isDbBook = false;
 
           if (!book) {
             // 새 책 정보 생성
@@ -1127,9 +1189,62 @@ export class BookService {
               ) as unknown as Book;
               book = tempBook;
             }
+          } else {
+            isDbBook = book.id > 0;
           }
 
-          return book;
+          // 데이터베이스에 저장된 책이고 (id > 0) 사용자 ID가 제공된 경우,
+          // 읽기 상태 및 평점 정보 추가
+          if (isDbBook) {
+            const bookResponse: BookResponse = { ...book };
+
+            try {
+              // 1. 읽기 상태 통계 정보 가져오기
+              const readingStats =
+                await this.readingStatusService.getBookReadingStats(
+                  book.id,
+                  userId,
+                );
+              if (readingStats) {
+                bookResponse.readingStats = {
+                  currentReaders: readingStats.currentReaders,
+                  completedReaders: readingStats.completedReaders,
+                  averageReadingTime: readingStats.averageReadingTime,
+                  difficulty: readingStats.difficulty,
+                  readingStatusCounts: readingStats.readingStatusCounts,
+                };
+
+                // 사용자의 읽기 상태가 있으면 포함
+                if (userId && readingStats.userReadingStatus) {
+                  bookResponse.userReadingStatus =
+                    readingStats.userReadingStatus;
+                }
+              }
+            } catch (error) {
+              this.logger.error(`읽기 상태 조회 오류: ${error.message}`);
+              // 오류가 발생해도 계속 진행
+            }
+
+            // 2. 사용자가 로그인 상태이면 평점 정보 가져오기
+            if (userId) {
+              try {
+                const userRating = await this.ratingService.findByUserAndBook(
+                  userId,
+                  book.id,
+                );
+                if (userRating) {
+                  bookResponse.userRating = userRating;
+                }
+              } catch (error) {
+                this.logger.error(`평점 조회 오류: ${error.message}`);
+                // 오류가 발생해도 계속 진행
+              }
+            }
+
+            return bookResponse;
+          }
+
+          return book as BookResponse;
         }),
       );
 
@@ -1152,12 +1267,8 @@ export class BookService {
     categoryId?: number,
     page: number = 1,
     limit: number = 10,
-  ): Promise<{
-    books: Book[];
-    total: number;
-    page: number;
-    totalPages: number;
-  }> {
+    userId?: number,
+  ): Promise<BookSearchResponse> {
     try {
       // 알라딘 API 호출 파라미터 구성
       const aladinParams = {
@@ -1186,6 +1297,7 @@ export class BookService {
         result.item.map(async (item) => {
           // 이미 등록된 책인지 확인
           let book = await this.findByIsbn(item.isbn13 || item.isbn);
+          let isDbBook = false;
 
           if (!book) {
             // 새 책 정보 생성 및 저장
@@ -1229,9 +1341,62 @@ export class BookService {
               ) as unknown as Book;
               book = tempBook;
             }
+          } else {
+            isDbBook = book.id > 0;
           }
 
-          return book;
+          // 데이터베이스에 저장된 책이고 (id > 0) 사용자 ID가 제공된 경우,
+          // 읽기 상태 및 평점 정보 추가
+          if (isDbBook) {
+            const bookResponse: BookResponse = { ...book };
+
+            try {
+              // 1. 읽기 상태 통계 정보 가져오기
+              const readingStats =
+                await this.readingStatusService.getBookReadingStats(
+                  book.id,
+                  userId,
+                );
+              if (readingStats) {
+                bookResponse.readingStats = {
+                  currentReaders: readingStats.currentReaders,
+                  completedReaders: readingStats.completedReaders,
+                  averageReadingTime: readingStats.averageReadingTime,
+                  difficulty: readingStats.difficulty,
+                  readingStatusCounts: readingStats.readingStatusCounts,
+                };
+
+                // 사용자의 읽기 상태가 있으면 포함
+                if (userId && readingStats.userReadingStatus) {
+                  bookResponse.userReadingStatus =
+                    readingStats.userReadingStatus;
+                }
+              }
+            } catch (error) {
+              this.logger.error(`읽기 상태 조회 오류: ${error.message}`);
+              // 오류가 발생해도 계속 진행
+            }
+
+            // 2. 사용자가 로그인 상태이면 평점 정보 가져오기
+            if (userId) {
+              try {
+                const userRating = await this.ratingService.findByUserAndBook(
+                  userId,
+                  book.id,
+                );
+                if (userRating) {
+                  bookResponse.userRating = userRating;
+                }
+              } catch (error) {
+                this.logger.error(`평점 조회 오류: ${error.message}`);
+                // 오류가 발생해도 계속 진행
+              }
+            }
+
+            return bookResponse;
+          }
+
+          return book as BookResponse;
         }),
       );
 
@@ -1486,5 +1651,59 @@ export class BookService {
     }
 
     throw new Error('유효하지 않은 임시 책 데이터입니다.');
+  }
+
+  /**
+   * 책의 리뷰 수를 감소시킵니다.
+   */
+  async decrementReviewCount(bookId: number): Promise<void> {
+    try {
+      // 책이 존재하는지 확인
+      const book = await this.findById(bookId);
+
+      if (!book) {
+        throw new NotFoundException(`Book with ID ${bookId} not found`);
+      }
+
+      // 리뷰 수 감소 (0보다 작아지지 않도록)
+      await this.bookRepository
+        .createQueryBuilder()
+        .update(Book)
+        .set({ reviews: () => 'GREATEST(reviews - 1, 0)' })
+        .where('id = :id', { id: bookId })
+        .execute();
+
+      this.logger.log(`책 ID ${bookId}의 리뷰 수가 감소되었습니다.`);
+    } catch (error) {
+      this.logger.error(`책 리뷰 수 감소 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 책의 리뷰 수를 증가시킵니다.
+   */
+  async incrementReviewCount(bookId: number): Promise<void> {
+    try {
+      // 책이 존재하는지 확인
+      const book = await this.findById(bookId);
+
+      if (!book) {
+        throw new NotFoundException(`Book with ID ${bookId} not found`);
+      }
+
+      // 리뷰 수 증가
+      await this.bookRepository
+        .createQueryBuilder()
+        .update(Book)
+        .set({ reviews: () => 'reviews + 1' })
+        .where('id = :id', { id: bookId })
+        .execute();
+
+      this.logger.log(`책 ID ${bookId}의 리뷰 수가 증가되었습니다.`);
+    } catch (error) {
+      this.logger.error(`책 리뷰 수 증가 중 오류: ${error.message}`);
+      throw error;
+    }
   }
 }

@@ -1,12 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import { PopularSearch, RecentSearch, SearchLog } from './search.entity';
+import { BookService } from '../book/book.service';
+import { ReadingStatusService } from '../reading-status/reading-status.service';
+import { RatingService } from '../rating/rating.service';
+import { BookResponse } from '../book/dto/book.dto';
 
 @Injectable()
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
-  private readonly RECENT_SEARCH_MAX_PER_USER = 10; // 사용자당 최대 최근 검색어 수
+  private readonly RECENT_SEARCH_MAX_PER_USER = 20; // 사용자당 최대 최근 검색어 수
 
   constructor(
     @InjectRepository(SearchLog)
@@ -15,6 +19,10 @@ export class SearchService {
     private readonly popularSearchRepository: Repository<PopularSearch>,
     @InjectRepository(RecentSearch)
     private readonly recentSearchRepository: Repository<RecentSearch>,
+    @Inject(forwardRef(() => BookService))
+    private readonly bookService: BookService,
+    private readonly readingStatusService: ReadingStatusService,
+    private readonly ratingService: RatingService,
   ) {}
 
   /**
@@ -130,6 +138,40 @@ export class SearchService {
       await this.recentSearchRepository.remove(existingSearch);
     }
 
+    // ISBN 기반 중복 체크 (같은 책을 다른 검색어로 검색한 경우도 처리)
+    if (bookInfo && (bookInfo.isbn || bookInfo.isbn13)) {
+      try {
+        let existingBookSearch;
+
+        if (bookInfo.isbn) {
+          existingBookSearch = await this.recentSearchRepository.findOne({
+            where: { userId, isbn: bookInfo.isbn },
+          });
+        }
+
+        // ISBN으로 찾지 못했고 ISBN13이 있으면 ISBN13으로 검색
+        if (!existingBookSearch && bookInfo.isbn13) {
+          existingBookSearch = await this.recentSearchRepository.findOne({
+            where: { userId, isbn13: bookInfo.isbn13 },
+          });
+        }
+
+        // 이미 같은 ISBN의 책이 있으면 삭제
+        if (
+          existingBookSearch &&
+          existingBookSearch.id !== existingSearch?.id
+        ) {
+          this.logger.log(
+            `중복 ISBN(${bookInfo.isbn || bookInfo.isbn13}) 검색어 제거: "${existingBookSearch.term}" → "${term}" (userId: ${userId})`,
+          );
+          await this.recentSearchRepository.remove(existingBookSearch);
+        }
+      } catch (error) {
+        this.logger.error(`ISBN 중복 검색어 제거 중 오류: ${error.message}`);
+        // 오류가 발생해도 계속 진행
+      }
+    }
+
     // 최근 검색어 추가를 위한 기본 객체
     const recentSearch = {
       userId,
@@ -204,7 +246,7 @@ export class SearchService {
   async getRecentSearchTerms(
     userId: number,
     limit: number = 5,
-  ): Promise<any[]> {
+  ): Promise<BookResponse[]> {
     if (!userId) {
       return [];
     }
@@ -214,19 +256,114 @@ export class SearchService {
       order: { createdAt: 'DESC' },
       take: limit,
     });
+    console.log({ recentSearches });
 
-    return recentSearches.map((item) => ({
-      id: item.id,
-      term: item.term,
-      bookId: item.bookId,
-      title: item.title,
-      author: item.author,
-      coverImage: item.coverImage,
-      publisher: item.publisher,
-      isbn: item.isbn,
-      isbn13: item.isbn13,
-      createdAt: item.createdAt,
-    }));
+    // 각 검색어에 대해 책 정보가 있으면 추가 정보 조회
+    const enhancedSearches = await Promise.all(
+      recentSearches.map(async (item) => {
+        // 최근 검색어 관련 정보 임시 저장
+        const recentSearchId = item.id;
+        console.log({ recentSearchId });
+
+        const bookResponse: BookResponse = {
+          id: recentSearchId,
+          bookId: item.bookId || -1, // 명시적으로 bookId 필드 추가
+          title: item.title || '',
+          author: item.author || '',
+          coverImage: item.coverImage || '',
+          publisher: item.publisher || '',
+          isbn: item.isbn || '',
+          isbn13: item.isbn13 || '',
+          description: item.description || '',
+          // 기타 Book 엔티티에 필요한 필드 초기화
+          category: null,
+          subcategory: null,
+          discoverCategory: null,
+          discoverSubCategory: null,
+          rating: 0,
+          reviews: 0,
+          totalRatings: 0,
+          publishDate: null,
+          translator: '',
+          pageCount: 0,
+          tags: [],
+          priceSales: 0,
+          priceStandard: 0,
+          isFeatured: false,
+          isDiscovered: false,
+          readingStatuses: [],
+          // 날짜 필드
+          createdAt: item.createdAt,
+          updatedAt: item.createdAt, // 최근 검색에서는 createdAt과 동일하게 설정
+        };
+
+        // bookId가 있고 DB에 실제로 저장된 책이면(id > 0) 추가 정보 조회
+        if (item.bookId && item.bookId > 0) {
+          try {
+            // 1. 읽기 상태 통계 정보 가져오기
+            const readingStats =
+              await this.readingStatusService.getBookReadingStats(
+                item.bookId,
+                userId,
+              );
+
+            if (readingStats) {
+              bookResponse.readingStats = {
+                currentReaders: readingStats.currentReaders,
+                completedReaders: readingStats.completedReaders,
+                averageReadingTime: readingStats.averageReadingTime,
+                difficulty: readingStats.difficulty,
+                readingStatusCounts: readingStats.readingStatusCounts,
+              };
+
+              // 사용자의 읽기 상태가 있으면 포함
+              if (readingStats.userReadingStatus) {
+                bookResponse.userReadingStatus = readingStats.userReadingStatus;
+              }
+            }
+          } catch (error) {
+            this.logger.error(`읽기 상태 조회 오류: ${error.message}`);
+            // 오류가 발생해도 계속 진행
+          }
+
+          // 2. 사용자 평점 정보 가져오기
+          try {
+            const userRating = await this.ratingService.findByUserAndBook(
+              userId,
+              item.bookId,
+            );
+
+            if (userRating) {
+              bookResponse.userRating = userRating;
+            }
+          } catch (error) {
+            this.logger.error(`평점 조회 오류: ${error.message}`);
+            // 오류가 발생해도 계속 진행
+          }
+
+          // 3. 실제 DB에 있는 책 정보 가져오기
+          try {
+            const bookInfo = await this.bookService.findById(item.bookId);
+            if (bookInfo) {
+              // 실제 책 정보로 업데이트 (평점, 리뷰 수 등)
+              bookResponse.rating = bookInfo.rating;
+              bookResponse.reviews = bookInfo.reviews;
+              bookResponse.totalRatings = bookInfo.totalRatings;
+              bookResponse.category = bookInfo.category;
+              bookResponse.subcategory = bookInfo.subcategory;
+              // 기타 필요한 필드 업데이트
+            }
+          } catch (error) {
+            this.logger.error(`책 정보 조회 오류: ${error.message}`);
+            // 오류가 발생해도 계속 진행
+          }
+        }
+
+        return bookResponse;
+      }),
+    );
+
+    return enhancedSearches;
   }
 
   /**

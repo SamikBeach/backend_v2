@@ -3,6 +3,8 @@ import {
   Logger,
   NotFoundException,
   UnauthorizedException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -19,6 +21,7 @@ import {
 } from './dto/reading-status.dto';
 import { Book } from '../book/entities/book.entity';
 import { Not, IsNull } from 'typeorm';
+import { BookService } from '../book/book.service';
 
 @Injectable()
 export class ReadingStatusService {
@@ -29,6 +32,8 @@ export class ReadingStatusService {
     private readonly readingStatusRepository: Repository<ReadingStatus>,
     @InjectRepository(Book)
     private readonly bookRepository: Repository<Book>,
+    @Inject(forwardRef(() => BookService))
+    private readonly bookService: BookService,
   ) {}
 
   /**
@@ -40,11 +45,39 @@ export class ReadingStatusService {
     createReadingStatusDto: CreateReadingStatusDto,
   ): Promise<ReadingStatusResponseDto> {
     try {
-      // 책이 존재하는지 확인
-      const book = await this.bookRepository.findOne({ where: { id: bookId } });
-      if (!book) {
-        this.logger.error(`Book with ID ${bookId} not found`);
-        throw new NotFoundException('Book not found');
+      let book: Book;
+
+      // 북아이디가 -1이고 ISBN이 제공된 경우, ISBN으로 책을 찾거나 생성
+      if (bookId === -1 && createReadingStatusDto.isbn) {
+        this.logger.log(
+          `bookId가 -1이고 ISBN ${createReadingStatusDto.isbn}이 제공되어 책을 조회합니다.`,
+        );
+
+        try {
+          // ISBN으로 책 조회 또는 생성 (saveToDb=true로 설정하여 DB에 저장)
+          book = await this.bookService.getBookDetailByIsbn(
+            createReadingStatusDto.isbn,
+            true,
+          );
+          bookId = book.id; // 찾거나 생성된 책의 ID로 업데이트
+          this.logger.log(
+            `ISBN ${createReadingStatusDto.isbn}로 책을 찾았거나 생성했습니다. ID: ${bookId}`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `ISBN ${createReadingStatusDto.isbn}로 책을 찾을 수 없습니다: ${error.message}`,
+          );
+          throw new NotFoundException(
+            `ISBN ${createReadingStatusDto.isbn}로 책을 찾을 수 없습니다.`,
+          );
+        }
+      } else {
+        // 일반적인 경우: 책이 존재하는지 확인
+        book = await this.bookRepository.findOne({ where: { id: bookId } });
+        if (!book) {
+          this.logger.error(`Book with ID ${bookId} not found`);
+          throw new NotFoundException('Book not found');
+        }
       }
 
       // 이미 존재하는 읽기 상태가 있는지 확인

@@ -353,7 +353,7 @@ export class AladinService {
       isbn13: item.isbn13,
       publisher: item.publisher,
       publishDate: item.pubDate ? new Date(item.pubDate) : null,
-      rating: item.customerReviewRank / 2, // 알라딘은 10점 만점, 우리는 5점 만점
+      rating: 0, // 알라딘 평점(customerReviewRank)은 사용하지 않고 항상 0으로 초기화
       reviews: 0, // 초기값
       totalRatings: 0, // 초기값
       pageCount,

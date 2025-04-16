@@ -3,6 +3,8 @@ import {
   Logger,
   NotFoundException,
   UnauthorizedException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,6 +16,7 @@ import {
   RatingResponseDto,
 } from './dto/rating.dto';
 import { Not, IsNull } from 'typeorm';
+import { BookService } from '../book/book.service';
 
 @Injectable()
 export class RatingService {
@@ -24,6 +27,8 @@ export class RatingService {
     private readonly ratingRepository: Repository<Rating>,
     @InjectRepository(Book)
     private readonly bookRepository: Repository<Book>,
+    @Inject(forwardRef(() => BookService))
+    private readonly bookService: BookService,
   ) {}
 
   /**
@@ -34,10 +39,38 @@ export class RatingService {
     bookId: number,
     createRatingDto: CreateRatingDto,
   ): Promise<RatingResponseDto> {
-    // 책이 존재하는지 확인
-    const book = await this.bookRepository.findOne({ where: { id: bookId } });
-    if (!book) {
-      throw new NotFoundException('책을 찾을 수 없습니다.');
+    let book: Book;
+
+    // 북아이디가 -1이고 ISBN이 제공된 경우, ISBN으로 책을 찾거나 생성
+    if (bookId === -1 && createRatingDto.isbn) {
+      this.logger.log(
+        `bookId가 -1이고 ISBN ${createRatingDto.isbn}이 제공되어 책을 조회합니다.`,
+      );
+
+      try {
+        // ISBN으로 책 조회 또는 생성 (saveToDb=true로 설정하여 DB에 저장)
+        book = await this.bookService.getBookDetailByIsbn(
+          createRatingDto.isbn,
+          true,
+        );
+        bookId = book.id; // 찾거나 생성된 책의 ID로 업데이트
+        this.logger.log(
+          `ISBN ${createRatingDto.isbn}로 책을 찾았거나 생성했습니다. ID: ${bookId}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `ISBN ${createRatingDto.isbn}로 책을 찾을 수 없습니다: ${error.message}`,
+        );
+        throw new NotFoundException(
+          `ISBN ${createRatingDto.isbn}로 책을 찾을 수 없습니다.`,
+        );
+      }
+    } else {
+      // 일반적인 경우: 책이 존재하는지 확인
+      book = await this.bookRepository.findOne({ where: { id: bookId } });
+      if (!book) {
+        throw new NotFoundException('책을 찾을 수 없습니다.');
+      }
     }
 
     // 이미 존재하는 평점이 있는지 확인

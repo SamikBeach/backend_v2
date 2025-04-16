@@ -4,11 +4,15 @@ import { SearchService } from './search.service';
 import { SearchController } from './search.controller';
 import { PopularSearch, RecentSearch, SearchLog } from './search.entity';
 import { BookModule } from '../book/book.module';
+import { ReadingStatusModule } from '../reading-status/reading-status.module';
+import { RatingModule } from '../rating/rating.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([SearchLog, PopularSearch, RecentSearch]),
     forwardRef(() => BookModule),
+    ReadingStatusModule,
+    RatingModule,
   ],
   controllers: [SearchController],
   providers: [SearchService],

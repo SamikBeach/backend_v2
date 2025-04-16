@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Max, Min, IsInt, IsNotEmpty } from 'class-validator';
+import {
+  Max,
+  Min,
+  IsInt,
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+} from 'class-validator';
 import { PartialType } from '@nestjs/mapped-types';
 import { User } from '../../user/entities/user.entity';
 import { Book } from '../../book/entities/book.entity';
@@ -23,6 +30,15 @@ export class CreateRatingDto {
     required: false,
   })
   comment?: string;
+
+  @ApiProperty({
+    description: 'ISBN 또는 ISBN13 (선택사항, bookId가 -1일 때 사용)',
+    example: '9788901234567',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  isbn?: string;
 }
 
 export class UpdateRatingDto extends PartialType(CreateRatingDto) {}

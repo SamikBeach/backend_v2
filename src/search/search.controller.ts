@@ -4,18 +4,16 @@ import {
   Post,
   Body,
   Query,
-  UseGuards,
   Delete,
   Param,
 } from '@nestjs/common';
 import { SearchService } from './search.service';
 import { BookService } from '../book/book.service';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { SearchTarget, SortType, CoverSize } from '../book/dto/search-book.dto';
-import { OptionalAuth } from '../auth/decorators/optional-auth.decorator';
+import { BookSearchResponse } from '../book/dto/book.dto';
 
 @Controller('search')
 export class SearchController {
@@ -28,7 +26,7 @@ export class SearchController {
    * 통합 검색 API
    */
   @Get()
-  @OptionalAuth()
+  @IsPublic()
   async search(
     @Query('query') query: string,
     @Query('type') type?: string,
@@ -41,7 +39,7 @@ export class SearchController {
     @Query('outOfStockFilter') outOfStockFilter?: boolean,
     @Query('recentPublishFilter') recentPublishFilter?: number,
     @GetUser() user?: User,
-  ): Promise<any> {
+  ): Promise<BookSearchResponse> {
     if (!query) {
       return {
         books: [],
@@ -61,13 +59,14 @@ export class SearchController {
       recentPublishFilter,
     };
 
-    // 검색 결과 조회
+    // 검색 결과 조회 (사용자 ID 전달)
     const searchResults = await this.bookService.searchBooks(
       query,
       type || 'Keyword',
       page || 1,
       limit || 10,
       searchParams,
+      user?.id, // 로그인한 사용자의 ID 전달
     );
 
     // 검색 결과만 반환
@@ -80,7 +79,7 @@ export class SearchController {
    * 이 정보는 Book 테이블에 저장되지 않고, 검색 로그 및 최근 검색어에 직접 저장됩니다.
    */
   @Post('log-book-selection')
-  @OptionalAuth()
+  @IsPublic()
   async logBookSelection(
     @Body('term') term: string,
     @Body('bookId') bookId: number,
@@ -130,14 +129,14 @@ export class SearchController {
     @GetUser() user: User,
     @Query('limit') limit?: number,
   ): Promise<any> {
-    const recentSearches = await this.searchService.getRecentSearchTerms(
+    const recentBooks = await this.searchService.getRecentSearchTerms(
       user.id,
       limit || 5,
     );
 
     return {
-      recentSearches,
-      count: recentSearches.length,
+      books: recentBooks,
+      count: recentBooks.length,
     };
   }
 
@@ -194,8 +193,14 @@ export class SearchController {
     @Query('categoryId') categoryId?: number,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-  ): Promise<any> {
-    return this.bookService.findBestsellers(categoryId, page || 1, limit || 10);
+    @GetUser() user?: User,
+  ): Promise<BookSearchResponse> {
+    return this.bookService.findBestsellers(
+      categoryId,
+      page || 1,
+      limit || 10,
+      user?.id,
+    );
   }
 
   /**
@@ -207,8 +212,14 @@ export class SearchController {
     @Query('categoryId') categoryId?: number,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-  ): Promise<any> {
-    return this.bookService.findNewBooks(categoryId, page || 1, limit || 10);
+    @GetUser() user?: User,
+  ): Promise<BookSearchResponse> {
+    return this.bookService.findNewBooks(
+      categoryId,
+      page || 1,
+      limit || 10,
+      user?.id,
+    );
   }
 
   /**

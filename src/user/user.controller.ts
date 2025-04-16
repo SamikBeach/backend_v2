@@ -7,6 +7,7 @@ import {
   UseGuards,
   ParseIntPipe,
   Query,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { User } from './entities/user.entity';
@@ -22,6 +23,10 @@ export class UserController {
 
   @Get('me')
   getCurrentUser(@GetUser() user: User) {
+    if (!user) {
+      throw new UnauthorizedException('사용자 인증이 필요합니다');
+    }
+
     return {
       id: user.id,
       email: user.email,
