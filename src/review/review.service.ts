@@ -786,7 +786,8 @@ export class ReviewService {
               where: { reviewId: review.id, userId },
             });
 
-            console.log({ userLike });
+            // userLike가 존재하면 사용자가 좋아요를 누른 것
+            userLiked = !!userLike;
           }
 
           // 책 정보 가져오기
