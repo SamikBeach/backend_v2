@@ -96,6 +96,8 @@ export interface BookResponse extends Book {
     rating: number;
     comment?: string;
   };
+  searchTerm?: string;
+  searchedAt?: Date;
 }
 
 /**
