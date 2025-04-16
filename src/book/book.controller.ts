@@ -139,7 +139,8 @@ export class BookController {
       }
 
       return response;
-    } catch {
+    } catch (error) {
+      console.error(`ISBN ${isbn} 조회 중 오류 발생:`, error);
       throw new NotFoundException(`ISBN ${isbn}으로 도서를 찾을 수 없습니다.`);
     }
   }

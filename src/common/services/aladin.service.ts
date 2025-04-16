@@ -252,25 +252,59 @@ export class AladinService {
     params: AladinBookDetailParams,
   ): Promise<AladinApiResult> {
     try {
+      this.logger.log(
+        `[getBookDetail] 요청 ISBN: ${params.itemId}, 유형: ${params.itemIdType || 'ISBN13'}`,
+      );
+
+      // 파라미터 유효성 확인
+      if (!params.itemId) {
+        this.logger.error('[getBookDetail] 유효하지 않은 ISBN 또는 itemId');
+        throw new Error('유효하지 않은 ISBN 또는 itemId 입니다.');
+      }
+
+      // 알라딘 API 호출용 파라미터 구성
+      const requestParams = {
+        ttbkey: this.ttbKey,
+        ItemId: params.itemId,
+        ItemIdType: params.itemIdType || 'ISBN13',
+        output: params.output || 'js',
+        Version: params.version || this.defaultVersion,
+        Cover: params.cover || 'Big',
+        includeKey: params.includeKey || 0,
+        offCode: params.offCode,
+        OptResult: params.optResult
+          ? params.optResult.join(',')
+          : 'ebookList,usedList',
+      };
+
+      this.logger.log(
+        `[getBookDetail] API 호출 파라미터: ${JSON.stringify(requestParams)}`,
+      );
+
       const response = await axios.get(this.baseDetailUrl, {
-        params: {
-          ttbkey: this.ttbKey,
-          ItemId: params.itemId,
-          ItemIdType: params.itemIdType || 'ISBN13',
-          output: params.output || 'js',
-          Version: params.version || this.defaultVersion,
-          Cover: params.cover || 'Big',
-          includeKey: params.includeKey || 0,
-          offCode: params.offCode,
-          OptResult: params.optResult
-            ? params.optResult.join(',')
-            : 'ebookList,usedList',
-        },
+        params: requestParams,
       });
+
+      this.logger.log(
+        `[getBookDetail] API 응답 상태: ${response.status}, 데이터: ${JSON.stringify(response.data.item ? '책 정보 있음' : '책 정보 없음')}`,
+      );
 
       return response.data;
     } catch (error) {
       this.logger.error(`도서 상세 정보 조회 중 오류 발생: ${error.message}`);
+
+      if (error.response) {
+        this.logger.error(
+          `상태 코드: ${error.response.status}, 응답: ${JSON.stringify(error.response.data || {})}`,
+        );
+      }
+
+      if (error.config) {
+        this.logger.error(
+          `요청 URL: ${error.config.url}, 파라미터: ${JSON.stringify(error.config.params || {})}`,
+        );
+      }
+
       throw error;
     }
   }

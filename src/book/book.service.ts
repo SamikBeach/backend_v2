@@ -1466,6 +1466,10 @@ export class BookService {
         ],
       });
 
+      this.logger.log(
+        `[getBookDetailByIsbn] 알라딘 API 응답 확인: ${JSON.stringify(result?.item?.length ? 'Book found' : 'No book found')}`,
+      );
+
       if (!result || !result.item || result.item.length === 0) {
         this.logger.error(
           `[getBookDetailByIsbn] 알라딘 API에서 ISBN ${isbnParam} 정보를 찾을 수 없음`,
@@ -1484,12 +1488,21 @@ export class BookService {
       );
 
       // 카테고리 처리 (기본값 사용)
-      const category = await this.categoryService.findOne(1);
+      let category = null;
+      try {
+        category = await this.categoryService.findOne(1);
+      } catch (error) {
+        this.logger.warn(
+          `[getBookDetailByIsbn] 기본 카테고리(ID: 1)를 찾을 수 없습니다. 카테고리 없이 진행합니다.`,
+          error.message,
+        );
+        // 카테고리가 없어도 계속 진행
+      }
 
       // 책 데이터 객체 생성
       const bookObject = {
         ...bookData,
-        category,
+        category, // 카테고리가 null이어도 진행
         // ISBN과 ISBN13이 항상 포함되도록 명시
         isbn: bookData.isbn || isbnParam,
         isbn13:
@@ -1536,7 +1549,15 @@ export class BookService {
     } catch (error) {
       this.logger.error(
         `[getBookDetailByIsbn] 도서 상세 정보 조회 오류: ${error.message}`,
+        error.stack,
       );
+
+      if (error.response) {
+        this.logger.error(
+          `[getBookDetailByIsbn] API 응답 오류: ${JSON.stringify(error.response.data)}, 상태: ${error.response.status}`,
+        );
+      }
+
       throw new NotFoundException(
         `ISBN ${isbnParam}으로 도서를 찾을 수 없습니다.`,
       );
