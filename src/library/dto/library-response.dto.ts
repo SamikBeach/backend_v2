@@ -71,6 +71,22 @@ export interface LibraryDetailResponseDto
   recentUpdates: UpdateHistoryItem[];
 }
 
+// 페이지네이션 메타데이터
+export interface LibraryResponseMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  sort?: LibrarySortOption;
+  query?: string;
+}
+
+// 페이지네이션 응답 형식
+export interface PaginatedLibraryResponse {
+  data: LibraryListResponseDto[];
+  meta: LibraryResponseMeta;
+}
+
 export enum LibrarySortOption {
   SUBSCRIBERS = 'subscribers', // 구독자 많은 순
   BOOKS = 'books', // 담긴 책 많은 순

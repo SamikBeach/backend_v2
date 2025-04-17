@@ -33,8 +33,17 @@ export class LibraryController {
   findAll(
     @Query('userId') userId?: string,
     @Query('sort') sort?: LibrarySortOption,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('query') query?: string,
   ) {
-    return this.libraryService.findAll(userId ? +userId : undefined, sort);
+    return this.libraryService.findAll(
+      userId ? +userId : undefined,
+      sort,
+      page ? +page : 1,
+      limit ? +limit : 10,
+      query,
+    );
   }
 
   @Get('user/:userId')

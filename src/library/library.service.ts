@@ -29,6 +29,7 @@ import {
   LibraryDetailResponseDto,
   UpdateHistoryItem,
   LibrarySortOption,
+  PaginatedLibraryResponse,
 } from './dto/library-response.dto';
 import { UserService } from '../user/user.service';
 import { In } from 'typeorm';
@@ -126,93 +127,134 @@ export class LibraryService {
   async findAll(
     userId?: number,
     sortOption?: LibrarySortOption,
-  ): Promise<LibraryListResponseDto[]> {
-    // 공개 서재만 가져오거나, 사용자 ID가 제공된 경우 해당 사용자의 서재까지 가져옴
-    let qb = this.libraryRepository
-      .createQueryBuilder('library')
-      .leftJoinAndSelect('library.owner', 'owner')
-      .leftJoinAndSelect('library.tags', 'tags')
-      .leftJoinAndSelect('tags.tag', 'tag')
-      .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
-      .leftJoinAndSelect('libraryBooks.book', 'book')
-      .where('library.isPublic = :isPublic', { isPublic: true });
+    page: number = 1,
+    limit: number = 10,
+    query?: string,
+  ): Promise<PaginatedLibraryResponse> {
+    const skip = (page - 1) * limit;
 
-    if (userId) {
-      qb = qb.orWhere('library.ownerId = :ownerId', {
-        ownerId: userId,
-      });
-    }
-
-    // 정렬 옵션 적용
-    switch (sortOption) {
-      case LibrarySortOption.SUBSCRIBERS:
-        qb = qb.orderBy('library.subscriberCount', 'DESC');
-        break;
-      case LibrarySortOption.BOOKS:
-        // 책 수로 정렬하려면 추가 작업 필요
-        // 쿼리 결과를 가져온 후 JS에서 정렬
-        break;
-      case LibrarySortOption.RECENT:
-        qb = qb.orderBy('library.createdAt', 'DESC');
-        break;
-      default:
-        // 기본은 최신순
-        qb = qb.orderBy('library.createdAt', 'DESC');
-        break;
-    }
-
-    const libraries = await qb.getMany();
-
-    let result = await Promise.all(
-      libraries.map(async (library) => {
-        const isSubscribed = userId
-          ? await this.isUserSubscribed(userId, library.id)
-          : false;
-
-        // 미리보기용 책 - 최근 추가된 3권으로 제한
-        const previewBooks = library.libraryBooks
-          ? library.libraryBooks
-              .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-              .slice(0, 3)
-              .map((libraryBook) => ({
-                id: libraryBook.book.id,
-                title: libraryBook.book.title,
-                author: libraryBook.book.author,
-                coverImage: libraryBook.book.coverImage,
-                isbn: libraryBook.book.isbn,
-                publisher: libraryBook.book.publisher,
-              }))
-          : [];
-
-        return {
-          id: library.id,
-          name: library.name,
-          description: library.description,
-          isPublic: library.isPublic,
-          subscriberCount: library.subscriberCount,
-          owner: {
-            id: library.owner.id,
-            username: library.owner.username,
-            email: library.owner.email,
-          },
-          tags: library.tags
-            ? library.tags.map((tag) => this.mapLibraryTagToDto(tag))
-            : [],
-          bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
-          previewBooks,
-          isSubscribed,
-          createdAt: library.createdAt,
-          updatedAt: library.updatedAt,
-        };
-      }),
+    this.logger.log(
+      `서재 목록 조회: userId=${userId}, sort=${sortOption}, page=${page}, limit=${limit}, query=${query}`,
     );
 
-    // 책 개수로 정렬해야 하는 경우 메모리에서 정렬
-    if (sortOption === LibrarySortOption.BOOKS) {
-      result = result.sort((a, b) => b.bookCount - a.bookCount);
-    }
+    try {
+      // 공개 서재만 가져오거나, 사용자 ID가 제공된 경우 해당 사용자의 서재까지 가져옴
+      let qb = this.libraryRepository
+        .createQueryBuilder('library')
+        .leftJoinAndSelect('library.owner', 'owner')
+        .leftJoinAndSelect('library.tags', 'tags')
+        .leftJoinAndSelect('tags.tag', 'tag')
+        .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
+        .leftJoinAndSelect('libraryBooks.book', 'book')
+        .where('library.isPublic = :isPublic', { isPublic: true });
 
-    return result;
+      if (userId) {
+        qb = qb.orWhere('library.ownerId = :ownerId', {
+          ownerId: userId,
+        });
+      }
+
+      // 검색어가 제공된 경우 서재 이름, 설명, 태그 이름으로 검색
+      if (query && query.trim() !== '') {
+        const searchTerm = `%${query.trim()}%`;
+        qb = qb.andWhere(
+          '(library.name LIKE :query OR library.description LIKE :query OR tag.name LIKE :query)',
+          { query: searchTerm },
+        );
+      }
+
+      // 전체 개수 계산을 위한 카운트 쿼리
+      const totalCount = await qb.getCount();
+
+      // 정렬 옵션 적용
+      switch (sortOption) {
+        case LibrarySortOption.SUBSCRIBERS:
+          qb = qb.orderBy('library.subscriberCount', 'DESC');
+          break;
+        case LibrarySortOption.BOOKS:
+          // 책 수로 정렬하는 것은 아래에서 처리 (일단 생성일 순으로 정렬)
+          qb = qb.orderBy('library.createdAt', 'DESC');
+          break;
+        case LibrarySortOption.RECENT:
+          qb = qb.orderBy('library.createdAt', 'DESC');
+          break;
+        default:
+          // 기본은 최신순
+          qb = qb.orderBy('library.createdAt', 'DESC');
+          break;
+      }
+
+      // 페이지네이션 적용
+      qb = qb.skip(skip).take(limit);
+
+      const libraries = await qb.getMany();
+
+      let librariesWithDetails = await Promise.all(
+        libraries.map(async (library) => {
+          const isSubscribed = userId
+            ? await this.isUserSubscribed(userId, library.id)
+            : false;
+
+          // 미리보기용 책 - 최근 추가된 3권으로 제한
+          const previewBooks = library.libraryBooks
+            ? library.libraryBooks
+                .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+                .slice(0, 3)
+                .map((libraryBook) => ({
+                  id: libraryBook.book.id,
+                  title: libraryBook.book.title,
+                  author: libraryBook.book.author,
+                  coverImage: libraryBook.book.coverImage,
+                  isbn: libraryBook.book.isbn,
+                  publisher: libraryBook.book.publisher,
+                }))
+            : [];
+
+          return {
+            id: library.id,
+            name: library.name,
+            description: library.description,
+            isPublic: library.isPublic,
+            subscriberCount: library.subscriberCount,
+            owner: {
+              id: library.owner.id,
+              username: library.owner.username,
+              email: library.owner.email,
+            },
+            tags: library.tags
+              ? library.tags.map((tag) => this.mapLibraryTagToDto(tag))
+              : [],
+            bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
+            previewBooks,
+            isSubscribed,
+            createdAt: library.createdAt,
+            updatedAt: library.updatedAt,
+          };
+        }),
+      );
+
+      // 책 개수로 정렬해야 하는 경우 메모리에서 정렬
+      if (sortOption === LibrarySortOption.BOOKS) {
+        librariesWithDetails = librariesWithDetails.sort(
+          (a, b) => b.bookCount - a.bookCount,
+        );
+      }
+
+      return {
+        data: librariesWithDetails,
+        meta: {
+          total: totalCount,
+          page,
+          limit,
+          totalPages: Math.ceil(totalCount / limit),
+          sort: sortOption,
+          query: query || undefined,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`서재 목록 조회 실패: ${error.message}`);
+      throw error;
+    }
   }
 
   // 특정 사용자의 서재 목록 조회
