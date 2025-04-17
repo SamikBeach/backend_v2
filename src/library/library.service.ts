@@ -35,6 +35,7 @@ import { UserService } from '../user/user.service';
 import { In } from 'typeorm';
 import { TagService } from '../tag/tag.service';
 import { NotificationService } from '../notification/notification.service';
+import { Brackets } from 'typeorm';
 
 @Injectable()
 export class LibraryService {
@@ -145,26 +146,40 @@ export class LibraryService {
         .leftJoinAndSelect('library.tags', 'tags')
         .leftJoinAndSelect('tags.tag', 'tag')
         .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
-        .leftJoinAndSelect('libraryBooks.book', 'book')
-        .where('library.isPublic = :isPublic', { isPublic: true });
+        .leftJoinAndSelect('libraryBooks.book', 'book');
 
+      // 기본 조건: 공개 서재만 보이거나, 자신의 서재도 보이게 함
       if (userId) {
-        qb = qb.orWhere('library.ownerId = :ownerId', {
-          ownerId: userId,
-        });
+        qb = qb.where(
+          '(library.isPublic = :isPublic OR library.ownerId = :ownerId)',
+          {
+            isPublic: true,
+            ownerId: userId,
+          },
+        );
+      } else {
+        qb = qb.where('library.isPublic = :isPublic', { isPublic: true });
       }
 
       // 검색어가 제공된 경우 서재 이름, 설명, 태그 이름으로 검색
       if (query && query.trim() !== '') {
         const searchTerm = `%${query.trim()}%`;
         qb = qb.andWhere(
-          '(library.name LIKE :query OR library.description LIKE :query OR tag.name LIKE :query)',
-          { query: searchTerm },
+          new Brackets((qb) => {
+            qb.where('library.name LIKE :searchTerm', { searchTerm })
+              .orWhere('library.description LIKE :searchTerm', { searchTerm })
+              .orWhere('tag.name LIKE :searchTerm', { searchTerm });
+          }),
         );
       }
 
       // 전체 개수 계산을 위한 카운트 쿼리
       const totalCount = await qb.getCount();
+
+      // 로그 추가 - 쿼리 확인용
+      const rawQuery = qb.getQueryAndParameters();
+      this.logger.debug(`실행되는 쿼리: ${rawQuery[0]}`);
+      this.logger.debug(`파라미터: ${JSON.stringify(rawQuery[1])}`);
 
       // 정렬 옵션 적용
       switch (sortOption) {
