@@ -473,6 +473,8 @@ export class LibraryService {
     id: number,
     userId?: number,
   ): Promise<LibraryDetailResponseDto> {
+    this.logger.log(`서재 상세 조회: libraryId=${id}, userId=${userId}`);
+
     const library = await this.libraryRepository.findOne({
       where: { id },
       relations: [
@@ -493,14 +495,27 @@ export class LibraryService {
 
     // Check if the user is subscribed to this library
     let isSubscribed = false;
+
     if (userId) {
-      const subscription = await this.librarySubscriptionRepository.findOne({
-        where: {
-          libraryId: id,
-          subscriberId: userId,
-        },
-      });
-      isSubscribed = !!subscription;
+      this.logger.debug(`사용자(${userId})의 서재(${id}) 구독 여부 확인`);
+
+      // 1. 직접 subscriptions 배열에서 확인
+      if (library.subscriptions && library.subscriptions.length > 0) {
+        isSubscribed = library.subscriptions.some(
+          (sub) => sub.subscriberId === userId,
+        );
+        this.logger.debug(
+          `구독 관계에서 직접 확인: ${isSubscribed ? '구독 중' : '미구독'}`,
+        );
+      }
+
+      // 2. 관계에서 찾지 못한 경우 레포지토리를 통해 다시 확인
+      if (!isSubscribed) {
+        isSubscribed = await this.isUserSubscribed(userId, id);
+        this.logger.debug(
+          `isUserSubscribed 메서드 호출 결과: ${isSubscribed ? '구독 중' : '미구독'}`,
+        );
+      }
     }
 
     const libraryBooks = library.libraryBooks.map((libraryBook) => {
@@ -1061,14 +1076,47 @@ export class LibraryService {
     userId: number,
     libraryId: number,
   ): Promise<boolean> {
-    const subscription = await this.librarySubscriptionRepository.findOne({
-      where: {
-        libraryId,
-        subscriberId: userId,
-      },
-    });
+    try {
+      this.logger.debug(
+        `isUserSubscribed 호출: userId=${userId}, libraryId=${libraryId}`,
+      );
 
-    return !!subscription;
+      // 구독 정보 확인 - 구독 테이블에서 직접 조회
+      const subscription = await this.librarySubscriptionRepository.findOne({
+        where: {
+          libraryId,
+          subscriberId: userId,
+        },
+      });
+
+      if (subscription) {
+        this.logger.debug(
+          `구독 정보 찾음: userId=${userId}, libraryId=${libraryId}`,
+        );
+        return true;
+      }
+
+      // 구독 정보가 없다면 서재의 subscriptions 관계를 통해 다시 확인
+      const library = await this.libraryRepository.findOne({
+        where: { id: libraryId },
+        relations: ['subscriptions'],
+      });
+
+      if (library && library.subscriptions) {
+        const subscribed = library.subscriptions.some(
+          (sub) => sub.subscriberId === userId,
+        );
+        this.logger.debug(
+          `관계를 통한 구독 확인: ${subscribed ? '구독 중' : '미구독'}`,
+        );
+        return subscribed;
+      }
+
+      return false;
+    } catch (error) {
+      this.logger.error(`구독 확인 중 오류 발생: ${error.message}`);
+      return false;
+    }
   }
 
   // 서재 엔티티를 응답 DTO로 변환

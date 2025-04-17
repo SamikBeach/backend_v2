@@ -90,11 +90,8 @@ export class LibraryController {
 
   @Get(':id')
   @IsPublic()
-  findOne(
-    @Param('id', ParseIntPipe) id: number,
-    @Query('userId') userId?: string,
-  ) {
-    return this.libraryService.findOne(id, userId ? +userId : undefined);
+  findOne(@Param('id', ParseIntPipe) id: number, @GetUser() user?: User) {
+    return this.libraryService.findOne(id, user?.id);
   }
 
   @Patch(':id')
