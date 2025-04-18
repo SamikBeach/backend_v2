@@ -96,8 +96,7 @@ export class LibraryTagService {
     }
 
     const [tags, totalCount] = await queryBuilder
-      .orderBy('tag.usageCount', 'DESC')
-      .addOrderBy('tag.name', 'ASC')
+      .orderBy('tag.id', 'ASC')
       .skip(skip)
       .take(limit)
       .getManyAndCount();

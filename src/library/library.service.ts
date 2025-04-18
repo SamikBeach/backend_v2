@@ -15,7 +15,10 @@ import { LibraryBook } from './entities/library-book.entity';
 import { LibraryTag } from '../library-tag/entities/library-tag.entity';
 import { LibraryTagMapping } from './entities/library-tag-mapping.entity';
 import { LibrarySubscription } from './entities/library-subscription.entity';
-import { LibraryUpdateHistory } from './entities/library-update-history.entity';
+import {
+  LibraryUpdateHistory,
+  LibraryActivityType,
+} from './entities/library-update-history.entity';
 import { CreateLibraryDto } from './dto/create-library.dto';
 import { UpdateLibraryDto } from './dto/update-library.dto';
 import { AddBookToLibraryDto } from './dto/add-book-to-library.dto';
@@ -622,8 +625,13 @@ export class LibraryService {
           .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
           .slice(0, 5) // 최근 5개만 가져오기
           .map((update) => ({
+            id: update.id,
             date: update.createdAt,
             message: update.message,
+            activityType: update.activityType,
+            userId: update.userId,
+            bookId: update.bookId,
+            tagId: update.tagId,
           }))
       : [];
 
@@ -678,11 +686,23 @@ export class LibraryService {
     const updatedLibrary = await this.libraryRepository.save(library);
 
     // 서재 정보 업데이트 이력 추가
-    let updateMessage = `서재 정보가 업데이트되었습니다.`;
     if (oldName !== updatedLibrary.name) {
-      updateMessage = `서재 이름이 "${oldName}"에서 "${updatedLibrary.name}"로 변경되었습니다.`;
+      // 서재 제목이 변경된 경우 LIBRARY_TITLE_UPDATE 타입으로 히스토리 추가
+      await this.addUpdateHistory(
+        id,
+        'LIBRARY_TITLE_UPDATE',
+        LibraryActivityType.LIBRARY_TITLE_UPDATE,
+        userId,
+      );
+    } else {
+      // 그 외 변경사항에 대해서 일반 업데이트 히스토리 추가
+      await this.addUpdateHistory(
+        id,
+        'LIBRARY_UPDATE',
+        LibraryActivityType.LIBRARY_UPDATE,
+        userId,
+      );
     }
-    await this.addUpdateHistory(id, updateMessage);
 
     return this.mapToLibraryResponseDto(updatedLibrary);
   }
@@ -805,8 +825,13 @@ export class LibraryService {
         await this.libraryBookRepository.save(libraryBook);
 
       // 라이브러리 업데이트 이력 저장
-      const message = `라이브러리에 새로운 책이 추가되었습니다: ${book.title}`;
-      await this.addUpdateHistory(libraryId, message);
+      await this.addUpdateHistory(
+        libraryId,
+        'BOOK_ADD',
+        LibraryActivityType.BOOK_ADD,
+        userId,
+        book.id,
+      );
 
       // 구독자들에게 알림 발송
       const subscribers = await this.getLibrarySubscribers(libraryId);
@@ -880,7 +905,10 @@ export class LibraryService {
     // 책 제거 이력
     await this.addUpdateHistory(
       libraryId,
-      `"${bookTitle}" 책이 서재에서 제거되었습니다.`,
+      'BOOK_REMOVE',
+      LibraryActivityType.BOOK_REMOVE,
+      userId,
+      bookId,
     );
   }
 
@@ -943,7 +971,11 @@ export class LibraryService {
     // 태그 추가 이력
     await this.addUpdateHistory(
       libraryId,
-      `"${tag.name}" 태그가 서재에 추가되었습니다.`,
+      'TAG_ADD',
+      LibraryActivityType.TAG_ADD,
+      userId,
+      null,
+      tag.id,
     );
 
     return {
@@ -1002,7 +1034,11 @@ export class LibraryService {
     // 태그 제거 이력
     await this.addUpdateHistory(
       libraryId,
-      `"${tagName}" 태그가 서재에서 제거되었습니다.`,
+      'TAG_REMOVE',
+      LibraryActivityType.TAG_REMOVE,
+      userId,
+      null,
+      tagId,
     );
   }
 
@@ -1056,7 +1092,9 @@ export class LibraryService {
     // 구독 이력
     await this.addUpdateHistory(
       libraryId,
-      `${user.username}님이 서재를 구독했습니다.`,
+      'SUBSCRIPTION_ADD',
+      LibraryActivityType.SUBSCRIPTION_ADD,
+      userId,
     );
   }
 
@@ -1097,7 +1135,9 @@ export class LibraryService {
     // 구독 취소 이력
     await this.addUpdateHistory(
       libraryId,
-      `${userName}님이 서재 구독을 취소했습니다.`,
+      'SUBSCRIPTION_REMOVE',
+      LibraryActivityType.SUBSCRIPTION_REMOVE,
+      userId,
     );
   }
 
@@ -1132,16 +1172,32 @@ export class LibraryService {
     });
 
     return updates.map((update) => ({
+      id: update.id,
       date: update.createdAt,
       message: update.message,
+      activityType: update.activityType,
+      userId: update.userId,
+      bookId: update.bookId,
+      tagId: update.tagId,
     }));
   }
 
   // 업데이트 이력 추가
-  async addUpdateHistory(libraryId: number, message: string): Promise<void> {
+  async addUpdateHistory(
+    libraryId: number,
+    message: string,
+    activityType: LibraryActivityType = LibraryActivityType.OTHER,
+    userId?: number,
+    bookId?: number,
+    tagId?: number,
+  ): Promise<void> {
     const updateHistory = this.libraryUpdateHistoryRepository.create({
       libraryId,
       message,
+      activityType,
+      userId,
+      bookId,
+      tagId,
     });
 
     await this.libraryUpdateHistoryRepository.save(updateHistory);

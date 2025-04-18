@@ -42,8 +42,13 @@ export interface SubscriberResponseDto {
 }
 
 export interface UpdateHistoryItem {
+  id: number;
   date: Date;
   message: string;
+  activityType: string;
+  userId?: number;
+  bookId?: number;
+  tagId?: number;
 }
 
 export interface LibraryResponseDto {
