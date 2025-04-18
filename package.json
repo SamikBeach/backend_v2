@@ -17,6 +17,7 @@
     "seed:notification": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/notification.seed.ts",
     "seed:reading-status": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/reading-status.seed.ts",
     "seed:library-tag": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/library-tag.seed.ts",
+    "seed:aladin-library": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/aladin-library.seed.ts",
     "seed:all": "yarn seed:categories && yarn seed:books && yarn seed:discover-category && yarn seed:user && yarn seed:library && yarn seed:review && yarn seed:search && yarn seed:notification && yarn seed:reading-status && yarn seed:library-tag",
     "seed:run-all": "NODE_ENV=development ts-node src/seeds/seed-all.ts",
     "seed:category": "ts-node -r tsconfig-paths/register src/seeds/category.seed.ts"
