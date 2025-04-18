@@ -1,4 +1,11 @@
-import { IsString, IsBoolean, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsBoolean,
+  IsOptional,
+  IsArray,
+  IsNumber,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class UpdateLibraryDto {
   @IsOptional()
@@ -12,4 +19,10 @@ export class UpdateLibraryDto {
   @IsOptional()
   @IsBoolean()
   isPublic?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @Type(() => Number)
+  @IsNumber({}, { each: true })
+  tagIds?: number[];
 }

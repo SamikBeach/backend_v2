@@ -90,6 +90,46 @@ export class LibraryService {
       null,
     );
 
+    // 태그 처리 - 제공된 태그 ID 배열이 있는 경우
+    if (createLibraryDto.tagIds && createLibraryDto.tagIds.length > 0) {
+      this.logger.log(
+        `서재 생성 시 태그 추가: ${createLibraryDto.tagIds.join(', ')}`,
+      );
+
+      for (const tagId of createLibraryDto.tagIds) {
+        try {
+          // 태그 ID로 태그 조회
+          const tag = await this.libraryTagService.findOne(tagId);
+
+          // 라이브러리-태그 매핑 생성
+          const libraryTagMapping = this.libraryTagMappingRepository.create({
+            library: savedLibrary,
+            libraryId: savedLibrary.id,
+            libraryTag: tag,
+            libraryTagId: tag.id,
+          });
+
+          await this.libraryTagMappingRepository.save(libraryTagMapping);
+
+          // 태그 사용 횟수 증가
+          await this.libraryTagService.incrementUsage(tag.id);
+
+          // 태그 추가 이력
+          await this.addUpdateHistory(
+            savedLibrary.id,
+            'TAG_ADD',
+            LibraryActivityType.TAG_ADD,
+            userId,
+            null,
+            tag.id,
+            null,
+          );
+        } catch (error) {
+          this.logger.error(`태그 추가 중 오류 발생: ${error.message}`);
+        }
+      }
+    }
+
     return this.mapToLibraryResponseDto(savedLibrary);
   }
 
@@ -688,7 +728,11 @@ export class LibraryService {
     }
 
     const oldName = library.name;
-    Object.assign(library, updateLibraryDto);
+
+    // 태그를 제외한 다른 필드 업데이트
+    const { tagIds, ...libraryDataToUpdate } = updateLibraryDto;
+    Object.assign(library, libraryDataToUpdate);
+
     const updatedLibrary = await this.libraryRepository.save(library);
 
     // 서재 정보 업데이트 이력 추가
@@ -714,6 +758,99 @@ export class LibraryService {
         null,
         null,
       );
+    }
+
+    // 태그 업데이트 처리
+    if (tagIds && Array.isArray(tagIds)) {
+      // 기존 태그 목록 가져오기
+      const existingMappings = await this.libraryTagMappingRepository.find({
+        where: { libraryId: id },
+        relations: ['libraryTag'],
+      });
+
+      const existingTagIds = existingMappings.map(
+        (mapping) => mapping.libraryTagId,
+      );
+      const newTagIds = tagIds.filter((tagId) => tagId > 0); // 유효한 ID만 필터링
+
+      // 제거할 태그 (기존에 있으나 새 목록에 없는 태그)
+      const tagsToRemove = existingMappings.filter(
+        (mapping) => !newTagIds.includes(mapping.libraryTagId),
+      );
+
+      // 추가할 태그 (새 목록에 있으나 기존에 없는 태그)
+      const tagsToAdd = newTagIds.filter(
+        (tagId) => !existingTagIds.includes(tagId),
+      );
+
+      // 태그 제거
+      for (const mapping of tagsToRemove) {
+        try {
+          // 태그 사용 횟수 감소
+          await this.libraryTagService.decrementUsage(mapping.libraryTagId);
+
+          // 매핑 삭제
+          await this.libraryTagMappingRepository.remove(mapping);
+
+          // 태그 제거 이력
+          await this.addUpdateHistory(
+            id,
+            'TAG_REMOVE',
+            LibraryActivityType.TAG_REMOVE,
+            userId,
+            null,
+            mapping.libraryTagId,
+            null,
+          );
+        } catch (error) {
+          this.logger.error(`태그 제거 중 오류 발생: ${error.message}`);
+        }
+      }
+
+      // 태그 추가
+      for (const tagId of tagsToAdd) {
+        try {
+          // ID로 태그 찾기
+          const tag = await this.libraryTagService.findOne(tagId);
+
+          // 이미 매핑이 있는지 확인
+          const existingMapping =
+            await this.libraryTagMappingRepository.findOne({
+              where: {
+                libraryId: id,
+                libraryTagId: tagId,
+              },
+            });
+
+          if (!existingMapping) {
+            // 라이브러리-태그 매핑 생성
+            const libraryTagMapping = this.libraryTagMappingRepository.create({
+              library,
+              libraryId: id,
+              libraryTag: tag,
+              libraryTagId: tag.id,
+            });
+
+            await this.libraryTagMappingRepository.save(libraryTagMapping);
+
+            // 태그 사용 횟수 증가
+            await this.libraryTagService.incrementUsage(tag.id);
+
+            // 태그 추가 이력
+            await this.addUpdateHistory(
+              id,
+              'TAG_ADD',
+              LibraryActivityType.TAG_ADD,
+              userId,
+              null,
+              tag.id,
+              null,
+            );
+          }
+        } catch (error) {
+          this.logger.error(`태그 추가 중 오류 발생: ${error.message}`);
+        }
+      }
     }
 
     return this.mapToLibraryResponseDto(updatedLibrary);
