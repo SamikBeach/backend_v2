@@ -7,11 +7,11 @@ import { User } from '../user/entities/user.entity';
 import { Book } from '../book/entities/book.entity';
 import { Logger } from '@nestjs/common';
 import { LibraryService } from '../library/library.service';
-import { TagService } from '../tag/tag.service';
+import { LibraryTagService } from '../library-tag/library-tag.service';
 import { CreateLibraryDto } from '../library/dto/create-library.dto';
 import { AddBookToLibraryDto } from '../library/dto/add-book-to-library.dto';
 import { AddTagToLibraryDto } from '../library/dto/add-tag-to-library.dto';
-import { Tag } from '../library/entities/tag.entity';
+import { LibraryTag } from '../library-tag/entities/library-tag.entity';
 
 interface LibrarySeed {
   name: string;
@@ -33,9 +33,11 @@ async function bootstrap() {
     );
     const userRepository = app.get<Repository<User>>(getRepositoryToken(User));
     const bookRepository = app.get<Repository<Book>>(getRepositoryToken(Book));
-    const tagRepository = app.get<Repository<Tag>>(getRepositoryToken(Tag));
+    const tagRepository = app.get<Repository<LibraryTag>>(
+      getRepositoryToken(LibraryTag),
+    );
     const libraryService = app.get(LibraryService);
-    const tagService = app.get(TagService);
+    const tagService = app.get(LibraryTagService);
 
     // Check if there are already libraries
     const existingLibraries = await libraryRepository.count();

@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { AppModule } from '../app.module';
 import { execSync } from 'child_process';
 import * as path from 'path';
+import { seedTags } from './library-tag.seed';
 
 async function bootstrap() {
   const logger = new Logger('SeedAll');
@@ -16,7 +17,7 @@ async function bootstrap() {
       'category.seed.ts',
       'book.seed.ts',
       'discover-category.seed.ts',
-      'tag.seed.ts',
+      'library-tag.seed.ts',
       'library.seed.ts',
       'review.seed.ts',
       'reading-status.seed.ts',

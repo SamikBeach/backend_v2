@@ -18,11 +18,9 @@ import { DiscoverSubCategory } from './discover-category/entities/discover-subca
 import { LibraryModule } from './library/library.module';
 import { Library } from './library/entities/library.entity';
 import { LibraryBook } from './library/entities/library-book.entity';
-import { LibraryTag } from './library/entities/library-tag.entity';
+import { LibraryTag } from './library-tag/entities/library-tag.entity';
 import { LibrarySubscription } from './library/entities/library-subscription.entity';
 import { LibraryUpdateHistory } from './library/entities/library-update-history.entity';
-import { TagModule } from './tag/tag.module';
-import { Tag } from './library/entities/tag.entity';
 import { ReviewModule } from './review/review.module';
 import { Review } from './review/entities/review.entity';
 import { ReviewImage } from './review/entities/review-image.entity';
@@ -37,6 +35,7 @@ import { ReadingStatus } from './reading-status/entities/reading-status.entity';
 import { RatingModule } from './rating/rating.module';
 import { ReadingStatusModule } from './reading-status/reading-status.module';
 import { Rating } from './rating/entities/rating.entity';
+import { LibraryTagModule } from './library-tag/library-tag.module';
 
 @Module({
   imports: [
@@ -66,7 +65,6 @@ import { Rating } from './rating/entities/rating.entity';
           LibraryTag,
           LibrarySubscription,
           LibraryUpdateHistory,
-          Tag,
           Review,
           ReviewImage,
           ReviewBook,
@@ -90,7 +88,7 @@ import { Rating } from './rating/entities/rating.entity';
     BookModule,
     DiscoverCategoryModule,
     LibraryModule,
-    TagModule,
+    LibraryTagModule,
     ReviewModule,
     SearchModule,
     NotificationModule,

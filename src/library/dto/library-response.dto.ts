@@ -17,9 +17,12 @@ export interface LibraryTagResponseDto {
   id: number;
   tagId: number;
   tagName: string;
+  description?: string;
+  usageCount: number;
   libraryId: number;
   note?: string;
   createdAt: Date;
+  updatedAt?: Date;
 }
 
 export interface LibraryBookResponseDto {
@@ -79,6 +82,8 @@ export interface LibraryResponseMeta {
   totalPages: number;
   sort?: LibrarySortOption;
   query?: string;
+  tagId?: number;
+  tagName?: string;
 }
 
 // 페이지네이션 응답 형식

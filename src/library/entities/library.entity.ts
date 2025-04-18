@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 import { LibraryBook } from './library-book.entity';
-import { LibraryTag } from './library-tag.entity';
+import { LibraryTag } from '../../library-tag/entities/library-tag.entity';
 import { LibrarySubscription } from './library-subscription.entity';
 import { LibraryUpdateHistory } from './library-update-history.entity';
 

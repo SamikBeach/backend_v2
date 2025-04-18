@@ -5,30 +5,27 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, MoreThan } from 'typeorm';
-import { Tag } from '../library/entities/tag.entity';
-import { LibraryTag } from '../library/entities/library-tag.entity';
+import { Repository, DataSource, MoreThan, Not, IsNull } from 'typeorm';
+import { LibraryTag } from './entities/library-tag.entity';
 import {
-  TagResponseDto,
-  TagListResponseDto,
-} from '../library/dto/tag-response.dto';
+  LibraryTagResponseDto,
+  LibraryTagListResponseDto,
+} from './dto/library-tag-response.dto';
 
 @Injectable()
-export class TagService {
-  private readonly logger = new Logger(TagService.name);
+export class LibraryTagService {
+  private readonly logger = new Logger(LibraryTagService.name);
 
   constructor(
-    @InjectRepository(Tag)
-    private readonly tagRepository: Repository<Tag>,
     @InjectRepository(LibraryTag)
-    private readonly libraryTagRepository: Repository<LibraryTag>,
+    private readonly tagRepository: Repository<LibraryTag>,
     private readonly dataSource: DataSource,
   ) {}
 
   /**
    * 새로운 태그 생성 또는 기존 태그 조회
    */
-  async findOrCreateTag(name: string): Promise<Tag> {
+  async findOrCreateTag(name: string): Promise<LibraryTag> {
     // 대소문자 구분 없이 정확히 일치하는 태그 찾기
     let tag = await this.tagRepository.findOne({
       where: { name: name.trim() },
@@ -50,7 +47,7 @@ export class TagService {
   /**
    * 태그 사용 횟수 증가
    */
-  async incrementUsage(tagId: number): Promise<Tag> {
+  async incrementUsage(tagId: number): Promise<LibraryTag> {
     const tag = await this.findOne(tagId);
     tag.usageCount += 1;
     return this.tagRepository.save(tag);
@@ -59,7 +56,7 @@ export class TagService {
   /**
    * 태그 사용 횟수 감소
    */
-  async decrementUsage(tagId: number): Promise<Tag> {
+  async decrementUsage(tagId: number): Promise<LibraryTag> {
     const tag = await this.findOne(tagId);
     if (tag.usageCount > 0) {
       tag.usageCount -= 1;
@@ -71,7 +68,7 @@ export class TagService {
   /**
    * 태그 ID로 조회
    */
-  async findOne(id: number): Promise<Tag> {
+  async findOne(id: number): Promise<LibraryTag> {
     const tag = await this.tagRepository.findOne({
       where: { id },
     });
@@ -87,16 +84,17 @@ export class TagService {
    * 모든 태그 조회 (페이지네이션 및 검색 지원)
    */
   async findAll(
-    page: number = 1,
-    limit: number = 20,
-    search?: string,
-  ): Promise<TagListResponseDto> {
+    options: { page?: number; limit?: number; search?: string } = {},
+  ): Promise<LibraryTagListResponseDto> {
+    const { page = 1, limit = 20, search } = options;
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.tagRepository.createQueryBuilder('tag');
+    const queryBuilder = this.tagRepository
+      .createQueryBuilder('tag')
+      .where('tag.libraryId IS NULL');
 
     if (search) {
-      queryBuilder.where('tag.name LIKE :search', { search: `%${search}%` });
+      queryBuilder.andWhere('tag.name LIKE :search', { search: `%${search}%` });
     }
 
     const [tags, totalCount] = await queryBuilder
@@ -115,9 +113,12 @@ export class TagService {
   /**
    * 인기 태그 조회 (사용 횟수 기준)
    */
-  async findPopularTags(limit: number = 10): Promise<TagResponseDto[]> {
+  async findPopularTags(limit: number = 10): Promise<LibraryTagResponseDto[]> {
     const tags = await this.tagRepository.find({
-      where: { usageCount: MoreThan(0) },
+      where: {
+        usageCount: MoreThan(0),
+        libraryId: null,
+      },
       order: { usageCount: 'DESC', name: 'ASC' },
       take: limit,
     });
@@ -132,7 +133,7 @@ export class TagService {
     id: number,
     name?: string,
     description?: string,
-  ): Promise<TagResponseDto> {
+  ): Promise<LibraryTagResponseDto> {
     const tag = await this.findOne(id);
 
     // 이름 업데이트
@@ -178,8 +179,8 @@ export class TagService {
       // 소스 태그를 사용하는 모든 라이브러리 태그를 타겟 태그로 업데이트
       await queryRunner.manager.update(
         LibraryTag,
-        { tagId: sourceTagId },
-        { tagId: targetTagId, tag: targetTag },
+        { id: sourceTagId, libraryId: Not(IsNull()) },
+        { name: targetTag.name },
       );
 
       // 타겟 태그의 사용 횟수 업데이트 (소스 태그의 사용 횟수를 더함)
@@ -201,14 +202,15 @@ export class TagService {
   }
 
   /**
-   * Tag 엔티티를 TagResponseDto로 매핑
+   * LibraryTag 엔티티를 DTO로 변환
    */
-  private mapToTagResponseDto(tag: Tag): TagResponseDto {
+  private mapToTagResponseDto(tag: LibraryTag): LibraryTagResponseDto {
     return {
       id: tag.id,
-      name: tag.name,
+      tagName: tag.name,
       description: tag.description,
       usageCount: tag.usageCount,
+      note: tag.note,
       createdAt: tag.createdAt,
       updatedAt: tag.updatedAt,
     };

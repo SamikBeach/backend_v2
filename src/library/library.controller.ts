@@ -36,14 +36,29 @@ export class LibraryController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('query') query?: string,
+    @Query('tagId') tagId?: number,
   ) {
-    return this.libraryService.findAll(
-      userId ? +userId : undefined,
-      sort,
-      page ? +page : 1,
-      limit ? +limit : 10,
-      query,
-    );
+    try {
+      console.log('findAll 호출됨', {
+        userId,
+        sort,
+        page,
+        limit,
+        query,
+        tagId,
+      });
+      return this.libraryService.findAll(
+        userId ? +userId : undefined,
+        sort,
+        page ? +page : 1,
+        limit ? +limit : 10,
+        query,
+        tagId,
+      );
+    } catch (error) {
+      console.error('findAll 메소드 에러:', error);
+      throw error;
+    }
   }
 
   @Get('user/:userId')
