@@ -49,6 +49,7 @@ export interface UpdateHistoryItem {
   userId?: number;
   bookId?: number;
   tagId?: number;
+  bookTitle?: string;
 }
 
 export interface LibraryResponseDto {

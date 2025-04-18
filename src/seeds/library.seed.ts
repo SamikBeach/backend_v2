@@ -132,6 +132,7 @@ async function bootstrap() {
               activityType: LibraryActivityType.BOOK_ADD,
               userId: library.ownerId,
               bookId: libraryBook.bookId,
+              bookTitle: libraryBook.book?.title,
             });
           }
 
@@ -169,6 +170,7 @@ async function bootstrap() {
               activityType: LibraryActivityType.BOOK_REMOVE,
               userId: library.ownerId,
               bookId: libraryBook.bookId,
+              bookTitle: libraryBook.book?.title,
             });
           }
 
@@ -444,6 +446,7 @@ async function bootstrap() {
                 activityType: LibraryActivityType.BOOK_ADD,
                 userId: user.id,
                 bookId: bookId,
+                bookTitle: addedBook.book.title,
               });
             } catch (error) {
               logger.error(`Error adding book ${bookId}: ${error.message}`);
@@ -509,6 +512,7 @@ async function bootstrap() {
                 activityType: LibraryActivityType.BOOK_REMOVE,
                 userId: user.id,
                 bookId: sampleBook.id,
+                bookTitle: sampleBook.title,
               });
             }
           }

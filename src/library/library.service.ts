@@ -82,7 +82,12 @@ export class LibraryService {
     // 서재 생성 이력 추가
     await this.addUpdateHistory(
       savedLibrary.id,
-      `서재 "${savedLibrary.name}"가 생성되었습니다.`,
+      'LIBRARY_CREATE',
+      LibraryActivityType.LIBRARY_CREATE,
+      userId,
+      null,
+      null,
+      null,
     );
 
     return this.mapToLibraryResponseDto(savedLibrary);
@@ -632,6 +637,7 @@ export class LibraryService {
             userId: update.userId,
             bookId: update.bookId,
             tagId: update.tagId,
+            bookTitle: update.bookTitle,
           }))
       : [];
 
@@ -693,6 +699,9 @@ export class LibraryService {
         'LIBRARY_TITLE_UPDATE',
         LibraryActivityType.LIBRARY_TITLE_UPDATE,
         userId,
+        null,
+        null,
+        null,
       );
     } else {
       // 그 외 변경사항에 대해서 일반 업데이트 히스토리 추가
@@ -701,6 +710,9 @@ export class LibraryService {
         'LIBRARY_UPDATE',
         LibraryActivityType.LIBRARY_UPDATE,
         userId,
+        null,
+        null,
+        null,
       );
     }
 
@@ -831,6 +843,8 @@ export class LibraryService {
         LibraryActivityType.BOOK_ADD,
         userId,
         book.id,
+        null,
+        book.title,
       );
 
       // 구독자들에게 알림 발송
@@ -909,6 +923,8 @@ export class LibraryService {
       LibraryActivityType.BOOK_REMOVE,
       userId,
       bookId,
+      null,
+      bookTitle,
     );
   }
 
@@ -976,6 +992,7 @@ export class LibraryService {
       userId,
       null,
       tag.id,
+      null,
     );
 
     return {
@@ -1039,6 +1056,7 @@ export class LibraryService {
       userId,
       null,
       tagId,
+      null,
     );
   }
 
@@ -1095,6 +1113,9 @@ export class LibraryService {
       'SUBSCRIPTION_ADD',
       LibraryActivityType.SUBSCRIPTION_ADD,
       userId,
+      null,
+      null,
+      null,
     );
   }
 
@@ -1138,6 +1159,9 @@ export class LibraryService {
       'SUBSCRIPTION_REMOVE',
       LibraryActivityType.SUBSCRIPTION_REMOVE,
       userId,
+      null,
+      null,
+      null,
     );
   }
 
@@ -1179,6 +1203,7 @@ export class LibraryService {
       userId: update.userId,
       bookId: update.bookId,
       tagId: update.tagId,
+      bookTitle: update.bookTitle,
     }));
   }
 
@@ -1190,6 +1215,7 @@ export class LibraryService {
     userId?: number,
     bookId?: number,
     tagId?: number,
+    bookTitle?: string,
   ): Promise<void> {
     const updateHistory = this.libraryUpdateHistoryRepository.create({
       libraryId,
@@ -1198,6 +1224,7 @@ export class LibraryService {
       userId,
       bookId,
       tagId,
+      bookTitle,
     });
 
     await this.libraryUpdateHistoryRepository.save(updateHistory);

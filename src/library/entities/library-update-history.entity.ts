@@ -52,6 +52,10 @@ export class LibraryUpdateHistory {
   @Column({ nullable: true })
   bookId: number;
 
+  // 활동과 관련된 책 제목 (선택 사항)
+  @Column({ nullable: true })
+  bookTitle: string;
+
   // 활동과 관련된 태그 ID (선택 사항)
   @Column({ nullable: true })
   tagId: number;
