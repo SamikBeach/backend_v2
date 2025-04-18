@@ -31,7 +31,7 @@ export class LibraryController {
   @Get()
   @IsPublic()
   findAll(
-    @Query('userId') userId?: string,
+    @GetUser() user?: User,
     @Query('sort') sort?: LibrarySortOption,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
@@ -40,7 +40,7 @@ export class LibraryController {
   ) {
     try {
       console.log('findAll 호출됨', {
-        userId,
+        userId: user?.id,
         sort,
         page,
         limit,
@@ -48,7 +48,7 @@ export class LibraryController {
         tagId,
       });
       return this.libraryService.findAll(
-        userId ? +userId : undefined,
+        user?.id,
         sort,
         page ? +page : 1,
         limit ? +limit : 10,
@@ -56,7 +56,7 @@ export class LibraryController {
         tagId,
       );
     } catch (error) {
-      console.error('findAll 메소드 에러:', error);
+      console.error('findAll, 메소드 에러:', error);
       throw error;
     }
   }
