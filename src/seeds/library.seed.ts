@@ -124,7 +124,7 @@ async function bootstrap() {
           name: '철학 고전 모음',
           description: '철학 분야의 고전 명작들을 모아둔 라이브러리입니다.',
           isPublic: true,
-          tags: ['철학', '고전', '필독서'],
+          tags: ['철학', '인문학'],
           bookCount: 8,
           preferredCategory: '철학',
         },
@@ -132,7 +132,7 @@ async function bootstrap() {
           name: '읽고 싶은 책 목록',
           description: '향후 읽고 싶은 책들을 모아둔 개인 라이브러리입니다.',
           isPublic: false,
-          tags: ['읽고 싶은 책'],
+          tags: ['문학', '예술'],
           bookCount: 5,
           preferredCategory: '소설',
         },
@@ -140,7 +140,7 @@ async function bootstrap() {
           name: '2023년 완독한 책들',
           description: '2023년에 완독한 책 모음입니다.',
           isPublic: true,
-          tags: ['완독', '2023'],
+          tags: ['심리학', '과학'],
           bookCount: 12,
           preferredCategory: '자기계발',
         },
@@ -150,7 +150,7 @@ async function bootstrap() {
           name: '과학 교양서 모음',
           description: '과학 분야의 대중적인 교양서를 모은 컬렉션입니다.',
           isPublic: true,
-          tags: ['과학', '자연과학', '교양서'],
+          tags: ['과학', '경제학'],
           bookCount: 6,
           preferredCategory: '과학',
         },
@@ -158,7 +158,7 @@ async function bootstrap() {
           name: '자기계발 도서',
           description: '자기계발과 생산성 향상에 관한 책들입니다.',
           isPublic: true,
-          tags: ['자기계발', '비즈니스'],
+          tags: ['사회학', '정치학'],
           bookCount: 7,
           preferredCategory: '자기계발',
         },
@@ -166,7 +166,7 @@ async function bootstrap() {
           name: '좋아하는 작가 모음',
           description: '제가 좋아하는 작가들의 책을 모아둔 서재입니다.',
           isPublic: true,
-          tags: ['작가', '소설'],
+          tags: ['문학', '역사'],
           bookCount: 5,
           preferredCategory: '소설',
         },
@@ -186,7 +186,7 @@ async function bootstrap() {
           name: `${user.username || 'User'}'s Library`,
           description: `A collection of books curated by ${user.username || user.email}`,
           isPublic: Math.random() > 0.3, // 70% 확률로 공개
-          tags: ['읽은 책'],
+          tags: ['철학'], // 기본 태그로 철학 사용
           bookCount: 3,
         };
         userLibraries.push(defaultLibrary);
@@ -222,6 +222,7 @@ async function bootstrap() {
                 logger.log(`Created new tag: ${tagName}`);
               }
 
+              // 새 매핑 구조에 맞게 태그 추가
               const tagDto: AddTagToLibraryDto = { name: tagName };
               await libraryService.addTagToLibrary(library.id, user.id, tagDto);
               logger.log(`Added tag ${tagName} to library ${library.name}`);

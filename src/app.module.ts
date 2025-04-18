@@ -18,6 +18,7 @@ import { DiscoverSubCategory } from './discover-category/entities/discover-subca
 import { LibraryModule } from './library/library.module';
 import { Library } from './library/entities/library.entity';
 import { LibraryBook } from './library/entities/library-book.entity';
+import { LibraryTagMapping } from './library/entities/library-tag-mapping.entity';
 import { LibraryTag } from './library-tag/entities/library-tag.entity';
 import { LibrarySubscription } from './library/entities/library-subscription.entity';
 import { LibraryUpdateHistory } from './library/entities/library-update-history.entity';
@@ -63,6 +64,7 @@ import { LibraryTagModule } from './library-tag/library-tag.module';
           Library,
           LibraryBook,
           LibraryTag,
+          LibraryTagMapping,
           LibrarySubscription,
           LibraryUpdateHistory,
           Review,

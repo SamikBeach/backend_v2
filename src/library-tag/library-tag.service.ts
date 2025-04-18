@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, MoreThan, Not, IsNull } from 'typeorm';
+import { Repository, DataSource, MoreThan } from 'typeorm';
 import { LibraryTag } from './entities/library-tag.entity';
 import {
   LibraryTagResponseDto,
@@ -89,9 +89,7 @@ export class LibraryTagService {
     const { page = 1, limit = 20, search } = options;
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.tagRepository
-      .createQueryBuilder('tag')
-      .where('tag.libraryId IS NULL');
+    const queryBuilder = this.tagRepository.createQueryBuilder('tag');
 
     if (search) {
       queryBuilder.andWhere('tag.name LIKE :search', { search: `%${search}%` });
@@ -117,7 +115,6 @@ export class LibraryTagService {
     const tags = await this.tagRepository.find({
       where: {
         usageCount: MoreThan(0),
-        libraryId: null,
       },
       order: { usageCount: 'DESC', name: 'ASC' },
       take: limit,
@@ -176,11 +173,11 @@ export class LibraryTagService {
     await queryRunner.startTransaction();
 
     try {
-      // 소스 태그를 사용하는 모든 라이브러리 태그를 타겟 태그로 업데이트
-      await queryRunner.manager.update(
-        LibraryTag,
-        { id: sourceTagId, libraryId: Not(IsNull()) },
-        { name: targetTag.name },
+      // 소스 태그를 사용하는 모든 매핑을 타겟 태그로 업데이트
+      // SQL 쿼리를 직접 실행하여 libraryTagMappings 테이블에서 참조 변경
+      await queryRunner.query(
+        `UPDATE library_tag_mapping SET library_tag_id = ? WHERE library_tag_id = ?`,
+        [targetTagId, sourceTagId],
       );
 
       // 타겟 태그의 사용 횟수 업데이트 (소스 태그의 사용 횟수를 더함)

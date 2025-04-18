@@ -30,12 +30,12 @@ export const seedTags = async (dataSource: DataSource): Promise<void> => {
   const existingCount = await tagRepository.count();
   if (existingCount > 0) {
     logger.log(
-      `이미 ${existingCount}개의 라이브러리 태그가 존재합니다. 시드 작업을 건너뜁니다.`,
+      `이미 ${existingCount}개의 태그가 존재합니다. 시드 작업을 건너뜁니다.`,
     );
     return;
   }
 
-  logger.log('라이브러리 태그 데이터 초기화 시작...');
+  logger.log('태그 데이터 초기화 시작...');
 
   try {
     // 태그 추가
@@ -55,7 +55,9 @@ export const seedTags = async (dataSource: DataSource): Promise<void> => {
     }
 
     const finalCount = await tagRepository.count();
-    logger.log(`총 ${finalCount}개의 라이브러리 태그 데이터 초기화 완료!`);
+    logger.log(
+      `총 ${finalCount}개의 태그 데이터 초기화 완료! Library와 다대다 관계가 설정됩니다.`,
+    );
   } catch (error) {
     logger.error(`라이브러리 태그 초기화 중 오류: ${error.message}`);
   }

@@ -40,28 +40,28 @@ const LIBRARIES = [
     name: '철학 고전 컬렉션',
     description: '철학 분야의 고전 작품들을 모아놓은 서재입니다.',
     isPublic: true,
-    tags: ['철학', '고전', '인문학'],
+    tags: ['철학', '인문학'],
     categories: ['철학'],
   },
   {
     name: '과학 탐구 서재',
     description: '과학에 관한 교양서와 전문서적을 모아놓은 서재입니다.',
     isPublic: true,
-    tags: ['과학', '자연과학', '우주'],
+    tags: ['과학', '경제학'],
     categories: ['과학'],
   },
   {
     name: '세계 문학 걸작선',
     description: '세계 각국의 문학 걸작들을 수집해둔 서재입니다.',
     isPublic: true,
-    tags: ['문학', '소설', '고전문학'],
+    tags: ['문학', '역사'],
     categories: ['문학'],
   },
   {
     name: '자기계발 컬렉션',
     description: '자기계발과 성장에 도움이 되는 책들을 모아놓은 서재입니다.',
     isPublic: true,
-    tags: ['자기계발', '성장', '습관'],
+    tags: ['심리학', '사회학'],
     categories: ['자기계발'],
   },
 ];
@@ -78,7 +78,6 @@ async function bootstrap() {
     const bookService = app.get(BookService);
     const libraryService = app.get(LibraryService);
     const tagService = app.get(LibraryTagService);
-    const aladinService = app.get(AladinService);
 
     // 사용자 ID (1번 사용자가 타겟)
     const userId = 1;

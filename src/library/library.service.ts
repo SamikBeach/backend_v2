@@ -13,6 +13,7 @@ import { Repository } from 'typeorm';
 import { Library } from './entities/library.entity';
 import { LibraryBook } from './entities/library-book.entity';
 import { LibraryTag } from '../library-tag/entities/library-tag.entity';
+import { LibraryTagMapping } from './entities/library-tag-mapping.entity';
 import { LibrarySubscription } from './entities/library-subscription.entity';
 import { LibraryUpdateHistory } from './entities/library-update-history.entity';
 import { CreateLibraryDto } from './dto/create-library.dto';
@@ -47,6 +48,8 @@ export class LibraryService {
     private readonly libraryBookRepository: Repository<LibraryBook>,
     @InjectRepository(LibraryTag)
     private readonly libraryTagRepository: Repository<LibraryTag>,
+    @InjectRepository(LibraryTagMapping)
+    private readonly libraryTagMappingRepository: Repository<LibraryTagMapping>,
     @InjectRepository(LibrarySubscription)
     private readonly librarySubscriptionRepository: Repository<LibrarySubscription>,
     @InjectRepository(LibraryUpdateHistory)
@@ -143,7 +146,8 @@ export class LibraryService {
       let qb = this.libraryRepository
         .createQueryBuilder('library')
         .leftJoinAndSelect('library.owner', 'owner')
-        .leftJoinAndSelect('library.tags', 'tags')
+        .leftJoinAndSelect('library.libraryTagMappings', 'tagMappings')
+        .leftJoinAndSelect('tagMappings.libraryTag', 'tag')
         .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
         .leftJoinAndSelect('libraryBooks.book', 'book');
 
@@ -166,7 +170,7 @@ export class LibraryService {
       if (tagId) {
         this.logger.debug(`태그 ID ${tagId} 필터 적용 시도`);
         try {
-          qb = qb.andWhere('tags.id = :tagId', { tagId });
+          qb = qb.andWhere('tag.id = :tagId', { tagId });
         } catch (error) {
           this.logger.error(`태그 필터링 중 오류 발생: ${error.message}`);
         }
@@ -179,7 +183,7 @@ export class LibraryService {
           new Brackets((qb) => {
             qb.where('library.name LIKE :searchTerm', { searchTerm })
               .orWhere('library.description LIKE :searchTerm', { searchTerm })
-              .orWhere('tags.name LIKE :searchTerm', { searchTerm });
+              .orWhere('tag.name LIKE :searchTerm', { searchTerm });
           }),
         );
       }
@@ -236,6 +240,20 @@ export class LibraryService {
                 }))
             : [];
 
+          // 태그 정보를 매핑에서 추출
+          const tags = library.libraryTagMappings
+            ? library.libraryTagMappings.map((mapping) => ({
+                id: mapping.id,
+                tagId: mapping.libraryTag.id,
+                tagName: mapping.libraryTag.name,
+                usageCount: mapping.libraryTag.usageCount,
+                libraryId: mapping.libraryId,
+                note: mapping.note,
+                createdAt: mapping.createdAt,
+                updatedAt: mapping.updatedAt,
+              }))
+            : [];
+
           return {
             id: library.id,
             name: library.name,
@@ -247,9 +265,7 @@ export class LibraryService {
               username: library.owner.username,
               email: library.owner.email,
             },
-            tags: library.tags
-              ? library.tags.map((tag) => this.mapLibraryTagToDto(tag))
-              : [],
+            tags,
             bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
             previewBooks,
             isSubscribed,
@@ -314,7 +330,8 @@ export class LibraryService {
     let qb = this.libraryRepository
       .createQueryBuilder('library')
       .leftJoinAndSelect('library.owner', 'owner')
-      .leftJoinAndSelect('library.tags', 'tags')
+      .leftJoinAndSelect('library.libraryTagMappings', 'tagMappings')
+      .leftJoinAndSelect('tagMappings.libraryTag', 'tag')
       .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
       .leftJoinAndSelect('libraryBooks.book', 'book')
       .where('library.ownerId = :ownerId', { ownerId: userId });
@@ -365,6 +382,20 @@ export class LibraryService {
               }))
           : [];
 
+        // 태그 정보를 매핑에서 추출
+        const tags = library.libraryTagMappings
+          ? library.libraryTagMappings.map((mapping) => ({
+              id: mapping.id,
+              tagId: mapping.libraryTag.id,
+              tagName: mapping.libraryTag.name,
+              usageCount: mapping.libraryTag.usageCount,
+              libraryId: mapping.libraryId,
+              note: mapping.note,
+              createdAt: mapping.createdAt,
+              updatedAt: mapping.updatedAt,
+            }))
+          : [];
+
         return {
           id: library.id,
           name: library.name,
@@ -376,9 +407,7 @@ export class LibraryService {
             username: library.owner.username,
             email: library.owner.email,
           },
-          tags: library.tags
-            ? library.tags.map((tag) => this.mapLibraryTagToDto(tag))
-            : [],
+          tags,
           bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
           previewBooks,
           isSubscribed,
@@ -417,7 +446,8 @@ export class LibraryService {
     let qb = this.libraryRepository
       .createQueryBuilder('library')
       .leftJoinAndSelect('library.owner', 'owner')
-      .leftJoinAndSelect('library.tags', 'tags')
+      .leftJoinAndSelect('library.libraryTagMappings', 'tagMappings')
+      .leftJoinAndSelect('tagMappings.libraryTag', 'tag')
       .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
       .leftJoinAndSelect('libraryBooks.book', 'book')
       .where('library.id IN (:...ids)', { ids: libraryIds });
@@ -461,6 +491,20 @@ export class LibraryService {
               }))
           : [];
 
+        // 태그 정보를 매핑에서 추출
+        const tags = library.libraryTagMappings
+          ? library.libraryTagMappings.map((mapping) => ({
+              id: mapping.id,
+              tagId: mapping.libraryTag.id,
+              tagName: mapping.libraryTag.name,
+              usageCount: mapping.libraryTag.usageCount,
+              libraryId: mapping.libraryId,
+              note: mapping.note,
+              createdAt: mapping.createdAt,
+              updatedAt: mapping.updatedAt,
+            }))
+          : [];
+
         return {
           id: library.id,
           name: library.name,
@@ -472,9 +516,7 @@ export class LibraryService {
             username: library.owner.username,
             email: library.owner.email,
           },
-          tags: library.tags
-            ? library.tags.map((tag) => this.mapLibraryTagToDto(tag))
-            : [],
+          tags,
           bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
           previewBooks,
           isSubscribed,
@@ -505,7 +547,8 @@ export class LibraryService {
         'owner',
         'libraryBooks',
         'libraryBooks.book',
-        'tags',
+        'libraryTagMappings',
+        'libraryTagMappings.libraryTag',
         'subscriptions',
         'subscriptions.subscriber',
         'updateHistory',
@@ -559,6 +602,20 @@ export class LibraryService {
       };
     });
 
+    // 태그 정보를 매핑에서 추출
+    const tags = library.libraryTagMappings
+      ? library.libraryTagMappings.map((mapping) => ({
+          id: mapping.id,
+          tagId: mapping.libraryTag.id,
+          tagName: mapping.libraryTag.name,
+          usageCount: mapping.libraryTag.usageCount,
+          libraryId: mapping.libraryId,
+          note: mapping.note,
+          createdAt: mapping.createdAt,
+          updatedAt: mapping.updatedAt,
+        }))
+      : [];
+
     // 최근 업데이트 이력
     const recentUpdates = library.updateHistory
       ? library.updateHistory
@@ -581,7 +638,7 @@ export class LibraryService {
         email: library.owner.email,
       },
       books: libraryBooks,
-      tags: library.tags?.map((tag) => this.mapLibraryTagToDto(tag)) || [],
+      tags,
       isSubscribed,
       subscriberCount: library.subscriptions?.length || 0,
       subscribers:
@@ -644,9 +701,9 @@ export class LibraryService {
       throw new ForbiddenException('이 서재를 삭제할 권한이 없습니다.');
     }
 
-    // 관련된 libraryBooks, tags, subscriptions, updateHistory 먼저 삭제
+    // 관련된 libraryBooks, libraryTagMappings, subscriptions, updateHistory 먼저 삭제
     await this.libraryBookRepository.delete({ libraryId: id });
-    await this.libraryTagRepository.delete({ libraryId: id });
+    await this.libraryTagMappingRepository.delete({ libraryId: id });
     await this.librarySubscriptionRepository.delete({ libraryId: id });
     await this.libraryUpdateHistoryRepository.delete({ libraryId: id });
 
@@ -857,28 +914,28 @@ export class LibraryService {
     tag = await this.libraryTagService.findOrCreateTag(tagName);
 
     // 이미 서재에 해당 태그가 있는지 확인
-    const existingTag = await this.libraryTagRepository.findOne({
+    const existingMapping = await this.libraryTagMappingRepository.findOne({
       where: {
         libraryId,
-        name: tag.name,
+        libraryTagId: tag.id,
       },
     });
 
-    if (existingTag) {
+    if (existingMapping) {
       throw new BadRequestException('이미 서재에 추가된 태그입니다.');
     }
 
-    // 라이브러리-태그 관계 생성
-    const libraryTag = this.libraryTagRepository.create({
+    // 라이브러리-태그 매핑 생성
+    const libraryTagMapping = this.libraryTagMappingRepository.create({
       library,
       libraryId,
-      name: tag.name,
-      description: tag.description,
-      usageCount: 0,
+      libraryTag: tag,
+      libraryTagId: tag.id,
       note: addTagToLibraryDto.note,
     });
 
-    const savedLibraryTag = await this.libraryTagRepository.save(libraryTag);
+    const savedMapping =
+      await this.libraryTagMappingRepository.save(libraryTagMapping);
 
     // 태그 사용 횟수 증가
     await this.libraryTagService.incrementUsage(tag.id);
@@ -890,13 +947,13 @@ export class LibraryService {
     );
 
     return {
-      id: savedLibraryTag.id,
+      id: savedMapping.id,
       tagId: tag.id,
       tagName: tag.name,
       usageCount: tag.usageCount,
-      libraryId: savedLibraryTag.libraryId,
-      note: savedLibraryTag.note,
-      createdAt: savedLibraryTag.createdAt,
+      libraryId: savedMapping.libraryId,
+      note: savedMapping.note,
+      createdAt: savedMapping.createdAt,
     };
   }
 
@@ -920,26 +977,27 @@ export class LibraryService {
       );
     }
 
-    const libraryTag = await this.libraryTagRepository.findOne({
+    const mapping = await this.libraryTagMappingRepository.findOne({
       where: {
-        id: tagId,
         libraryId,
+        libraryTagId: tagId,
       },
+      relations: ['libraryTag'],
     });
 
-    if (!libraryTag) {
+    if (!mapping) {
       throw new NotFoundException(
         `태그 ID ${tagId}를 서재에서 찾을 수 없습니다.`,
       );
     }
 
-    const tagName = libraryTag.name;
+    const tagName = mapping.libraryTag.name;
 
     // 태그 사용 횟수 감소
-    await this.libraryTagService.decrementUsage(libraryTag.id);
+    await this.libraryTagService.decrementUsage(tagId);
 
-    // 라이브러리 태그 삭제
-    await this.libraryTagRepository.remove(libraryTag);
+    // 라이브러리 태그 매핑 삭제
+    await this.libraryTagMappingRepository.remove(mapping);
 
     // 태그 제거 이력
     await this.addUpdateHistory(
@@ -1157,14 +1215,14 @@ export class LibraryService {
     };
   }
 
-  // 라이브러리 태그 매핑 메소드
+  // 라이브러리 태그 매핑 메소드 (더 이상 사용하지 않음)
   private mapLibraryTagToDto(libraryTag: LibraryTag): LibraryTagResponseDto {
     return {
       id: libraryTag.id,
       tagId: libraryTag.id,
       tagName: libraryTag.name,
       usageCount: libraryTag.usageCount,
-      libraryId: libraryTag.libraryId,
+      libraryId: 0, // 이제 LibraryTag에 libraryId가 없으므로 기본값 설정
       note: libraryTag.note,
       createdAt: libraryTag.createdAt,
       updatedAt: libraryTag.updatedAt,
@@ -1292,7 +1350,7 @@ export class LibraryService {
               where: { libraryId: library.id },
             });
 
-          // 로그인한 사용자의 구독 여부 확인
+          // 자신의 서재는 구독할 수 없음
           let isSubscribed = false;
           if (userId) {
             const subscription =
@@ -1303,13 +1361,16 @@ export class LibraryService {
           }
 
           // 서재 태그 정보 조회
-          const libraryTags = await this.libraryTagRepository.find({
-            where: { libraryId: library.id },
-          });
+          const libraryTagMappings =
+            await this.libraryTagMappingRepository.find({
+              where: { libraryId: library.id },
+              relations: ['libraryTag'],
+            });
 
-          const tags = libraryTags.map((lt) => ({
-            id: lt.id,
-            name: lt.name,
+          const tags = libraryTagMappings.map((mapping) => ({
+            id: mapping.id,
+            tagId: mapping.libraryTag.id,
+            name: mapping.libraryTag.name,
           }));
 
           return {
