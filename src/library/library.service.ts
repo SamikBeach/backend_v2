@@ -22,6 +22,7 @@ import {
 import { CreateLibraryDto } from './dto/create-library.dto';
 import { UpdateLibraryDto } from './dto/update-library.dto';
 import { AddBookToLibraryDto } from './dto/add-book-to-library.dto';
+import { AddBooksToLibraryDto } from './dto/add-books-to-library.dto';
 import { AddTagToLibraryDto } from './dto/add-tag-to-library.dto';
 import { BookService } from '../book/book.service';
 import {
@@ -1629,6 +1630,60 @@ export class LibraryService {
       };
     } catch (error) {
       this.logger.error(`라이브러리에서 책 조회 실패: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // 서재에 여러 권의 책 추가
+  async addBooksToLibrary(
+    libraryId: number,
+    userId: number,
+    addBooksToLibraryDto: AddBooksToLibraryDto,
+  ): Promise<{
+    success: number;
+    failed: number;
+    books: LibraryBookResponseDto[];
+  }> {
+    try {
+      // 라이브러리 존재 및 사용자 권한 확인
+      const library = await this.findOne(libraryId);
+      if (library.owner.id !== userId) {
+        throw new ForbiddenException(
+          '이 라이브러리에 책을 추가할 권한이 없습니다.',
+        );
+      }
+
+      const results = {
+        success: 0,
+        failed: 0,
+        books: [] as LibraryBookResponseDto[],
+      };
+
+      // 각 책을 순차적으로 추가
+      for (const bookDto of addBooksToLibraryDto.books) {
+        try {
+          // 기존 addBookToLibrary 로직 재사용
+          const addedBook = await this.addBookToLibrary(
+            libraryId,
+            userId,
+            bookDto,
+          );
+
+          results.success++;
+          results.books.push(addedBook);
+        } catch (error) {
+          this.logger.error(
+            `책 추가 실패 (bookId: ${bookDto.bookId}, isbn: ${bookDto.isbn}): ${error.message}`,
+          );
+          results.failed++;
+        }
+      }
+
+      return results;
+    } catch (error) {
+      this.logger.error(
+        `라이브러리(${libraryId})에 여러 책 추가 실패: ${error.message}`,
+      );
       throw error;
     }
   }

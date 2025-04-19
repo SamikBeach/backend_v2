@@ -13,6 +13,7 @@ import { LibraryService } from './library.service';
 import { CreateLibraryDto } from './dto/create-library.dto';
 import { UpdateLibraryDto } from './dto/update-library.dto';
 import { AddBookToLibraryDto } from './dto/add-book-to-library.dto';
+import { AddBooksToLibraryDto } from './dto/add-books-to-library.dto';
 import { AddTagToLibraryDto } from './dto/add-tag-to-library.dto';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
@@ -133,6 +134,19 @@ export class LibraryController {
       id,
       user.id,
       addBookToLibraryDto,
+    );
+  }
+
+  @Post(':id/books/batch')
+  addBooksToLibrary(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: User,
+    @Body() addBooksToLibraryDto: AddBooksToLibraryDto,
+  ) {
+    return this.libraryService.addBooksToLibrary(
+      id,
+      user.id,
+      addBooksToLibraryDto,
     );
   }
 
