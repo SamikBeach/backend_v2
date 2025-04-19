@@ -64,8 +64,76 @@ export class BookController {
 
   @Get(':id')
   @IsPublic()
-  async findById(@Param('id', ParseIntPipe) id: number): Promise<Book> {
-    return this.bookService.findById(id);
+  async findById(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user?: User,
+  ): Promise<BookResponse> {
+    console.log({ id });
+    try {
+      // 기본 책 정보 조회
+      const book = await this.bookService.findById(id);
+
+      // 응답 데이터 구성 - 기본 책 정보
+      const response: BookResponse = {
+        ...book,
+        readingStats: null,
+        userRating: null,
+        userReadingStatus: null,
+      };
+
+      // 독서 상태 통계 정보 조회
+      try {
+        const readingStats =
+          await this.readingStatusService.getBookReadingStats(
+            book.id,
+            user?.id,
+          );
+
+        if (readingStats) {
+          // 통계 정보 설정
+          response.readingStats = {
+            currentReaders: readingStats.currentReaders,
+            completedReaders: readingStats.completedReaders,
+            averageReadingTime: readingStats.averageReadingTime,
+            difficulty: readingStats.difficulty,
+            readingStatusCounts: readingStats.readingStatusCounts,
+          } as ReadingStats;
+
+          // 사용자 독서 상태 설정 (로그인한 경우)
+          if (user) {
+            response.userReadingStatus = readingStats.userReadingStatus;
+          }
+        }
+      } catch (error) {
+        // 독서 상태 통계 조회 실패 시 무시하고 계속 진행
+        console.error(`BookID ${id} 독서 상태 조회 중 오류 발생:`, error);
+      }
+
+      // 사용자 평점 정보 조회 (로그인한 경우)
+      if (user) {
+        try {
+          const rating = await this.ratingService.findByUserAndBook(
+            user.id,
+            book.id,
+          );
+          if (rating) {
+            response.userRating = {
+              bookId: book.id,
+              rating: rating.rating,
+              comment: rating.comment,
+            };
+          }
+        } catch (error) {
+          // 평점 조회 실패 시 무시하고 계속 진행
+          console.error(`BookID ${id} 평점 조회 중 오류 발생:`, error);
+        }
+      }
+
+      return response;
+    } catch (error) {
+      console.error(`BookID ${id} 조회 중 오류 발생:`, error);
+      throw new NotFoundException(`ID ${id}로 도서를 찾을 수 없습니다.`);
+    }
   }
 
   @Get('isbn/:isbn')

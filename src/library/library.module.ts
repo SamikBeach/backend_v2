@@ -12,6 +12,8 @@ import { BookModule } from '../book/book.module';
 import { UserModule } from '../user/user.module';
 import { LibraryTagModule } from '../library-tag/library-tag.module';
 import { NotificationModule } from '../notification/notification.module';
+import { ReadingStatusModule } from '../reading-status/reading-status.module';
+import { RatingModule } from '../rating/rating.module';
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { NotificationModule } from '../notification/notification.module';
     UserModule,
     forwardRef(() => LibraryTagModule),
     NotificationModule,
+    ReadingStatusModule,
+    RatingModule,
   ],
   controllers: [LibraryController],
   providers: [LibraryService],
