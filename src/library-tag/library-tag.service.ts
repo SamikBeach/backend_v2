@@ -172,11 +172,14 @@ export class LibraryTagService {
     await queryRunner.startTransaction();
 
     try {
-      // 소스 태그를 사용하는 모든 매핑을 타겟 태그로 업데이트
-      // SQL 쿼리를 직접 실행하여 libraryTagMappings 테이블에서 참조 변경
-      await queryRunner.query(
-        `UPDATE library_tag_mapping SET library_tag_id = ? WHERE library_tag_id = ?`,
-        [targetTagId, sourceTagId],
+      // SQL 쿼리 대신 TypeORM의 repository API 사용
+      // library_tag_mapping 테이블의 모든 관련 레코드 업데이트
+      const libraryTagMappingRepo = queryRunner.manager.getRepository(
+        'library_tag_mapping',
+      );
+      await libraryTagMappingRepo.update(
+        { libraryTagId: sourceTagId },
+        { libraryTagId: targetTagId },
       );
 
       // 타겟 태그의 사용 횟수 업데이트 (소스 태그의 사용 횟수를 더함)
@@ -190,7 +193,7 @@ export class LibraryTagService {
       this.logger.log(`태그 병합 완료: ${sourceTagId} -> ${targetTagId}`);
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      this.logger.error(`태그 병합 실패: ${error.message}`);
+      this.logger.error(`태그 병합 실패: ${error.message}`, error.stack);
       throw new BadRequestException('태그 병합 중 오류가 발생했습니다.');
     } finally {
       await queryRunner.release();
