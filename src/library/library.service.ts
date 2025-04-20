@@ -275,65 +275,21 @@ export class LibraryService {
 
       const libraries = await qb.getMany();
 
-      let librariesWithDetails = await Promise.all(
+      // 공통 변환 메서드를 사용하여 응답 데이터 구성
+      const librariesWithDetails = await Promise.all(
         libraries.map(async (library) => {
           const isSubscribed = userId
             ? await this.isUserSubscribed(userId, library.id)
             : false;
 
-          // 미리보기용 책 - 최근 추가된 3권으로 제한
-          const previewBooks = library.libraryBooks
-            ? library.libraryBooks
-                .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-                .slice(0, 3)
-                .map((libraryBook) => ({
-                  id: libraryBook.book.id,
-                  title: libraryBook.book.title,
-                  author: libraryBook.book.author,
-                  coverImage: libraryBook.book.coverImage || '',
-                  isbn: libraryBook.book.isbn || '',
-                  publisher: libraryBook.book.publisher || '',
-                }))
-            : [];
-
-          // 태그 정보를 매핑에서 추출
-          const tags = library.libraryTagMappings
-            ? library.libraryTagMappings.map((mapping) => ({
-                id: mapping.id,
-                tagId: mapping.libraryTag.id,
-                tagName: mapping.libraryTag.name,
-                usageCount: mapping.libraryTag.usageCount,
-                libraryId: mapping.libraryId,
-                note: mapping.note,
-                createdAt: mapping.createdAt,
-                updatedAt: mapping.updatedAt,
-              }))
-            : [];
-
-          return {
-            id: library.id,
-            name: library.name,
-            description: library.description,
-            isPublic: library.isPublic,
-            subscriberCount: library.subscriberCount,
-            owner: {
-              id: library.owner.id,
-              username: library.owner.username,
-              email: library.owner.email,
-            },
-            tags,
-            bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
-            previewBooks,
-            isSubscribed,
-            createdAt: library.createdAt,
-            updatedAt: library.updatedAt,
-          };
+          return this.transformLibraryToListResponseDto(library, isSubscribed);
         }),
       );
 
       // 책 개수로 정렬해야 하는 경우 메모리에서 정렬
+      let sortedLibraries = [...librariesWithDetails];
       if (sortOption === LibrarySortOption.BOOKS) {
-        librariesWithDetails = librariesWithDetails.sort(
+        sortedLibraries = sortedLibraries.sort(
           (a, b) => b.bookCount - a.bookCount,
         );
       }
@@ -352,7 +308,7 @@ export class LibraryService {
       }
 
       return {
-        data: librariesWithDetails,
+        data: sortedLibraries,
         meta: {
           total: totalCount,
           page,
@@ -417,65 +373,20 @@ export class LibraryService {
 
     const libraries = await qb.getMany();
 
-    let result: LibraryListResponseDto[] = await Promise.all(
+    // 공통 변환 메서드를 사용하여 응답 데이터 구성
+    const result = await Promise.all(
       libraries.map(async (library) => {
         const isSubscribed = requestingUserId
           ? await this.isUserSubscribed(requestingUserId, library.id)
           : false;
 
-        // 미리보기용 책 - 최근 추가된 3권으로 제한
-        const previewBooks: BookInfoDto[] = library.libraryBooks
-          ? library.libraryBooks
-              .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-              .slice(0, 3)
-              .map((libraryBook) => ({
-                id: libraryBook.book.id,
-                title: libraryBook.book.title,
-                author: libraryBook.book.author,
-                coverImage: libraryBook.book.coverImage || '',
-                isbn: libraryBook.book.isbn || '',
-                publisher: libraryBook.book.publisher || '',
-              }))
-          : [];
-
-        // 태그 정보를 매핑에서 추출
-        const tags = library.libraryTagMappings
-          ? library.libraryTagMappings.map((mapping) => ({
-              id: mapping.id,
-              tagId: mapping.libraryTag.id,
-              tagName: mapping.libraryTag.name,
-              usageCount: mapping.libraryTag.usageCount,
-              libraryId: mapping.libraryId,
-              note: mapping.note,
-              createdAt: mapping.createdAt,
-              updatedAt: mapping.updatedAt,
-            }))
-          : [];
-
-        return {
-          id: library.id,
-          name: library.name,
-          description: library.description,
-          isPublic: library.isPublic,
-          subscriberCount: library.subscriberCount,
-          owner: {
-            id: library.owner.id,
-            username: library.owner.username,
-            email: library.owner.email,
-          },
-          tags,
-          bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
-          previewBooks,
-          isSubscribed,
-          createdAt: library.createdAt,
-          updatedAt: library.updatedAt,
-        };
+        return this.transformLibraryToListResponseDto(library, isSubscribed);
       }),
     );
 
     // 책 개수로 정렬해야 하는 경우 메모리에서 정렬
     if (sortOption === LibrarySortOption.BOOKS) {
-      result = result.sort((a, b) => b.bookCount - a.bookCount);
+      return result.sort((a, b) => b.bookCount - a.bookCount);
     }
 
     return result;
@@ -528,63 +439,16 @@ export class LibraryService {
 
     const libraries = await qb.getMany();
 
-    let result: LibraryListResponseDto[] = await Promise.all(
-      libraries.map(async (library) => {
-        const isSubscribed = true; // 당연히 모두 구독 중인 서재들
-
-        // 미리보기용 책 - 최근 추가된 3권으로 제한
-        const previewBooks: BookInfoDto[] = library.libraryBooks
-          ? library.libraryBooks
-              .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-              .slice(0, 3)
-              .map((libraryBook) => ({
-                id: libraryBook.book.id,
-                title: libraryBook.book.title,
-                author: libraryBook.book.author,
-                coverImage: libraryBook.book.coverImage || '',
-                isbn: libraryBook.book.isbn || '',
-                publisher: libraryBook.book.publisher || '',
-              }))
-          : [];
-
-        // 태그 정보를 매핑에서 추출
-        const tags = library.libraryTagMappings
-          ? library.libraryTagMappings.map((mapping) => ({
-              id: mapping.id,
-              tagId: mapping.libraryTag.id,
-              tagName: mapping.libraryTag.name,
-              usageCount: mapping.libraryTag.usageCount,
-              libraryId: mapping.libraryId,
-              note: mapping.note,
-              createdAt: mapping.createdAt,
-              updatedAt: mapping.updatedAt,
-            }))
-          : [];
-
-        return {
-          id: library.id,
-          name: library.name,
-          description: library.description,
-          isPublic: library.isPublic,
-          subscriberCount: library.subscriberCount,
-          owner: {
-            id: library.owner.id,
-            username: library.owner.username,
-            email: library.owner.email,
-          },
-          tags,
-          bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
-          previewBooks,
-          isSubscribed,
-          createdAt: library.createdAt,
-          updatedAt: library.updatedAt,
-        };
-      }),
+    // 공통 변환 메서드를 사용하여 응답 데이터 구성 (모두 구독 중인 서재)
+    const result = await Promise.all(
+      libraries.map(async (library) =>
+        this.transformLibraryToListResponseDto(library, true),
+      ),
     );
 
     // 책 개수로 정렬해야 하는 경우 메모리에서 정렬
     if (sortOption === LibrarySortOption.BOOKS) {
-      result = result.sort((a, b) => b.bookCount - a.bookCount);
+      return result.sort((a, b) => b.bookCount - a.bookCount);
     }
 
     return result;
@@ -649,103 +513,41 @@ export class LibraryService {
         let bookDetail;
         try {
           bookDetail = await this.bookService.findById(book.id);
+
+          // bookService의 enrichBookWithUserData 메서드를 활용하여 사용자 데이터 추가
+          const enrichedBook = await this.bookService.enrichBookWithUserData(
+            bookDetail,
+            userId,
+          );
+
+          return {
+            id: libraryBook.id,
+            bookId: libraryBook.bookId,
+            libraryId: libraryBook.libraryId,
+            note: libraryBook.note,
+            book: enrichedBook,
+            createdAt: libraryBook.createdAt,
+          };
         } catch (error) {
           this.logger.error(
             `책 ID ${book.id} 상세 정보 조회 실패: ${error.message}`,
           );
-          bookDetail = book; // 실패 시 기존 정보 사용
+
+          // 오류 발생 시 기본 정보만 반환
+          return {
+            id: libraryBook.id,
+            bookId: libraryBook.bookId,
+            libraryId: libraryBook.libraryId,
+            note: libraryBook.note,
+            book: {
+              ...book,
+              readingStats: null,
+              userRating: null,
+              userReadingStatus: null,
+            },
+            createdAt: libraryBook.createdAt,
+          };
         }
-
-        // 기본 책 정보 구성 (BookResponse 형식)
-        const bookData = {
-          id: libraryBook.id,
-          bookId: libraryBook.bookId,
-          libraryId: libraryBook.libraryId,
-          note: libraryBook.note,
-          book: {
-            id: bookDetail.id,
-            title: bookDetail.title,
-            author: bookDetail.author,
-            translator: bookDetail.translator || '',
-            coverImage: bookDetail.coverImage || '',
-            publisher: bookDetail.publisher || '',
-            publishDate: bookDetail.publishDate,
-            description: bookDetail.description || '',
-            isbn: bookDetail.isbn || '',
-            isbn13: bookDetail.isbn13 || '',
-            rating: bookDetail.rating || 0,
-            reviews: bookDetail.reviews || 0,
-            totalRatings: bookDetail.totalRatings || 0,
-            pageCount: bookDetail.pageCount || 0,
-            tags: bookDetail.tags || [],
-            priceSales: bookDetail.priceSales || 0,
-            priceStandard: bookDetail.priceStandard || 0,
-            category: bookDetail.category || null,
-            subcategory: bookDetail.subcategory || null,
-            discoverCategory: bookDetail.discoverCategory || null,
-            discoverSubCategory: bookDetail.discoverSubCategory || null,
-            isFeatured: bookDetail.isFeatured || false,
-            isDiscovered: bookDetail.isDiscovered || false,
-            readingStatuses: bookDetail.readingStatuses || [],
-            createdAt: bookDetail.createdAt,
-            updatedAt: bookDetail.updatedAt,
-          },
-          createdAt: libraryBook.createdAt,
-        };
-
-        // 사용자가 로그인한 경우 사용자별 정보 추가
-        if (userId) {
-          try {
-            // 읽기 상태 정보 조회
-            const readingStats =
-              await this.readingStatusService.getBookReadingStats(
-                libraryBook.bookId,
-                userId,
-              );
-
-            if (readingStats) {
-              // 책 정보에 읽기 통계 추가
-              bookData.book['readingStats'] = {
-                currentReaders: readingStats.currentReaders,
-                completedReaders: readingStats.completedReaders,
-                averageReadingTime: readingStats.averageReadingTime,
-                difficulty: readingStats.difficulty,
-                readingStatusCounts: readingStats.readingStatusCounts,
-              };
-
-              // 사용자의 읽기 상태가 있으면 포함
-              if (readingStats.userReadingStatus) {
-                bookData.book['userReadingStatus'] =
-                  readingStats.userReadingStatus;
-              }
-            }
-          } catch (error) {
-            this.logger.error(
-              `책 ID ${libraryBook.bookId} 읽기 상태 조회 오류: ${error.message}`,
-            );
-          }
-
-          try {
-            // 사용자 평점 정보 조회
-            const userRating = await this.ratingService.findByUserAndBook(
-              userId,
-              libraryBook.bookId,
-            );
-
-            if (userRating) {
-              bookData.book['userRating'] = userRating.rating;
-              bookData.book['userRatingId'] = userRating.id;
-              bookData.book['userRatingCreatedAt'] = userRating.createdAt;
-              bookData.book['userRatingUpdatedAt'] = userRating.updatedAt;
-            }
-          } catch (error) {
-            this.logger.error(
-              `책 ID ${libraryBook.bookId} 평점 조회 오류: ${error.message}`,
-            );
-          }
-        }
-
-        return bookData;
       }),
     );
 
@@ -1276,8 +1078,6 @@ export class LibraryService {
       );
     }
 
-    const tagName = mapping.libraryTag.name;
-
     // 태그 사용 횟수 감소
     await this.libraryTagService.decrementUsage(tagId);
 
@@ -1380,7 +1180,6 @@ export class LibraryService {
       throw new NotFoundException('구독 정보를 찾을 수 없습니다.');
     }
 
-    const userName = subscription.subscriber.username;
     await this.librarySubscriptionRepository.remove(subscription);
 
     // 구독자 수 감소
@@ -1648,16 +1447,19 @@ export class LibraryService {
       // 서재 목록 조회
       const [libraries, total] = await queryBuilder.getManyAndCount();
 
-      // 서재별 상세 정보 추가
+      // 각 서재에 추가 정보 결합
       const librariesWithDetails = await Promise.all(
         libraries.map(async (library) => {
           // 책 미리보기 목록 조회
-          const previewBooks = await this.libraryBookRepository.find({
+          const previewBooksQuery = await this.libraryBookRepository.find({
             where: { libraryId: library.id },
             relations: ['book'],
             order: { createdAt: 'DESC' },
             take: 3,
           });
+
+          // library.libraryBooks에 previewBooks 할당하여 공통 메서드에서 활용
+          library.libraryBooks = previewBooksQuery;
 
           // 책 수 조회
           const bookCount = await this.libraryBookRepository.count({
@@ -1669,49 +1471,16 @@ export class LibraryService {
             ? await this.isUserSubscribed(userId, library.id)
             : false;
 
-          // 태그 정보 형식 통일
-          const tags = library.libraryTagMappings
-            ? library.libraryTagMappings.map((mapping) => ({
-                id: mapping.id,
-                tagId: mapping.libraryTag.id,
-                tagName: mapping.libraryTag.name,
-                usageCount: mapping.libraryTag.usageCount || 0,
-                libraryId: mapping.libraryId,
-                note: mapping.note,
-                createdAt: mapping.createdAt,
-                updatedAt: mapping.updatedAt,
-              }))
-            : [];
-
-          // 미리보기용 책 정보 형식 통일
-          const formattedPreviewBooks = previewBooks.map((libraryBook) => ({
-            id: libraryBook.book.id,
-            title: libraryBook.book.title,
-            author: libraryBook.book.author,
-            coverImage: libraryBook.book.coverImage || '',
-            isbn: libraryBook.book.isbn || '',
-            publisher: libraryBook.book.publisher || '',
-          }));
-
-          // LibraryListResponseDto 형식으로 통일
-          return {
-            id: library.id,
-            name: library.name,
-            description: library.description,
-            isPublic: library.isPublic,
-            subscriberCount: library.subscriberCount || 0,
-            owner: {
-              id: library.owner.id,
-              username: library.owner.username,
-              email: library.owner.email,
-            },
-            tags,
-            bookCount,
-            previewBooks: formattedPreviewBooks,
+          // 공통 변환 메서드 사용
+          const libraryDto = await this.transformLibraryToListResponseDto(
+            library,
             isSubscribed,
-            createdAt: library.createdAt,
-            updatedAt: library.updatedAt,
-          };
+          );
+
+          // bookCount 업데이트 (별도 쿼리로 조회한 값 사용)
+          libraryDto.bookCount = bookCount;
+
+          return libraryDto;
         }),
       );
 
@@ -1789,5 +1558,69 @@ export class LibraryService {
       );
       throw error;
     }
+  }
+
+  /**
+   * 서재 객체를 LibraryListResponseDto로 변환하는 공통 메서드
+   */
+  private async transformLibraryToListResponseDto(
+    library: Library,
+    isSubscribed: boolean = false,
+  ): Promise<LibraryListResponseDto> {
+    // 미리보기용 책 - 최근 추가된 3권으로 제한
+    const previewBooks: BookInfoDto[] = [];
+
+    if (library.libraryBooks && library.libraryBooks.length > 0) {
+      // 날짜 기준으로 정렬 후 최대 3개만 추출
+      const sortedBooks = [...library.libraryBooks]
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, 3);
+
+      // 필요한 프로퍼티만 추출하여 매핑
+      for (const libraryBook of sortedBooks) {
+        const { book } = libraryBook;
+        previewBooks.push({
+          id: book.id,
+          title: book.title,
+          author: book.author,
+          coverImage: book.coverImage || '',
+          isbn: book.isbn || '',
+          publisher: book.publisher || '',
+        });
+      }
+    }
+
+    // 태그 정보를 매핑에서 추출
+    const tags = library.libraryTagMappings
+      ? library.libraryTagMappings.map((mapping) => ({
+          id: mapping.id,
+          tagId: mapping.libraryTag.id,
+          tagName: mapping.libraryTag.name,
+          usageCount: mapping.libraryTag.usageCount,
+          libraryId: mapping.libraryId,
+          note: mapping.note,
+          createdAt: mapping.createdAt,
+          updatedAt: mapping.updatedAt,
+        }))
+      : [];
+
+    return {
+      id: library.id,
+      name: library.name,
+      description: library.description,
+      isPublic: library.isPublic,
+      subscriberCount: library.subscriberCount || 0,
+      owner: {
+        id: library.owner.id,
+        username: library.owner.username,
+        email: library.owner.email,
+      },
+      tags,
+      bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
+      previewBooks,
+      isSubscribed,
+      createdAt: library.createdAt,
+      updatedAt: library.updatedAt,
+    };
   }
 }

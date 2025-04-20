@@ -240,8 +240,7 @@ export class SearchService {
   /**
    * 최근 검색어 조회
    * @param userId 사용자 ID
-   * @param limit 조회 개수
-   * @returns 최근 검색어 목록 (책 정보 포함)
+   * @param limit 결과 수
    */
   async getRecentSearchTerms(
     userId: number,
@@ -323,12 +322,11 @@ export class SearchService {
           }
         }
 
-        // 책 정보가 조회되면 해당 정보로 업데이트
+        // 책 정보가 조회되면 BookService의 enrichBookWithUserData 사용하여 사용자 데이터 결합
         if (bookInfo) {
-          // 실제 책 정보로 업데이트
+          // 기본 책 정보 업데이트
           Object.assign(bookResponse, {
-            // 책 기본 정보 업데이트
-            bookId: bookInfo.id > 0 ? bookInfo.id : bookResponse.bookId, // 임시 ID가 아닌 경우만 업데이트
+            bookId: bookInfo.id > 0 ? bookInfo.id : bookResponse.bookId,
             title: bookInfo.title,
             author: bookInfo.author,
             translator: bookInfo.translator,
@@ -351,52 +349,18 @@ export class SearchService {
             isDiscovered: bookInfo.isDiscovered,
           });
 
-          // 실제 DB에 저장된 책인 경우에만 추가 정보 조회 (임시 ID가 아닌 경우)
+          // 실제 DB에 저장된 책인 경우, enrichBookWithUserData 활용하여 사용자 데이터 결합
           if (bookInfo.id > 0) {
-            // 1. 읽기 상태 통계 정보 가져오기
             try {
-              const readingStats =
-                await this.readingStatusService.getBookReadingStats(
-                  bookInfo.id,
-                  userId,
-                );
+              const enrichedBook =
+                await this.bookService.enrichBookWithUserData(bookInfo, userId);
 
-              if (readingStats) {
-                bookResponse.readingStats = {
-                  currentReaders: readingStats.currentReaders,
-                  completedReaders: readingStats.completedReaders,
-                  averageReadingTime: readingStats.averageReadingTime,
-                  difficulty: readingStats.difficulty,
-                  readingStatusCounts: readingStats.readingStatusCounts,
-                };
-
-                // 사용자의 읽기 상태가 있으면 포함
-                if (readingStats.userReadingStatus) {
-                  bookResponse.userReadingStatus =
-                    readingStats.userReadingStatus;
-                }
-              }
+              // 사용자별 데이터(읽기 상태, 평점) 업데이트
+              bookResponse.readingStats = enrichedBook.readingStats;
+              bookResponse.userRating = enrichedBook.userRating;
+              bookResponse.userReadingStatus = enrichedBook.userReadingStatus;
             } catch (error) {
-              this.logger.error(
-                `책 ID ${bookInfo.id} 읽기 상태 조회 오류: ${error.message}`,
-              );
-              // 오류가 발생해도 계속 진행
-            }
-
-            // 2. 사용자 평점 정보 가져오기
-            try {
-              const userRating = await this.ratingService.findByUserAndBook(
-                userId,
-                bookInfo.id,
-              );
-
-              if (userRating) {
-                bookResponse.userRating = userRating;
-              }
-            } catch (error) {
-              this.logger.error(
-                `책 ID ${bookInfo.id} 평점 조회 오류: ${error.message}`,
-              );
+              this.logger.error(`책 정보 보강 중 오류 발생: ${error.message}`);
               // 오류가 발생해도 계속 진행
             }
           }
