@@ -48,6 +48,10 @@ export class LibraryUpdateHistory {
   @Column({ nullable: true })
   userId: number;
 
+  // 활동과 관련된 사용자 이름 (선택 사항)
+  @Column({ nullable: true })
+  userName: string;
+
   // 활동과 관련된 책 ID (선택 사항)
   @Column({ nullable: true })
   bookId: number;

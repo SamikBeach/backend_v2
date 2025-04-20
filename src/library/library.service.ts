@@ -567,19 +567,39 @@ export class LibraryService {
 
     // 최근 업데이트 이력
     const recentUpdates = library.updateHistory
-      ? library.updateHistory
-          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-          .slice(0, 5) // 최근 5개만 가져오기
-          .map((update) => ({
-            id: update.id,
-            date: update.createdAt,
-            message: update.message,
-            activityType: update.activityType,
-            userId: update.userId,
-            bookId: update.bookId,
-            tagId: update.tagId,
-            bookTitle: update.bookTitle,
-          }))
+      ? await Promise.all(
+          library.updateHistory
+            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+            .slice(0, 5) // 최근 5개만 가져오기
+            .map(async (update) => {
+              const item: UpdateHistoryItem = {
+                id: update.id,
+                date: update.createdAt,
+                message: update.message,
+                activityType: update.activityType,
+                userId: update.userId,
+                userName: update.userName,
+                bookId: update.bookId,
+                tagId: update.tagId,
+                bookTitle: update.bookTitle,
+              };
+
+              // userName이 없고 userId가 있는 경우에만 사용자 이름 조회
+              if (!update.userName && update.userId) {
+                try {
+                  const user = await this.userService.findOne(update.userId);
+                  if (user) {
+                    item.userName = user.username;
+                  }
+                } catch (error) {
+                  this.logger.error(`사용자 정보 조회 실패: ${error.message}`);
+                  // 오류가 발생해도 진행 (userName은 undefined로 유지)
+                }
+              }
+
+              return item;
+            }),
+        )
       : [];
 
     return {
@@ -1230,16 +1250,39 @@ export class LibraryService {
       take: limit,
     });
 
-    return updates.map((update) => ({
-      id: update.id,
-      date: update.createdAt,
-      message: update.message,
-      activityType: update.activityType,
-      userId: update.userId,
-      bookId: update.bookId,
-      tagId: update.tagId,
-      bookTitle: update.bookTitle,
-    }));
+    // 사용자 ID가 있는 업데이트에 대해 사용자 정보 조회
+    const enhancedUpdates = await Promise.all(
+      updates.map(async (update) => {
+        const item: UpdateHistoryItem = {
+          id: update.id,
+          date: update.createdAt,
+          message: update.message,
+          activityType: update.activityType,
+          userId: update.userId,
+          userName: update.userName,
+          bookId: update.bookId,
+          tagId: update.tagId,
+          bookTitle: update.bookTitle,
+        };
+
+        // userName이 없고 userId가 있는 경우에만 사용자 이름 조회
+        if (!update.userName && update.userId) {
+          try {
+            const user = await this.userService.findOne(update.userId);
+            if (user) {
+              item.userName = user.username;
+            }
+          } catch (error) {
+            this.logger.error(`사용자 정보 조회 실패: ${error.message}`);
+            // 오류가 발생해도 진행 (userName은 undefined로 유지)
+          }
+        }
+
+        return item;
+      }),
+    );
+
+    return enhancedUpdates;
   }
 
   // 업데이트 이력 추가
@@ -1252,6 +1295,7 @@ export class LibraryService {
     tagId?: number,
     bookTitle?: string,
   ): Promise<void> {
+    // 기본 업데이트 이력 정보
     const updateHistory = this.libraryUpdateHistoryRepository.create({
       libraryId,
       message,
@@ -1261,6 +1305,19 @@ export class LibraryService {
       tagId,
       bookTitle,
     });
+
+    // 사용자 ID가 있는 경우 사용자 이름도 함께 저장
+    if (userId) {
+      try {
+        const user = await this.userService.findOne(userId);
+        if (user) {
+          updateHistory.userName = user.username;
+        }
+      } catch (error) {
+        this.logger.error(`사용자 정보 조회 실패: ${error.message}`);
+        // 사용자 정보 조회 실패 시 이름 없이 진행
+      }
+    }
 
     await this.libraryUpdateHistoryRepository.save(updateHistory);
   }

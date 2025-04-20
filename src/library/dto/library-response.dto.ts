@@ -47,6 +47,7 @@ export interface UpdateHistoryItem {
   message: string;
   activityType: string;
   userId?: number;
+  userName?: string;
   bookId?: number;
   tagId?: number;
   bookTitle?: string;
