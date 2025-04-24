@@ -158,9 +158,66 @@ export class ReviewService {
       // 쿼리 실행
       const [reviews, total] = await queryBuilder.getManyAndCount();
 
-      // DTO로 변환
+      // 리뷰에 연결된 책들의 ID 수집
+      const bookIds = new Set<number>();
+      reviews.forEach((review) => {
+        if (review.books && review.books.length > 0) {
+          review.books.forEach((reviewBook) => {
+            if (reviewBook.book && reviewBook.book.id) {
+              bookIds.add(reviewBook.book.id);
+            }
+          });
+        }
+      });
+
+      // 책 정보를 미리 로드 (N+1 문제 방지)
+      const bookDetailsMap = new Map();
+      if (bookIds.size > 0) {
+        const books = await this.bookService.findByIds(Array.from(bookIds));
+        for (const book of books) {
+          const enrichedBook = await this.bookService.enrichBookWithUserData(
+            book,
+            userId,
+          );
+          bookDetailsMap.set(book.id, enrichedBook);
+        }
+      }
+
+      // DTO로 변환 (책 정보 강화)
       const reviewDtos = await Promise.all(
-        reviews.map((review) => this.mapReviewToResponseDto(review, userId)),
+        reviews.map(async (review) => {
+          const dto = await this.mapReviewToResponseDto(review, userId);
+
+          // 책 정보 강화
+          if (dto.books && dto.books.length > 0) {
+            dto.books = dto.books.map((book) => {
+              const enrichedBook = bookDetailsMap.get(book.id);
+              if (enrichedBook) {
+                return {
+                  id: book.id,
+                  title: book.title,
+                  author: book.author,
+                  coverImage: book.coverImage,
+                  publisher: book.publisher,
+                  isbn: enrichedBook.isbn,
+                  isbn13: enrichedBook.isbn13,
+                  publishDate: enrichedBook.publishDate,
+                  description:
+                    enrichedBook.description?.substring(0, 100) + '...',
+                  rating: enrichedBook.rating,
+                  reviews: enrichedBook.reviews,
+                  totalRatings: enrichedBook.totalRatings,
+                  readingStats: enrichedBook.readingStats,
+                  userRating: enrichedBook.userRating,
+                  userReadingStatus: enrichedBook.userReadingStatus,
+                };
+              }
+              return book;
+            });
+          }
+
+          return dto;
+        }),
       );
 
       return {
@@ -215,7 +272,48 @@ export class ReviewService {
         throw new NotFoundException(`리뷰를 찾을 수 없습니다. (ID: ${id})`);
       }
 
-      return this.mapReviewToResponseDto(review, userId);
+      // 기본 DTO 변환
+      const reviewDto = await this.mapReviewToResponseDto(review, userId);
+
+      // 책 정보 강화
+      if (reviewDto.books && reviewDto.books.length > 0) {
+        const enrichedBooks = await Promise.all(
+          reviewDto.books.map(async (book) => {
+            try {
+              const bookDetails = await this.bookService.findById(book.id);
+              const enrichedBook =
+                await this.bookService.enrichBookWithUserData(
+                  bookDetails,
+                  userId,
+                );
+
+              return {
+                ...book,
+                isbn: enrichedBook.isbn,
+                isbn13: enrichedBook.isbn13,
+                publishDate: enrichedBook.publishDate,
+                description:
+                  enrichedBook.description?.substring(0, 100) + '...',
+                rating: enrichedBook.rating,
+                reviews: enrichedBook.reviews,
+                totalRatings: enrichedBook.totalRatings,
+                readingStats: enrichedBook.readingStats,
+                userRating: enrichedBook.userRating,
+                userReadingStatus: enrichedBook.userReadingStatus,
+              };
+            } catch (error) {
+              this.logger.error(
+                `Error enriching book ${book.id}: ${error.message}`,
+              );
+              return book;
+            }
+          }),
+        );
+
+        reviewDto.books = enrichedBooks;
+      }
+
+      return reviewDto;
     } catch (error) {
       this.logger.error(`리뷰 조회 중 오류: ${error.message}`);
       throw error;
@@ -766,6 +864,13 @@ export class ReviewService {
         review.images = imagesByReviewId[review.id] || [];
       });
 
+      // 해당 책의 상세 정보를 가져옵니다 (사용자 별점, 리뷰 포함)
+      const bookDetails = await this.bookService.findById(bookId);
+      const enrichedBookDetails = await this.bookService.enrichBookWithUserData(
+        bookDetails,
+        userId,
+      );
+
       // 리뷰 정보 변환
       const reviewsWithDetails = await Promise.all(
         reviews.map(async (review) => {
@@ -847,6 +952,13 @@ export class ReviewService {
                   author: book.author,
                   coverImage: book.coverImage,
                   isbn: book.isbn,
+                  isbn13: book.isbn13,
+                  publisher: book.publisher,
+                  publishDate: book.publishDate,
+                  description: book.description?.substring(0, 100) + '...',
+                  rating: book.rating,
+                  reviews: book.reviews,
+                  totalRatings: book.totalRatings,
                 }
               : null,
             images: review.images
@@ -867,6 +979,7 @@ export class ReviewService {
 
       // 페이지네이션 정보 반환
       return {
+        book: enrichedBookDetails,
         data: reviewsWithDetails,
         meta: {
           total,
