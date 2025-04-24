@@ -64,12 +64,14 @@ export class ReviewController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('type') type?: string,
+    @Query('filter') filter?: 'popular' | 'recent',
   ) {
     return this.reviewService.findAllReviews(
       user?.id,
       page ? +page : 1,
       limit ? +limit : 10,
       type,
+      filter || 'recent', // 기본값은 최신순
     );
   }
 

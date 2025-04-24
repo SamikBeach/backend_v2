@@ -115,6 +115,7 @@ export class ReviewService {
     page: number = 1,
     limit: number = 10,
     type?: string,
+    filter: 'popular' | 'recent' = 'recent',
   ): Promise<{
     reviews: ReviewResponseDto[];
     total: number;
@@ -127,15 +128,31 @@ export class ReviewService {
         .leftJoinAndSelect('review.author', 'author')
         .leftJoinAndSelect('review.images', 'images')
         .leftJoinAndSelect('review.books', 'reviewBooks')
-        .leftJoinAndSelect('reviewBooks.book', 'book')
-        .orderBy('review.createdAt', 'DESC')
-        .skip((page - 1) * limit)
-        .take(limit);
+        .leftJoinAndSelect('reviewBooks.book', 'book');
 
       // 타입 필터링
       if (type) {
         queryBuilder.andWhere('review.type = :type', { type });
       }
+
+      // 필터 적용 (인기순 / 최신순)
+      switch (filter) {
+        case 'popular':
+          // 인기순: 좋아요가 많은 순서 + 댓글이 많은 순서
+          queryBuilder
+            .orderBy('review.likeCount', 'DESC')
+            .addOrderBy('review.commentCount', 'DESC')
+            .addOrderBy('review.createdAt', 'DESC');
+          break;
+        case 'recent':
+        default:
+          // 최신순: 생성일 기준 내림차순
+          queryBuilder.orderBy('review.createdAt', 'DESC');
+          break;
+      }
+
+      // 페이지네이션 적용
+      queryBuilder.skip((page - 1) * limit).take(limit);
 
       // 로그인한 사용자의 경우 좋아요 여부 체크
       if (userId) {
