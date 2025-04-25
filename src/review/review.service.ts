@@ -381,6 +381,20 @@ export class ReviewService {
 
       // 책 ID 업데이트
       if ('bookId' in updateReviewDto) {
+        // 기존 책 연결이 있는 경우 리뷰 카운트 감소
+        if (review.books && review.books.length > 0) {
+          for (const reviewBook of review.books) {
+            try {
+              await this.bookService.decrementReviewCount(reviewBook.bookId);
+              this.logger.log(`책 ID ${reviewBook.bookId}의 리뷰 수 감소 완료`);
+            } catch (error) {
+              this.logger.warn(
+                `책 ID ${reviewBook.bookId}의 리뷰 수 감소 실패: ${error.message}`,
+              );
+            }
+          }
+        }
+
         // 기존 책 연결을 완전히 삭제
         await this.reviewBookRepository
           .createQueryBuilder()

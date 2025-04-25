@@ -28,6 +28,7 @@ import { ReviewImage } from './review/entities/review-image.entity';
 import { ReviewBook } from './review/entities/review-book.entity';
 import { ReviewLike } from './review/entities/review-like.entity';
 import { Comment } from './review/entities/comment.entity';
+import { CommentLike } from './review/entities/comment-like.entity';
 import { SearchModule } from './search/search.module';
 import { SearchLog, PopularSearch, RecentSearch } from './search/search.entity';
 import { NotificationModule } from './notification/notification.module';
@@ -72,6 +73,7 @@ import { LibraryTagModule } from './library-tag/library-tag.module';
           ReviewBook,
           ReviewLike,
           Comment,
+          CommentLike,
           SearchLog,
           PopularSearch,
           RecentSearch,
