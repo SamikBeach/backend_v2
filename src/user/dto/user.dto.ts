@@ -11,6 +11,16 @@ export class UpdateUserDto {
   @Length(0, 200, { message: '자기소개는 최대 200자까지 가능합니다.' })
   @IsOptional()
   bio?: string;
+
+  // 이 필드는 실제로 컨트롤러에서 파일을 받기 위한 마커로만 사용됨
+  // 실제 파일은 multer를 통해 처리됨
+  @IsOptional()
+  profileImage?: any;
+
+  // 프로필 이미지 삭제 요청을 위한 필드
+  // FormData에서는 문자열로, JSON에서는 불리언으로 전송될 수 있음
+  @IsOptional()
+  removeProfileImage?: string | boolean;
 }
 
 export class UserDetailDto {
@@ -18,6 +28,7 @@ export class UserDetailDto {
   username: string;
   email?: string;
   bio?: string;
+  profileImage?: string;
   provider: AuthProvider;
   createdAt: Date;
 }
@@ -99,15 +110,23 @@ export class UserDetailResponseDto {
 export class FollowerResponseDto {
   id: number;
   username: string;
+  bio?: string;
+  profileImage?: string;
   isFollowing: boolean;
 }
 
 export class FollowersListResponseDto {
   followers: FollowerResponseDto[];
   total: number;
+  page: number;
+  totalPages: number;
+  hasNextPage: boolean;
 }
 
 export class FollowingListResponseDto {
   following: FollowerResponseDto[];
   total: number;
+  page: number;
+  totalPages: number;
+  hasNextPage: boolean;
 }

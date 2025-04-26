@@ -43,7 +43,9 @@ export class BookService {
     private readonly discoverCategoryService: DiscoverCategoryService,
     @Inject(forwardRef(() => SearchService))
     private readonly searchService: SearchService,
+    @Inject(forwardRef(() => RatingService))
     private readonly ratingService: RatingService,
+    @Inject(forwardRef(() => ReadingStatusService))
     private readonly readingStatusService: ReadingStatusService,
   ) {}
 

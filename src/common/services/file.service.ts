@@ -34,11 +34,8 @@ export class FileService {
       // 이미지 최적화 및 저장
       await this.optimizeAndSaveImage(file.buffer, filePath);
 
-      // URL 생성 (실제 서비스 환경에서는 도메인을 앞에 붙여야 함)
-      const baseUrl =
-        this.configService.get<string>('SERVICE_URL') ||
-        'http://localhost:3001';
-      return `${baseUrl}/uploads/${uniqueFileName}`;
+      // 상대 경로만 반환 (절대 URL이 아닌)
+      return `/uploads/${uniqueFileName}`;
     } catch (error) {
       this.logger.error(`Failed to upload image: ${error.message}`);
       throw new Error('이미지 업로드에 실패했습니다.');
@@ -64,7 +61,19 @@ export class FileService {
    */
   async deleteFile(fileUrl: string): Promise<boolean> {
     try {
-      const fileName = path.basename(fileUrl);
+      // URL에서 파일 이름만 추출 (절대 URL인 경우도 처리)
+      let fileName;
+      if (fileUrl.startsWith('http')) {
+        // URL에서 마지막 경로 부분만 추출
+        const urlParts = new URL(fileUrl);
+        fileName = path.basename(urlParts.pathname);
+      } else if (fileUrl.startsWith('/uploads/')) {
+        // 상대 경로에서 파일 이름 추출
+        fileName = path.basename(fileUrl);
+      } else {
+        fileName = path.basename(fileUrl);
+      }
+
       const filePath = path.join(this.uploadDir, fileName);
 
       if (fs.existsSync(filePath)) {

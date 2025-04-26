@@ -14,7 +14,9 @@ import {
   UseInterceptors,
   ClassSerializerInterceptor,
   Put,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UserService } from './user.service';
 import { User } from './entities/user.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -27,6 +29,7 @@ import {
   FollowingListResponseDto,
   UpdateUserDto,
 } from './dto/user.dto';
+import { ReadingStatusType } from '../reading-status/entities/reading-status.entity';
 
 @Controller('user')
 @UseInterceptors(ClassSerializerInterceptor)
@@ -40,16 +43,7 @@ export class UserController {
       throw new UnauthorizedException('사용자 인증이 필요합니다');
     }
 
-    return {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      bio: user.bio,
-      provider: user.provider,
-      isEmailVerified: user.isEmailVerified,
-      marketingConsent: user.marketingConsent,
-      createdAt: user.createdAt,
-    };
+    return this.userService.getCurrentUser(user.id);
   }
 
   @Get()
@@ -109,20 +103,24 @@ export class UserController {
   @Get(':id/followers')
   getFollowers(
     @Param('id', ParseIntPipe) id: number,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
     @GetUser() currentUser?: User,
   ): Promise<FollowersListResponseDto> {
     const currentUserId = currentUser?.id;
-    return this.userService.getFollowers(id, currentUserId);
+    return this.userService.getFollowers(id, page, limit, currentUserId);
   }
 
   // 팔로잉 목록 조회 엔드포인트
   @Get(':id/following')
   getFollowing(
     @Param('id', ParseIntPipe) id: number,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
     @GetUser() currentUser?: User,
   ): Promise<FollowingListResponseDto> {
     const currentUserId = currentUser?.id;
-    return this.userService.getFollowing(id, currentUserId);
+    return this.userService.getFollowing(id, page, limit, currentUserId);
   }
 
   // 팔로우 엔드포인트
@@ -158,11 +156,32 @@ export class UserController {
 
   @Put('profile')
   @UseGuards(JwtAuthGuard)
-  updateProfile(@GetUser() user: User, @Body() updateUserDto: UpdateUserDto) {
-    return this.userService.updateUserInfo(
-      user.id,
-      updateUserDto.username,
-      updateUserDto.bio,
+  @UseInterceptors(FileInterceptor('profileImage'))
+  async updateProfile(
+    @GetUser() user: User,
+    @Body() updateUserDto: UpdateUserDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.userService.updateUserProfile(user.id, updateUserDto, file);
+  }
+
+  @Get(':id/books')
+  getUserBooks(
+    @Param('id', ParseIntPipe) id: number,
+    @IsOwnProfile() isOwnProfile: boolean,
+    @Query('status') status: ReadingStatusType,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @GetUser() currentUser?: User,
+  ) {
+    const currentUserId = currentUser?.id;
+    return this.userService.getUserBooks(
+      id,
+      status,
+      page,
+      limit,
+      isOwnProfile,
+      currentUserId,
     );
   }
 }

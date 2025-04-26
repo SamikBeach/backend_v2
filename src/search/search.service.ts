@@ -21,7 +21,9 @@ export class SearchService {
     private readonly recentSearchRepository: Repository<RecentSearch>,
     @Inject(forwardRef(() => BookService))
     private readonly bookService: BookService,
+    @Inject(forwardRef(() => ReadingStatusService))
     private readonly readingStatusService: ReadingStatusService,
+    @Inject(forwardRef(() => RatingService))
     private readonly ratingService: RatingService,
   ) {}
 

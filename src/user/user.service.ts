@@ -4,6 +4,8 @@ import {
   NotFoundException,
   UnauthorizedException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -17,22 +19,56 @@ import {
   FollowingListResponseDto,
   FollowerResponseDto,
   LibraryPreviewDto,
+  UpdateUserDto,
 } from './dto/user.dto';
 import { Library } from '../library/entities/library.entity';
 import { Review } from '../review/entities/review.entity';
 import { UserFollower } from './entities/user-follower.entity';
-import { ReadingStatus } from '../reading-status/entities/reading-status.entity';
+import {
+  ReadingStatus,
+  ReadingStatusType,
+} from '../reading-status/entities/reading-status.entity';
 import { LibrarySubscription } from '../library/entities/library-subscription.entity';
 import { LibraryBook } from '../library/entities/library-book.entity';
+import { ReadingStatusService } from '../reading-status/reading-status.service';
+import { ReadingStatusResponseDto } from '../reading-status/dto/reading-status.dto';
+import { FileService } from '../common/services/file.service';
+import { ConfigService } from '@nestjs/config';
+import { Book } from '../book/entities/book.entity';
+import { In } from 'typeorm';
 
 @Injectable()
 export class UserService {
+  private serverUrl: string;
+
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
     @InjectRepository(UserFollower)
     private userFollowerRepository: Repository<UserFollower>,
-  ) {}
+    @Inject(forwardRef(() => ReadingStatusService))
+    private readingStatusService: ReadingStatusService,
+    private fileService: FileService,
+    private configService: ConfigService,
+  ) {
+    this.serverUrl =
+      this.configService.get<string>('BASE_URL') || 'http://localhost:3001';
+  }
+
+  // 이미지 URL이 상대 경로인 경우 전체 URL로 변환하는 유틸리티 메소드
+  private ensureFullImageUrl(imageUrl: string | null): string | null {
+    if (!imageUrl) return null;
+    if (imageUrl.startsWith('http')) return imageUrl; // 이미 전체 URL이면 그대로 반환
+
+    // 상대 경로인 경우 서버 URL 추가
+    if (imageUrl.startsWith('/uploads/')) {
+      return `${this.serverUrl}${imageUrl}`;
+    } else if (imageUrl.startsWith('uploads/')) {
+      return `${this.serverUrl}/${imageUrl}`;
+    }
+
+    return imageUrl;
+  }
 
   async findAll(): Promise<User[]> {
     return this.userRepository.find();
@@ -391,6 +427,7 @@ export class UserService {
         username: user.username,
         email: isOwnProfile ? user.email : undefined, // 자신의 프로필인 경우만 이메일 포함
         bio: user.bio,
+        profileImage: this.ensureFullImageUrl(user.profileImage),
         provider: user.provider,
         createdAt: user.createdAt,
       },
@@ -637,16 +674,22 @@ export class UserService {
 
   async getFollowers(
     userId: number,
+    page: number = 1,
+    limit: number = 10,
     currentUserId?: number,
   ): Promise<FollowersListResponseDto> {
     const user = await this.findOne(userId);
 
-    const followersQuery = this.userFollowerRepository
-      .createQueryBuilder('uf')
-      .leftJoinAndSelect('uf.follower', 'follower')
-      .where('uf.following_id = :userId', { userId: user.id });
-
-    const [followers, total] = await followersQuery.getManyAndCount();
+    // 변경된 쿼리: relations 옵션 사용
+    const skip = (page - 1) * limit;
+    const [followersRelations, total] =
+      await this.userFollowerRepository.findAndCount({
+        where: { following_id: userId },
+        relations: ['follower'],
+        order: { created_at: 'DESC' },
+        skip,
+        take: limit,
+      });
 
     // 현재 사용자의 팔로우 목록 가져오기 (로그인한 경우)
     let currentUserFollowing: UserFollower[] = [];
@@ -657,37 +700,54 @@ export class UserService {
     }
 
     // DTO 포맷으로 변환
-    const followersDTO = followers.map((follow) => {
-      const follower = follow.follower;
-      const isFollowing = currentUserId
-        ? currentUserFollowing.some((f) => f.following_id === follower.id)
-        : false;
+    const followersDTO = followersRelations
+      .map((relation) => {
+        const follower = relation.follower;
+        if (!follower) {
+          return null;
+        }
 
-      return {
-        id: follower.id,
-        username: follower.username,
-        isFollowing,
-      } as FollowerResponseDto;
-    });
+        const isFollowing = currentUserId
+          ? currentUserFollowing.some((f) => f.following_id === follower.id)
+          : false;
+
+        return {
+          id: follower.id,
+          username: follower.username,
+          bio: follower.bio,
+          profileImage: this.ensureFullImageUrl(follower.profileImage),
+          isFollowing,
+        } as FollowerResponseDto;
+      })
+      .filter((dto) => dto !== null);
 
     return {
       followers: followersDTO,
       total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
     };
   }
 
   async getFollowing(
     userId: number,
+    page: number = 1,
+    limit: number = 10,
     currentUserId?: number,
   ): Promise<FollowingListResponseDto> {
     const user = await this.findOne(userId);
 
-    const followingQuery = this.userFollowerRepository
-      .createQueryBuilder('uf')
-      .leftJoinAndSelect('uf.following', 'following')
-      .where('uf.follower_id = :userId', { userId: user.id });
-
-    const [following, total] = await followingQuery.getManyAndCount();
+    // 변경된 쿼리: relations 옵션 사용
+    const skip = (page - 1) * limit;
+    const [followingRelations, total] =
+      await this.userFollowerRepository.findAndCount({
+        where: { follower_id: userId },
+        relations: ['following'],
+        order: { created_at: 'DESC' },
+        skip,
+        take: limit,
+      });
 
     // 현재 사용자의 팔로우 목록 가져오기 (로그인한 경우)
     let currentUserFollowing: UserFollower[] = [];
@@ -698,22 +758,35 @@ export class UserService {
     }
 
     // DTO 포맷으로 변환
-    const followingDTO = following.map((follow) => {
-      const followingUser = follow.following;
-      const isFollowing = currentUserId
-        ? currentUserFollowing.some((f) => f.following_id === followingUser.id)
-        : false;
+    const followingDTO = followingRelations
+      .map((relation) => {
+        const followingUser = relation.following;
+        if (!followingUser) {
+          return null;
+        }
 
-      return {
-        id: followingUser.id,
-        username: followingUser.username,
-        isFollowing,
-      } as FollowerResponseDto;
-    });
+        const isFollowing = currentUserId
+          ? currentUserFollowing.some(
+              (f) => f.following_id === followingUser.id,
+            )
+          : false;
+
+        return {
+          id: followingUser.id,
+          username: followingUser.username,
+          bio: followingUser.bio,
+          profileImage: this.ensureFullImageUrl(followingUser.profileImage),
+          isFollowing,
+        } as FollowerResponseDto;
+      })
+      .filter((dto) => dto !== null);
 
     return {
       following: followingDTO,
       total,
+      page,
+      totalPages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
     };
   }
 
@@ -726,5 +799,193 @@ export class UserService {
     });
 
     return !!follow;
+  }
+
+  // 사용자의 읽은 책, 읽고 싶은 책, 읽는 중인 책 목록을 조회하는 메서드
+  async getUserBooks(
+    userId: number,
+    status: ReadingStatusType,
+    page: number = 1,
+    limit: number = 10,
+    isOwnProfile: boolean = false,
+    currentUserId?: number,
+  ): Promise<{ items: ReadingStatusResponseDto[]; total: number }> {
+    try {
+      // 사용자 존재 여부 확인
+      await this.findOne(userId);
+
+      // Repository 가져오기
+      const readingStatusRepo =
+        this.userRepository.manager.getRepository(ReadingStatus);
+      const bookRepo = this.userRepository.manager.getRepository(Book);
+
+      // 조건 설정
+      const where: any = { userId };
+      if (status) {
+        where.status = status;
+      }
+
+      // 페이징 설정
+      const skip = (page - 1) * limit;
+
+      // 데이터 조회
+      const [statuses, total] = await readingStatusRepo.findAndCount({
+        where,
+        order: { updatedAt: 'DESC' },
+        skip,
+        take: limit,
+      });
+
+      // 책 정보가 없으면 빈 배열 반환
+      if (statuses.length === 0) {
+        return { items: [], total };
+      }
+
+      // bookId를 이용해 book 정보 별도 조회
+      const bookIds = statuses.map((status) => status.bookId);
+
+      // 책 정보 한번에 조회
+      const books = await bookRepo.find({
+        where: { id: In(bookIds) },
+      });
+
+      // bookId를 키로 하는 맵 생성
+      const bookMap = new Map<number, Book>();
+      books.forEach((book) => {
+        bookMap.set(book.id, book);
+      });
+
+      // 응답 DTO 생성
+      const responseDtos = statuses
+        .map((status) => {
+          const book = bookMap.get(status.bookId);
+
+          if (!book) {
+            return null;
+          }
+
+          return {
+            id: status.id,
+            status: status.status,
+            currentPage: status.currentPage,
+            startDate: status.startDate,
+            finishDate: status.finishDate,
+            readingMemo: status.readingMemo,
+            createdAt: status.createdAt,
+            updatedAt: status.updatedAt,
+            book: {
+              id: book.id,
+              title: book.title,
+              author: book.author,
+              coverImageUrl: book.coverImage,
+              isbn: book.isbn,
+            },
+          } as ReadingStatusResponseDto;
+        })
+        .filter((dto) => dto !== null);
+
+      return {
+        items: responseDtos,
+        total,
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * 사용자 프로필 정보 업데이트 (이미지 포함)
+   */
+  async updateUserProfile(
+    userId: number,
+    updateUserDto: UpdateUserDto,
+    file?: Express.Multer.File,
+  ): Promise<User> {
+    try {
+      const user = await this.findOne(userId);
+
+      // 사용자 기본 정보 업데이트
+      if (updateUserDto.username) {
+        user.username = updateUserDto.username;
+      }
+
+      if (updateUserDto.bio !== undefined) {
+        user.bio = updateUserDto.bio;
+      }
+
+      // removeProfileImage 값 처리 (문자열이나 불리언으로 올 수 있음)
+      // FormData에서는 'true'/'false' 문자열로 전송될 수 있음
+      let shouldRemoveImage = false;
+
+      // 불리언 또는 문자열 값 처리
+      if (typeof updateUserDto.removeProfileImage === 'boolean') {
+        shouldRemoveImage = updateUserDto.removeProfileImage;
+      } else if (typeof updateUserDto.removeProfileImage === 'string') {
+        shouldRemoveImage =
+          updateUserDto.removeProfileImage.toLowerCase() === 'true';
+      }
+
+      // 프로필 이미지 삭제 요청이 있는 경우
+      if (shouldRemoveImage) {
+        if (user.profileImage) {
+          await this.fileService.deleteFile(user.profileImage);
+          user.profileImage = null;
+        }
+      }
+      // 새 파일이 제공된 경우 프로필 이미지 업데이트
+      else if (file) {
+        // 기존 프로필 이미지가 있으면 삭제
+        if (user.profileImage) {
+          await this.fileService.deleteFile(user.profileImage);
+        }
+
+        // 새 이미지 업로드
+        const imageUrl = await this.fileService.uploadImage(file);
+        user.profileImage = imageUrl;
+      }
+
+      // 사용자 정보 저장
+      const savedUser = await this.userRepository.save(user);
+
+      return savedUser;
+    } catch (error) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException('프로필 업데이트 중 오류가 발생했습니다.');
+    }
+  }
+
+  /**
+   * 사용자 프로필 이미지 삭제
+   */
+  async deleteProfileImage(userId: number): Promise<User> {
+    const user = await this.findOne(userId);
+
+    if (user.profileImage) {
+      await this.fileService.deleteFile(user.profileImage);
+      user.profileImage = null;
+      return this.userRepository.save(user);
+    }
+
+    return user;
+  }
+
+  async getCurrentUser(id: number) {
+    const user = await this.findOne(id);
+    return {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      bio: user.bio,
+      profileImage: this.ensureFullImageUrl(user.profileImage),
+      provider: user.provider,
+      isEmailVerified: user.isEmailVerified,
+      marketingConsent: user.marketingConsent,
+      createdAt: user.createdAt,
+    };
   }
 }

@@ -40,6 +40,9 @@ export class User {
   @Column({ nullable: true })
   bio: string;
 
+  @Column({ nullable: true })
+  profileImage: string;
+
   @Column({
     type: 'enum',
     enum: AuthProvider,
