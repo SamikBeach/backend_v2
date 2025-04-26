@@ -733,21 +733,32 @@ export class ReviewService {
     }));
 
     // 리뷰 작성자의 별점 정보 가져오기
-    const authorRatings = [];
+    let userRating = null;
     if (books && books.length > 0) {
-      for (const book of books) {
-        const rating = await this.ratingService.findByUserAndBook(
-          review.author.id,
-          book.id,
-        );
-        if (rating) {
-          authorRatings.push({
-            bookId: book.id,
-            rating: rating.rating,
-            comment: rating.comment,
-          });
-        }
+      const rating = await this.ratingService.findByUserAndBook(
+        review.author.id,
+        books[0].id,
+      );
+
+      if (rating) {
+        userRating = {
+          bookId: books[0].id,
+          rating: rating.rating,
+          comment: rating.comment,
+        };
       }
+    }
+
+    // BASE_URL 환경변수 가져오기
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+
+    // 프로필 이미지 URL 생성
+    let profileImageUrl = null;
+    if (review.author.profileImage) {
+      // 이미 완전한 URL인 경우 그대로 사용, 아닌 경우 baseUrl 추가
+      profileImageUrl = review.author.profileImage.startsWith('http')
+        ? review.author.profileImage
+        : `${baseUrl}${review.author.profileImage}`;
     }
 
     return {
@@ -758,6 +769,7 @@ export class ReviewService {
         id: review.author.id,
         username: review.author.username || '사용자',
         email: review.author.email,
+        profileImage: profileImageUrl,
       },
       images: review.images?.map((image) => ({
         id: image.id,
@@ -765,7 +777,7 @@ export class ReviewService {
         caption: image.caption,
       })),
       books,
-      authorRatings: authorRatings.length > 0 ? authorRatings : undefined,
+      userRating,
       likeCount: review.likeCount,
       commentCount: review.commentCount,
       isLiked,
@@ -935,7 +947,7 @@ export class ReviewService {
           const book = reviewBook?.book || null;
 
           // 리뷰 작성자의 별점 정보 가져오기
-          let authorRating = null;
+          let userRating = null;
           if (book) {
             try {
               this.logger.debug(
@@ -948,7 +960,7 @@ export class ReviewService {
 
               if (rating) {
                 this.logger.debug(`Found rating: ${JSON.stringify(rating)}`);
-                authorRating = {
+                userRating = {
                   bookId: book.id,
                   rating: rating.rating,
                   comment: rating.comment,
@@ -961,7 +973,7 @@ export class ReviewService {
             } catch (error) {
               this.logger.error(`Error fetching rating: ${error.message}`);
               // Still allow the request to proceed even if rating fetch fails
-              authorRating = null;
+              userRating = null;
             }
           } else {
             this.logger.debug(
@@ -998,7 +1010,7 @@ export class ReviewService {
                   url: image.url,
                 }))
               : [],
-            authorRating,
+            userRating,
             likesCount,
             commentsCount,
             userLiked,
