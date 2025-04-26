@@ -1169,6 +1169,16 @@ export class UserService {
             })
           : [];
 
+        // 리뷰와 관련된 첫 번째 책에 대한 사용자 평점 정보 추출
+        let userRating = null;
+        if (books.length > 0 && books[0].userRating) {
+          userRating = {
+            bookId: books[0].id,
+            rating: books[0].userRating.rating,
+            comment: books[0].userRating.comment,
+          };
+        }
+
         return {
           id: review.id,
           content: review.content,
@@ -1183,6 +1193,7 @@ export class UserService {
           },
           images,
           books,
+          userRating,
           likeCount: review.likeCount || 0,
           commentCount: review.commentCount || 0,
           isLiked: review['isLiked'] || false,
