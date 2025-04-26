@@ -6,6 +6,7 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -38,18 +39,31 @@ import { FileService } from '../common/services/file.service';
 import { ConfigService } from '@nestjs/config';
 import { Book } from '../book/entities/book.entity';
 import { In } from 'typeorm';
+import { ReviewResponseDto } from '../review/dto/review-response.dto';
+import { ReviewImage } from '../review/entities/review-image.entity';
+import { ReviewBook } from '../review/entities/review-book.entity';
+import { BookService } from '../book/book.service';
 
 @Injectable()
 export class UserService {
   private serverUrl: string;
+  private readonly logger = new Logger(UserService.name);
 
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
     @InjectRepository(UserFollower)
     private userFollowerRepository: Repository<UserFollower>,
+    @InjectRepository(Review)
+    private reviewRepository: Repository<Review>,
+    @InjectRepository(ReviewImage)
+    private reviewImageRepository: Repository<ReviewImage>,
+    @InjectRepository(ReviewBook)
+    private reviewBookRepository: Repository<ReviewBook>,
     @Inject(forwardRef(() => ReadingStatusService))
     private readingStatusService: ReadingStatusService,
+    @Inject(forwardRef(() => BookService))
+    private bookService: BookService,
     private fileService: FileService,
     private configService: ConfigService,
   ) {
@@ -1008,5 +1022,182 @@ export class UserService {
       marketingConsent: user.marketingConsent,
       createdAt: user.createdAt,
     };
+  }
+
+  /**
+   * 특정 사용자가 작성한 리뷰 목록 조회 (페이지네이션)
+   */
+  async getUserReviews(
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+    type?: string,
+    filter: 'popular' | 'recent' = 'recent',
+    currentUserId?: number,
+  ): Promise<{
+    reviews: ReviewResponseDto[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    try {
+      // 사용자 존재 확인
+      const user = await this.findOne(userId);
+
+      const queryBuilder = this.reviewRepository
+        .createQueryBuilder('review')
+        .leftJoinAndSelect('review.author', 'author')
+        .leftJoinAndSelect('review.images', 'images')
+        .leftJoinAndSelect('review.books', 'reviewBooks')
+        .leftJoinAndSelect('reviewBooks.book', 'book')
+        .where('review.authorId = :userId', { userId });
+
+      // 타입 필터링
+      if (type) {
+        queryBuilder.andWhere('review.type = :type', { type });
+      }
+
+      // 필터 적용 (인기순 / 최신순)
+      switch (filter) {
+        case 'popular':
+          // 인기순: 좋아요가 많은 순서 + 댓글이 많은 순서
+          queryBuilder
+            .orderBy('review.likeCount', 'DESC')
+            .addOrderBy('review.commentCount', 'DESC')
+            .addOrderBy('review.createdAt', 'DESC');
+          break;
+        case 'recent':
+        default:
+          // 최신순: 생성일 기준 내림차순
+          queryBuilder.orderBy('review.createdAt', 'DESC');
+          break;
+      }
+
+      // 페이지네이션 적용
+      queryBuilder.skip((page - 1) * limit).take(limit);
+
+      // 좋아요 여부 체크
+      if (currentUserId) {
+        queryBuilder.leftJoin(
+          'review.likes',
+          'likes',
+          'likes.userId = :currentUserId',
+          {
+            currentUserId,
+          },
+        );
+        queryBuilder.addSelect(
+          'CASE WHEN likes.id IS NOT NULL THEN true ELSE false END',
+          'review_isLiked',
+        );
+      } else {
+        queryBuilder.addSelect('false', 'review_isLiked');
+      }
+
+      // 쿼리 실행
+      const [reviews, total] = await queryBuilder.getManyAndCount();
+
+      // 리뷰에 연결된 책들의 ID 수집
+      const bookIds = new Set<number>();
+      reviews.forEach((review) => {
+        if (review.books && review.books.length > 0) {
+          review.books.forEach((reviewBook) => {
+            if (reviewBook.book && reviewBook.book.id) {
+              bookIds.add(reviewBook.book.id);
+            }
+          });
+        }
+      });
+
+      // 책 정보를 미리 로드 (N+1 문제 방지)
+      const bookDetailsMap = new Map();
+      if (bookIds.size > 0) {
+        const books = await this.bookService.findByIds(Array.from(bookIds));
+        for (const book of books) {
+          const enrichedBook = await this.bookService.enrichBookWithUserData(
+            book,
+            currentUserId,
+          );
+          bookDetailsMap.set(book.id, enrichedBook);
+        }
+      }
+
+      // DTO로 변환
+      const reviewDtos = reviews.map((review) => {
+        const images = review.images
+          ? review.images.map((img) => ({
+              id: img.id,
+              url: this.ensureFullImageUrl(img.url),
+            }))
+          : [];
+
+        const books = review.books
+          ? review.books.map((reviewBook) => {
+              const bookId = reviewBook.book.id;
+              const enrichedBook = bookDetailsMap.get(bookId);
+
+              if (enrichedBook) {
+                return {
+                  id: enrichedBook.id,
+                  title: enrichedBook.title,
+                  author: enrichedBook.author,
+                  coverImage: enrichedBook.coverImage,
+                  publisher: enrichedBook.publisher,
+                  isbn: enrichedBook.isbn,
+                  isbn13: enrichedBook.isbn13,
+                  publishDate: enrichedBook.publishDate,
+                  description:
+                    enrichedBook.description?.substring(0, 100) + '...',
+                  rating: enrichedBook.rating,
+                  reviews: enrichedBook.reviews,
+                  totalRatings: enrichedBook.totalRatings,
+                  readingStats: enrichedBook.readingStats,
+                  userRating: enrichedBook.userRating,
+                  userReadingStatus: enrichedBook.userReadingStatus,
+                };
+              }
+
+              return {
+                id: reviewBook.book.id,
+                title: reviewBook.book.title,
+                author: reviewBook.book.author,
+                coverImage: reviewBook.book.coverImage,
+                publisher: reviewBook.book.publisher,
+                isbn: reviewBook.book.isbn,
+                isbn13: reviewBook.book.isbn13,
+              };
+            })
+          : [];
+
+        return {
+          id: review.id,
+          content: review.content,
+          type: review.type,
+          createdAt: review.createdAt,
+          updatedAt: review.updatedAt,
+          author: {
+            id: review.author.id,
+            username: review.author.username,
+            email: review.author.email,
+            profileImage: this.ensureFullImageUrl(review.author.profileImage),
+          },
+          images,
+          books,
+          likeCount: review.likeCount || 0,
+          commentCount: review.commentCount || 0,
+          isLiked: review['isLiked'] || false,
+        } as ReviewResponseDto;
+      });
+
+      return {
+        reviews: reviewDtos,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      this.logger.error(`사용자 리뷰 조회 중 오류: ${error.message}`);
+      throw error;
+    }
   }
 }

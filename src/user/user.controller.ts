@@ -80,14 +80,25 @@ export class UserController {
   }
 
   @Get(':id/reviews')
+  @IsPublic()
   getUserReviews(
     @Param('id', ParseIntPipe) id: number,
     @IsOwnProfile() isOwnProfile: boolean,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
+    @Query('type') type?: string,
+    @Query('filter') filter?: 'popular' | 'recent',
+    @GetUser() currentUser?: User,
   ) {
-    // This will be implemented later as per the requirements
-    return { message: 'This endpoint will be implemented later' };
+    const currentUserId = currentUser?.id;
+    return this.userService.getUserReviews(
+      id,
+      page,
+      limit,
+      type,
+      filter || 'recent',
+      currentUserId,
+    );
   }
 
   @Get(':id/stats')
