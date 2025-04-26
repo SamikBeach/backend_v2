@@ -171,7 +171,7 @@ export class UserController {
     @IsOwnProfile() isOwnProfile: boolean,
     @Query('status') status: ReadingStatusType,
     @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
+    @Query('limit') limit: number = 12,
     @GetUser() currentUser?: User,
   ) {
     const currentUserId = currentUser?.id;

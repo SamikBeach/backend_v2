@@ -135,7 +135,7 @@ export class BookInfoDto {
     example: 'https://example.com/cover.jpg',
     description: '책 표지 이미지 URL',
   })
-  coverImageUrl: string;
+  coverImage: string;
 
   @ApiProperty({
     example: '9788901234567',
@@ -211,7 +211,7 @@ export class BookReadingStatusDto {
     example: 'https://example.com/cover.jpg',
     description: '책 표지 이미지 URL',
   })
-  coverImageUrl: string;
+  coverImage: string;
 
   @ApiProperty({
     description: '읽기 상태별 수',

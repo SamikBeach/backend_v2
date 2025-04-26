@@ -20,6 +20,8 @@ import {
   FollowerResponseDto,
   LibraryPreviewDto,
   UpdateUserDto,
+  ExtendedBookInfoDto,
+  ExtendedReadingStatusResponseDto,
 } from './dto/user.dto';
 import { Library } from '../library/entities/library.entity';
 import { Review } from '../review/entities/review.entity';
@@ -809,7 +811,7 @@ export class UserService {
     limit: number = 10,
     isOwnProfile: boolean = false,
     currentUserId?: number,
-  ): Promise<{ items: ReadingStatusResponseDto[]; total: number }> {
+  ): Promise<{ items: ExtendedReadingStatusResponseDto[]; total: number }> {
     try {
       // 사용자 존재 여부 확인
       await this.findOne(userId);
@@ -864,6 +866,31 @@ export class UserService {
             return null;
           }
 
+          // 응답 객체 생성
+          const bookInfo: ExtendedBookInfoDto = {
+            id: book.id,
+            title: book.title,
+            author: book.author,
+            coverImage: book.coverImage,
+            isbn: book.isbn,
+            publisher: book.publisher,
+            isbn13: book.isbn13,
+            translator: book.translator,
+            pageCount: book.pageCount,
+            publishDate: book.publishDate,
+            rating: book.rating,
+            reviews: book.reviews,
+            totalRatings: book.totalRatings,
+            description: book.description,
+            tags: book.tags,
+            categoryId: book.category?.id,
+            subcategoryId: book.subcategory?.id,
+            priceSales: book.priceSales,
+            priceStandard: book.priceStandard,
+            isFeatured: book.isFeatured,
+            isDiscovered: book.isDiscovered,
+          };
+
           return {
             id: status.id,
             status: status.status,
@@ -873,14 +900,8 @@ export class UserService {
             readingMemo: status.readingMemo,
             createdAt: status.createdAt,
             updatedAt: status.updatedAt,
-            book: {
-              id: book.id,
-              title: book.title,
-              author: book.author,
-              coverImageUrl: book.coverImage,
-              isbn: book.isbn,
-            },
-          } as ReadingStatusResponseDto;
+            book: bookInfo,
+          } as ExtendedReadingStatusResponseDto;
         })
         .filter((dto) => dto !== null);
 

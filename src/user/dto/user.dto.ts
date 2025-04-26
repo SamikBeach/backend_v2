@@ -1,5 +1,6 @@
 import { IsOptional, IsString, Length } from 'class-validator';
 import { AuthProvider } from '../entities/user.entity';
+import { ReadingStatusType } from '../../reading-status/entities/reading-status.entity';
 
 export class UpdateUserDto {
   @IsString({ message: '사용자명은 문자열이어야 합니다.' })
@@ -129,4 +130,42 @@ export class FollowingListResponseDto {
   page: number;
   totalPages: number;
   hasNextPage: boolean;
+}
+
+// 확장된 BookInfoDto, 더 많은 책 정보를 포함
+export class ExtendedBookInfoDto {
+  id: number;
+  title: string;
+  author: string;
+  coverImage: string;
+  isbn: string;
+  publisher: string;
+  isbn13?: string;
+  translator?: string;
+  pageCount?: number;
+  publishDate?: Date;
+  rating?: number;
+  reviews?: number;
+  totalRatings?: number;
+  description?: string;
+  tags?: string[];
+  categoryId?: number;
+  subcategoryId?: number;
+  priceSales?: number;
+  priceStandard?: number;
+  isFeatured?: boolean;
+  isDiscovered?: boolean;
+}
+
+// ReadingStatusResponseDto와 동일하지만 book 속성이 ExtendedBookInfoDto 타입인 인터페이스
+export interface ExtendedReadingStatusResponseDto {
+  id: number;
+  status: ReadingStatusType;
+  currentPage?: number;
+  startDate?: Date;
+  finishDate?: Date;
+  readingMemo?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  book: ExtendedBookInfoDto;
 }
