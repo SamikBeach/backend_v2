@@ -9,9 +9,9 @@ import {
 } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 import { LibraryBook } from './library-book.entity';
-import { LibraryTag } from './library-tag.entity';
 import { LibrarySubscription } from './library-subscription.entity';
 import { LibraryUpdateHistory } from './library-update-history.entity';
+import { LibraryTagMapping } from './library-tag-mapping.entity';
 
 @Entity()
 export class Library {
@@ -39,8 +39,8 @@ export class Library {
   @OneToMany(() => LibraryBook, (libraryBook) => libraryBook.library)
   libraryBooks: LibraryBook[];
 
-  @OneToMany(() => LibraryTag, (libraryTag) => libraryTag.library)
-  tags: LibraryTag[];
+  @OneToMany(() => LibraryTagMapping, (tagMapping) => tagMapping.library)
+  libraryTagMappings: LibraryTagMapping[];
 
   @OneToMany(
     () => LibrarySubscription,

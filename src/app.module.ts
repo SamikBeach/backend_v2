@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { User } from './user/entities/user.entity';
+import { UserFollower } from './user/entities/user-follower.entity';
 import { CommonModule } from './common/common.module';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { LoggerMiddleware } from './common/middlewares/logger.middleware';
@@ -18,17 +19,17 @@ import { DiscoverSubCategory } from './discover-category/entities/discover-subca
 import { LibraryModule } from './library/library.module';
 import { Library } from './library/entities/library.entity';
 import { LibraryBook } from './library/entities/library-book.entity';
-import { LibraryTag } from './library/entities/library-tag.entity';
+import { LibraryTagMapping } from './library/entities/library-tag-mapping.entity';
+import { LibraryTag } from './library-tag/entities/library-tag.entity';
 import { LibrarySubscription } from './library/entities/library-subscription.entity';
 import { LibraryUpdateHistory } from './library/entities/library-update-history.entity';
-import { TagModule } from './tag/tag.module';
-import { Tag } from './library/entities/tag.entity';
 import { ReviewModule } from './review/review.module';
 import { Review } from './review/entities/review.entity';
 import { ReviewImage } from './review/entities/review-image.entity';
 import { ReviewBook } from './review/entities/review-book.entity';
 import { ReviewLike } from './review/entities/review-like.entity';
 import { Comment } from './review/entities/comment.entity';
+import { CommentLike } from './review/entities/comment-like.entity';
 import { SearchModule } from './search/search.module';
 import { SearchLog, PopularSearch, RecentSearch } from './search/search.entity';
 import { NotificationModule } from './notification/notification.module';
@@ -37,6 +38,7 @@ import { ReadingStatus } from './reading-status/entities/reading-status.entity';
 import { RatingModule } from './rating/rating.module';
 import { ReadingStatusModule } from './reading-status/reading-status.module';
 import { Rating } from './rating/entities/rating.entity';
+import { LibraryTagModule } from './library-tag/library-tag.module';
 
 @Module({
   imports: [
@@ -56,6 +58,7 @@ import { Rating } from './rating/entities/rating.entity';
         database: configService.get('DB_NAME'),
         entities: [
           User,
+          UserFollower,
           Category,
           SubCategory,
           Book,
@@ -64,14 +67,15 @@ import { Rating } from './rating/entities/rating.entity';
           Library,
           LibraryBook,
           LibraryTag,
+          LibraryTagMapping,
           LibrarySubscription,
           LibraryUpdateHistory,
-          Tag,
           Review,
           ReviewImage,
           ReviewBook,
           ReviewLike,
           Comment,
+          CommentLike,
           SearchLog,
           PopularSearch,
           RecentSearch,
@@ -90,7 +94,7 @@ import { Rating } from './rating/entities/rating.entity';
     BookModule,
     DiscoverCategoryModule,
     LibraryModule,
-    TagModule,
+    LibraryTagModule,
     ReviewModule,
     SearchModule,
     NotificationModule,

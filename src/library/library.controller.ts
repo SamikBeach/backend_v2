@@ -13,6 +13,7 @@ import { LibraryService } from './library.service';
 import { CreateLibraryDto } from './dto/create-library.dto';
 import { UpdateLibraryDto } from './dto/update-library.dto';
 import { AddBookToLibraryDto } from './dto/add-book-to-library.dto';
+import { AddBooksToLibraryDto } from './dto/add-books-to-library.dto';
 import { AddTagToLibraryDto } from './dto/add-tag-to-library.dto';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
@@ -31,10 +32,34 @@ export class LibraryController {
   @Get()
   @IsPublic()
   findAll(
-    @Query('userId') userId?: string,
+    @GetUser() user?: User,
     @Query('sort') sort?: LibrarySortOption,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('query') query?: string,
+    @Query('tagId') tagId?: number,
   ) {
-    return this.libraryService.findAll(userId ? +userId : undefined, sort);
+    try {
+      console.log('findAll 호출됨', {
+        userId: user?.id,
+        sort,
+        page,
+        limit,
+        query,
+        tagId,
+      });
+      return this.libraryService.findAll(
+        user?.id,
+        sort,
+        page ? +page : 1,
+        limit ? +limit : 10,
+        query,
+        tagId,
+      );
+    } catch (error) {
+      console.error('findAll, 메소드 에러:', error);
+      throw error;
+    }
   }
 
   @Get('user/:userId')
@@ -58,6 +83,7 @@ export class LibraryController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('isbn') isbn?: string,
+    @Query('sort') sort?: LibrarySortOption,
     @GetUser() user?: User,
   ) {
     return this.libraryService.findLibrariesByBookId(
@@ -66,6 +92,7 @@ export class LibraryController {
       limit ? +limit : 10,
       user?.id,
       isbn,
+      sort,
     );
   }
 
@@ -79,11 +106,8 @@ export class LibraryController {
 
   @Get(':id')
   @IsPublic()
-  findOne(
-    @Param('id', ParseIntPipe) id: number,
-    @Query('userId') userId?: string,
-  ) {
-    return this.libraryService.findOne(id, userId ? +userId : undefined);
+  findOne(@Param('id', ParseIntPipe) id: number, @GetUser() user?: User) {
+    return this.libraryService.findOne(id, user?.id);
   }
 
   @Patch(':id')
@@ -110,6 +134,19 @@ export class LibraryController {
       id,
       user.id,
       addBookToLibraryDto,
+    );
+  }
+
+  @Post(':id/books/batch')
+  addBooksToLibrary(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: User,
+    @Body() addBooksToLibraryDto: AddBooksToLibraryDto,
+  ) {
+    return this.libraryService.addBooksToLibrary(
+      id,
+      user.id,
+      addBooksToLibraryDto,
     );
   }
 

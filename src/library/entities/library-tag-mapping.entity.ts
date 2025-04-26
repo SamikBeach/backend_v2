@@ -5,31 +5,27 @@ import {
   ManyToOne,
   CreateDateColumn,
   UpdateDateColumn,
-  JoinColumn,
 } from 'typeorm';
 import { Library } from './library.entity';
-import { Tag } from './tag.entity';
+import { LibraryTag } from '../../library-tag/entities/library-tag.entity';
 
-@Entity()
-export class LibraryTag {
+@Entity('library_tag_mapping')
+export class LibraryTagMapping {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Library, (library) => library.tags)
-  @JoinColumn({ name: 'library_id' })
+  @ManyToOne(() => Library, (library) => library.libraryTagMappings)
   library: Library;
 
   @Column()
   libraryId: number;
 
-  @ManyToOne(() => Tag, (tag) => tag.libraryTags)
-  @JoinColumn({ name: 'tag_id' })
-  tag: Tag;
+  @ManyToOne(() => LibraryTag, (libraryTag) => libraryTag.libraryTagMappings)
+  libraryTag: LibraryTag;
 
   @Column()
-  tagId: number;
+  libraryTagId: number;
 
-  // 태그에 대한 사용자 정의 메모 (선택 사항)
   @Column({ nullable: true })
   note: string;
 

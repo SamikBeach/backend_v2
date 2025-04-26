@@ -6,14 +6,48 @@ export class UpdateUserDto {
   @Length(2, 30, { message: '사용자명은 2-30자 사이여야 합니다.' })
   @IsOptional()
   username?: string;
+
+  @IsString({ message: '자기소개는 문자열이어야 합니다.' })
+  @Length(0, 200, { message: '자기소개는 최대 200자까지 가능합니다.' })
+  @IsOptional()
+  bio?: string;
+
+  // 이 필드는 실제로 컨트롤러에서 파일을 받기 위한 마커로만 사용됨
+  // 실제 파일은 multer를 통해 처리됨
+  @IsOptional()
+  profileImage?: any;
+
+  // 프로필 이미지 삭제 요청을 위한 필드
+  // FormData에서는 문자열로, JSON에서는 불리언으로 전송될 수 있음
+  @IsOptional()
+  removeProfileImage?: string | boolean;
 }
 
 export class UserDetailDto {
   id: number;
   username: string;
   email?: string;
+  bio?: string;
+  profileImage?: string;
   provider: AuthProvider;
   createdAt: Date;
+}
+
+export class LibraryTagDto {
+  id: number;
+  tagId: number;
+  tagName: string;
+  usageCount: number;
+  libraryId: number;
+  note: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export class LibraryOwnerDto {
+  id: number;
+  username: string;
+  email: string;
 }
 
 export class LibraryPreviewDto {
@@ -22,8 +56,11 @@ export class LibraryPreviewDto {
   description: string;
   isPublic: boolean;
   subscriberCount: number;
+  owner: LibraryOwnerDto;
+  tags: LibraryTagDto[];
   bookCount: number;
   previewBooks: BookPreviewDto[];
+  isSubscribed: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -66,4 +103,30 @@ export class UserDetailResponseDto {
   followers: number;
   following: number;
   isEditable: boolean;
+  isFollowing?: boolean;
+  libraries?: LibraryPreviewDto[];
+}
+
+export class FollowerResponseDto {
+  id: number;
+  username: string;
+  bio?: string;
+  profileImage?: string;
+  isFollowing: boolean;
+}
+
+export class FollowersListResponseDto {
+  followers: FollowerResponseDto[];
+  total: number;
+  page: number;
+  totalPages: number;
+  hasNextPage: boolean;
+}
+
+export class FollowingListResponseDto {
+  following: FollowerResponseDto[];
+  total: number;
+  page: number;
+  totalPages: number;
+  hasNextPage: boolean;
 }

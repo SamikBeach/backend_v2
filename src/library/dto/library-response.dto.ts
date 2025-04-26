@@ -17,9 +17,12 @@ export interface LibraryTagResponseDto {
   id: number;
   tagId: number;
   tagName: string;
+  description?: string;
+  usageCount: number;
   libraryId: number;
   note?: string;
   createdAt: Date;
+  updatedAt?: Date;
 }
 
 export interface LibraryBookResponseDto {
@@ -39,8 +42,15 @@ export interface SubscriberResponseDto {
 }
 
 export interface UpdateHistoryItem {
+  id: number;
   date: Date;
   message: string;
+  activityType: string;
+  userId?: number;
+  userName?: string;
+  bookId?: number;
+  tagId?: number;
+  bookTitle?: string;
 }
 
 export interface LibraryResponseDto {
@@ -69,6 +79,24 @@ export interface LibraryDetailResponseDto
   subscriberCount: number;
   subscribers: SubscriberResponseDto[];
   recentUpdates: UpdateHistoryItem[];
+}
+
+// 페이지네이션 메타데이터
+export interface LibraryResponseMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  sort?: LibrarySortOption;
+  query?: string;
+  tagId?: number;
+  tagName?: string;
+}
+
+// 페이지네이션 응답 형식
+export interface PaginatedLibraryResponse {
+  data: LibraryListResponseDto[];
+  meta: LibraryResponseMeta;
 }
 
 export enum LibrarySortOption {

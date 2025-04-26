@@ -64,12 +64,14 @@ export class ReviewController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('type') type?: string,
+    @Query('filter') filter?: 'popular' | 'recent',
   ) {
     return this.reviewService.findAllReviews(
       user?.id,
       page ? +page : 1,
       limit ? +limit : 10,
       type,
+      filter || 'recent', // 기본값은 최신순
     );
   }
 
@@ -181,8 +183,11 @@ export class ReviewController {
    */
   @Get(':id/comment')
   @IsPublic()
-  async findCommentsByReviewId(@Param('id', ParseIntPipe) reviewId: number) {
-    return this.commentService.findCommentsByReviewId(reviewId);
+  async findCommentsByReviewId(
+    @Param('id', ParseIntPipe) reviewId: number,
+    @GetUser() user?: User,
+  ) {
+    return this.commentService.findCommentsByReviewId(reviewId, user?.id);
   }
 
   /**
@@ -220,6 +225,46 @@ export class ReviewController {
       user.id,
       updateCommentDto,
     );
+  }
+
+  /**
+   * 댓글 좋아요
+   */
+  @Post('comment/:id/like')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '댓글 좋아요' })
+  @ApiParam({ name: 'id', description: '댓글 ID' })
+  @ApiResponse({
+    status: 200,
+    description: '댓글 좋아요 성공',
+  })
+  async likeComment(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) commentId: number,
+  ) {
+    await this.commentService.likeComment(commentId, user.id);
+    return { success: true };
+  }
+
+  /**
+   * 댓글 좋아요 취소
+   */
+  @Delete('comment/:id/like')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '댓글 좋아요 취소' })
+  @ApiParam({ name: 'id', description: '댓글 ID' })
+  @ApiResponse({
+    status: 200,
+    description: '댓글 좋아요 취소 성공',
+  })
+  async unlikeComment(
+    @GetUser() user: User,
+    @Param('id', ParseIntPipe) commentId: number,
+  ) {
+    await this.commentService.unlikeComment(commentId, user.id);
+    return { success: true };
   }
 
   // 홈화면용 인기 리뷰 API

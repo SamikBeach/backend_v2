@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Comment } from './entities/comment.entity';
 import { Review } from './entities/review.entity';
+import { CommentLike } from './entities/comment-like.entity';
 import { User } from '../user/entities/user.entity';
 import { UserService } from '../user/user.service';
 import { CommentResponseDto } from './dto/review-response.dto';
@@ -25,6 +26,8 @@ export class CommentService {
     private readonly commentRepository: Repository<Comment>,
     @InjectRepository(Review)
     private readonly reviewRepository: Repository<Review>,
+    @InjectRepository(CommentLike)
+    private readonly commentLikeRepository: Repository<CommentLike>,
     private readonly userService: UserService,
     private readonly notificationService: NotificationService,
   ) {}
@@ -104,6 +107,7 @@ export class CommentService {
    */
   async findCommentsByReviewId(
     reviewId: number,
+    userId?: number,
   ): Promise<CommentResponseDto[]> {
     try {
       // 리뷰 존재 여부 확인
@@ -138,9 +142,14 @@ export class CommentService {
         }),
       );
 
-      return commentsWithReplies.map((comment) =>
-        this.mapCommentToDtoWithReplies(comment),
+      // 비동기 매핑을 Promise.all로 처리
+      const result = await Promise.all(
+        commentsWithReplies.map((comment) =>
+          this.mapCommentToDtoWithReplies(comment, userId),
+        ),
       );
+
+      return result;
     } catch (error) {
       this.logger.error(
         `리뷰 ID ${reviewId}의 댓글 목록 조회 중 오류: ${error.message}`,
@@ -241,37 +250,181 @@ export class CommentService {
   }
 
   /**
+   * 댓글 좋아요
+   */
+  async likeComment(commentId: number, userId: number): Promise<CommentLike> {
+    try {
+      // 이미 좋아요 했는지 확인
+      const existingLike = await this.commentLikeRepository.findOne({
+        where: { commentId, userId },
+      });
+
+      if (existingLike) {
+        return existingLike; // 이미 좋아요 상태면 그대로 반환
+      }
+
+      // 댓글 존재 여부 확인
+      const comment = await this.commentRepository.findOne({
+        where: { id: commentId },
+      });
+
+      if (!comment) {
+        throw new NotFoundException(
+          `댓글을 찾을 수 없습니다. (ID: ${commentId})`,
+        );
+      }
+
+      // 좋아요 생성
+      const like = this.commentLikeRepository.create({
+        commentId,
+        userId,
+      });
+
+      const savedLike = await this.commentLikeRepository.save(like);
+
+      // 댓글의 좋아요 수 증가
+      comment.likeCount += 1;
+      await this.commentRepository.save(comment);
+
+      // 댓글 작성자에게 알림 전송 (자신의 댓글에 좋아요가 표시된 경우는 제외)
+      if (comment.authorId !== userId) {
+        const username =
+          (await this.userService.findOne(userId)).username || '사용자';
+        await this.notificationService.createCommentNotification(
+          comment.reviewId,
+          comment.authorId,
+          userId,
+          username,
+        );
+      }
+
+      return savedLike;
+    } catch (error) {
+      this.logger.error(`댓글 좋아요 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 댓글 좋아요 취소
+   */
+  async unlikeComment(commentId: number, userId: number): Promise<void> {
+    try {
+      // 댓글 존재 여부 확인
+      const comment = await this.commentRepository.findOne({
+        where: { id: commentId },
+      });
+
+      if (!comment) {
+        throw new NotFoundException(
+          `댓글을 찾을 수 없습니다. (ID: ${commentId})`,
+        );
+      }
+
+      // 좋아요 삭제
+      const result = await this.commentLikeRepository.delete({
+        commentId,
+        userId,
+      });
+
+      // 좋아요 수 감소 (삭제된 항목이 있는 경우에만)
+      if (result.affected > 0) {
+        comment.likeCount = Math.max(0, comment.likeCount - 1);
+        await this.commentRepository.save(comment);
+      }
+    } catch (error) {
+      this.logger.error(`댓글 좋아요 취소 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 댓글에 대한 특정 사용자의 좋아요 여부 확인
+   */
+  async isCommentLikedByUser(
+    commentId: number,
+    userId: number,
+  ): Promise<boolean> {
+    if (!userId) return false;
+
+    const like = await this.commentLikeRepository.findOne({
+      where: { commentId, userId },
+    });
+
+    return !!like;
+  }
+
+  /**
    * 댓글 엔티티를 DTO로 변환
    */
-  private mapCommentToDto(
+  private async mapCommentToDto(
     comment: Comment,
-    currentUser?: User,
-  ): CommentResponseDto {
-    return {
-      id: comment.id,
-      content: comment.content,
-      author: {
-        id: comment.author?.id,
-        username: comment.author?.username || '사용자',
-        email: comment.author?.email,
-      },
-      createdAt: comment.createdAt,
-      updatedAt: comment.updatedAt,
-    };
+    userId?: number,
+  ): Promise<CommentResponseDto> {
+    try {
+      const author = await this.userService.findOne(comment.authorId);
+
+      // 좋아요 여부 확인
+      const isLiked = userId
+        ? await this.isCommentLikedByUser(comment.id, userId)
+        : false;
+
+      return {
+        id: comment.id,
+        content: comment.content,
+        author: {
+          id: author.id,
+          username: author.username || '사용자',
+        },
+        likeCount: comment.likeCount,
+        isLiked,
+        createdAt: comment.createdAt,
+        updatedAt: comment.updatedAt,
+        replies: [],
+      };
+    } catch (error) {
+      this.logger.error(`댓글 DTO 변환 중 오류: ${error.message}`);
+      return {
+        id: comment.id,
+        content: comment.content,
+        author: {
+          id: comment.authorId,
+          username: '사용자',
+        },
+        likeCount: comment.likeCount,
+        isLiked: false,
+        createdAt: comment.createdAt,
+        updatedAt: comment.updatedAt,
+        replies: [],
+      };
+    }
   }
 
   /**
    * 댓글과 대댓글을 DTO로 변환
    */
-  private mapCommentToDtoWithReplies(comment: Comment): CommentResponseDto {
-    const commentDto = this.mapCommentToDto(comment);
+  private async mapCommentToDtoWithReplies(
+    comment: Comment,
+    userId?: number,
+  ): Promise<CommentResponseDto> {
+    try {
+      const baseDto = await this.mapCommentToDto(comment, userId);
 
-    if (comment['replies'] && comment['replies'].length > 0) {
-      commentDto.replies = comment['replies'].map((reply) =>
-        this.mapCommentToDto(reply),
-      );
+      // 대댓글 처리
+      if (comment.replies && comment.replies.length > 0) {
+        const replyDtos = await Promise.all(
+          comment.replies.map((reply) => this.mapCommentToDto(reply, userId)),
+        );
+        baseDto.replies = replyDtos;
+      }
+
+      return baseDto;
+    } catch (error) {
+      this.logger.error(`댓글 및 대댓글 DTO 변환 중 오류: ${error.message}`);
+      return {
+        ...(await this.mapCommentToDto(comment, userId)),
+        replies: [],
+      };
     }
-
-    return commentDto;
   }
 }

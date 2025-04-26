@@ -40,8 +40,9 @@ export class CommentResponseDto {
   author: {
     id: number;
     username: string;
-    email: string;
   };
+  likeCount: number;
+  isLiked: boolean;
   createdAt: Date;
   updatedAt: Date;
   replies?: CommentResponseDto[];

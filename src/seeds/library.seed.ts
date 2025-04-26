@@ -7,11 +7,13 @@ import { User } from '../user/entities/user.entity';
 import { Book } from '../book/entities/book.entity';
 import { Logger } from '@nestjs/common';
 import { LibraryService } from '../library/library.service';
-import { TagService } from '../tag/tag.service';
+import { LibraryTagService } from '../library-tag/library-tag.service';
 import { CreateLibraryDto } from '../library/dto/create-library.dto';
 import { AddBookToLibraryDto } from '../library/dto/add-book-to-library.dto';
 import { AddTagToLibraryDto } from '../library/dto/add-tag-to-library.dto';
-import { Tag } from '../library/entities/tag.entity';
+import { LibraryTag } from '../library-tag/entities/library-tag.entity';
+import { LibraryActivityType } from '../library/entities/library-update-history.entity';
+import { LibraryUpdateHistory } from '../library/entities/library-update-history.entity';
 
 interface LibrarySeed {
   name: string;
@@ -33,14 +35,27 @@ async function bootstrap() {
     );
     const userRepository = app.get<Repository<User>>(getRepositoryToken(User));
     const bookRepository = app.get<Repository<Book>>(getRepositoryToken(Book));
-    const tagRepository = app.get<Repository<Tag>>(getRepositoryToken(Tag));
+    const tagRepository = app.get<Repository<LibraryTag>>(
+      getRepositoryToken(LibraryTag),
+    );
+    const updateHistoryRepository = app.get<Repository<LibraryUpdateHistory>>(
+      getRepositoryToken(LibraryUpdateHistory),
+    );
     const libraryService = app.get(LibraryService);
-    const tagService = app.get(TagService);
+    const tagService = app.get(LibraryTagService);
 
     // Check if there are already libraries
     const existingLibraries = await libraryRepository.count();
-    if (existingLibraries > 0) {
-      logger.log('Libraries already exist. Skipping seed.');
+    const existingHistories = await updateHistoryRepository.count();
+
+    // 라이브러리는 있지만 히스토리가 없는 경우 히스토리만 추가
+    const shouldAddOnlyHistories =
+      existingLibraries > 0 && existingHistories === 0;
+
+    if (existingLibraries > 0 && !shouldAddOnlyHistories) {
+      logger.log(
+        'Libraries already exist and histories are present. Skipping seed.',
+      );
       await app.close();
       return;
     }
@@ -60,6 +75,150 @@ async function bootstrap() {
     const books = await bookRepository.find();
     if (books.length === 0) {
       logger.log('No books found. Please seed books first.');
+      await app.close();
+      return;
+    }
+
+    // 히스토리만 추가하는 경우
+    if (shouldAddOnlyHistories) {
+      logger.log(
+        'Libraries exist but histories are empty. Adding only history data...',
+      );
+
+      // 모든 라이브러리 가져오기
+      const libraries = await libraryRepository.find({
+        relations: [
+          'owner',
+          'libraryBooks',
+          'libraryBooks.book',
+          'libraryTagMappings',
+          'libraryTagMappings.libraryTag',
+        ],
+      });
+
+      for (const library of libraries) {
+        try {
+          // 서재 생성 히스토리 추가
+          await updateHistoryRepository.save({
+            libraryId: library.id,
+            message: 'LIBRARY_CREATE',
+            activityType: LibraryActivityType.LIBRARY_CREATE,
+            userId: library.ownerId,
+          });
+
+          // 서재 제목 업데이트 히스토리 추가 (일부 서재만)
+          if (Math.random() > 0.7) {
+            await updateHistoryRepository.save({
+              libraryId: library.id,
+              message: 'LIBRARY_TITLE_UPDATE',
+              activityType: LibraryActivityType.LIBRARY_TITLE_UPDATE,
+              userId: library.ownerId,
+            });
+          }
+
+          // 공개/비공개 상태 히스토리
+          await updateHistoryRepository.save({
+            libraryId: library.id,
+            message: 'LIBRARY_UPDATE',
+            activityType: LibraryActivityType.LIBRARY_UPDATE,
+            userId: library.ownerId,
+          });
+
+          // 책 추가 히스토리
+          for (const libraryBook of library.libraryBooks) {
+            await updateHistoryRepository.save({
+              libraryId: library.id,
+              message: 'BOOK_ADD',
+              activityType: LibraryActivityType.BOOK_ADD,
+              userId: library.ownerId,
+              bookId: libraryBook.bookId,
+              bookTitle: libraryBook.book?.title,
+            });
+          }
+
+          // 태그 추가 히스토리
+          for (const tagMapping of library.libraryTagMappings) {
+            await updateHistoryRepository.save({
+              libraryId: library.id,
+              message: 'TAG_ADD',
+              activityType: LibraryActivityType.TAG_ADD,
+              userId: library.ownerId,
+              tagId: tagMapping.libraryTagId,
+            });
+          }
+
+          // 서재 수정 이력도 추가 (일부 서재만)
+          if (Math.random() > 0.6) {
+            await updateHistoryRepository.save({
+              libraryId: library.id,
+              message: 'LIBRARY_UPDATE',
+              activityType: LibraryActivityType.LIBRARY_UPDATE,
+              userId: library.ownerId,
+            });
+          }
+
+          // 일부 서재에만 책 제거 히스토리 추가 (실제로 책을 제거하지는 않음)
+          if (library.libraryBooks.length > 0 && Math.random() > 0.7) {
+            const randomBookIndex = Math.floor(
+              Math.random() * library.libraryBooks.length,
+            );
+            const libraryBook = library.libraryBooks[randomBookIndex];
+
+            await updateHistoryRepository.save({
+              libraryId: library.id,
+              message: 'BOOK_REMOVE',
+              activityType: LibraryActivityType.BOOK_REMOVE,
+              userId: library.ownerId,
+              bookId: libraryBook.bookId,
+              bookTitle: libraryBook.book?.title,
+            });
+          }
+
+          // 일부 서재에만 태그 제거 히스토리 추가 (실제로 태그를 제거하지는 않음)
+          if (library.libraryTagMappings.length > 0 && Math.random() > 0.7) {
+            const randomTagIndex = Math.floor(
+              Math.random() * library.libraryTagMappings.length,
+            );
+            const tagMapping = library.libraryTagMappings[randomTagIndex];
+
+            await updateHistoryRepository.save({
+              libraryId: library.id,
+              message: 'TAG_REMOVE',
+              activityType: LibraryActivityType.TAG_REMOVE,
+              userId: library.ownerId,
+              tagId: tagMapping.libraryTagId,
+            });
+          }
+
+          // 구독 추가 히스토리 (다른 사용자의 구독)
+          if (library.isPublic) {
+            const otherUsers = await userRepository.find({
+              where: { id: library.ownerId !== 1 ? 1 : 11 },
+            });
+
+            if (otherUsers.length > 0) {
+              for (const subscriber of otherUsers) {
+                await updateHistoryRepository.save({
+                  libraryId: library.id,
+                  message: 'SUBSCRIPTION_ADD',
+                  activityType: LibraryActivityType.SUBSCRIPTION_ADD,
+                  userId: subscriber.id,
+                });
+              }
+            }
+          }
+
+          logger.log(
+            `Added history data for library: ${library.name} (ID: ${library.id})`,
+          );
+        } catch (error) {
+          logger.error(
+            `Error adding history for library ${library.id}: ${error.message}`,
+          );
+        }
+      }
+
+      logger.log('Library history update completed successfully!');
       await app.close();
       return;
     }
@@ -122,7 +281,7 @@ async function bootstrap() {
           name: '철학 고전 모음',
           description: '철학 분야의 고전 명작들을 모아둔 라이브러리입니다.',
           isPublic: true,
-          tags: ['철학', '고전', '필독서'],
+          tags: ['철학', '인문학'],
           bookCount: 8,
           preferredCategory: '철학',
         },
@@ -130,7 +289,7 @@ async function bootstrap() {
           name: '읽고 싶은 책 목록',
           description: '향후 읽고 싶은 책들을 모아둔 개인 라이브러리입니다.',
           isPublic: false,
-          tags: ['읽고 싶은 책'],
+          tags: ['문학', '예술'],
           bookCount: 5,
           preferredCategory: '소설',
         },
@@ -138,7 +297,7 @@ async function bootstrap() {
           name: '2023년 완독한 책들',
           description: '2023년에 완독한 책 모음입니다.',
           isPublic: true,
-          tags: ['완독', '2023'],
+          tags: ['심리학', '과학'],
           bookCount: 12,
           preferredCategory: '자기계발',
         },
@@ -148,7 +307,7 @@ async function bootstrap() {
           name: '과학 교양서 모음',
           description: '과학 분야의 대중적인 교양서를 모은 컬렉션입니다.',
           isPublic: true,
-          tags: ['과학', '자연과학', '교양서'],
+          tags: ['과학', '경제학'],
           bookCount: 6,
           preferredCategory: '과학',
         },
@@ -156,7 +315,7 @@ async function bootstrap() {
           name: '자기계발 도서',
           description: '자기계발과 생산성 향상에 관한 책들입니다.',
           isPublic: true,
-          tags: ['자기계발', '비즈니스'],
+          tags: ['사회학', '정치학'],
           bookCount: 7,
           preferredCategory: '자기계발',
         },
@@ -164,7 +323,7 @@ async function bootstrap() {
           name: '좋아하는 작가 모음',
           description: '제가 좋아하는 작가들의 책을 모아둔 서재입니다.',
           isPublic: true,
-          tags: ['작가', '소설'],
+          tags: ['문학', '역사'],
           bookCount: 5,
           preferredCategory: '소설',
         },
@@ -184,7 +343,7 @@ async function bootstrap() {
           name: `${user.username || 'User'}'s Library`,
           description: `A collection of books curated by ${user.username || user.email}`,
           isPublic: Math.random() > 0.3, // 70% 확률로 공개
-          tags: ['읽은 책'],
+          tags: ['철학'], // 기본 태그로 철학 사용
           bookCount: 3,
         };
         userLibraries.push(defaultLibrary);
@@ -208,6 +367,25 @@ async function bootstrap() {
             `Created library: ${library.name} for user ID: ${user.id}`,
           );
 
+          // 생성 시 이미 LIBRARY_CREATE 타입으로 히스토리가 추가되므로 수동으로 추가할 필요 없음
+          // 라이브러리 공개/비공개 상태에 대한 히스토리 추가
+          await updateHistoryRepository.save({
+            libraryId: library.id,
+            message: 'LIBRARY_UPDATE',
+            activityType: LibraryActivityType.LIBRARY_UPDATE,
+            userId: user.id,
+          });
+
+          // 서재 제목 업데이트 히스토리 추가 (일부 서재만)
+          if (Math.random() > 0.7) {
+            await updateHistoryRepository.save({
+              libraryId: library.id,
+              message: 'LIBRARY_TITLE_UPDATE',
+              activityType: LibraryActivityType.LIBRARY_TITLE_UPDATE,
+              userId: user.id,
+            });
+          }
+
           // 태그 추가
           for (const tagName of librarySeed.tags) {
             try {
@@ -220,9 +398,23 @@ async function bootstrap() {
                 logger.log(`Created new tag: ${tagName}`);
               }
 
+              // 새 매핑 구조에 맞게 태그 추가
               const tagDto: AddTagToLibraryDto = { name: tagName };
-              await libraryService.addTagToLibrary(library.id, user.id, tagDto);
+              const tagMapping = await libraryService.addTagToLibrary(
+                library.id,
+                user.id,
+                tagDto,
+              );
               logger.log(`Added tag ${tagName} to library ${library.name}`);
+
+              // 태그 추가에 대한 히스토리 명시적으로 추가 (액티비티 타입 지정)
+              await updateHistoryRepository.save({
+                libraryId: library.id,
+                message: 'TAG_ADD',
+                activityType: LibraryActivityType.TAG_ADD,
+                userId: user.id,
+                tagId: tagMapping.tagId,
+              });
             } catch (error) {
               logger.error(`Error adding tag ${tagName}: ${error.message}`);
             }
@@ -240,12 +432,22 @@ async function bootstrap() {
                 note:
                   Math.random() > 0.5 ? `Note for book ${bookId}` : undefined,
               };
-              await libraryService.addBookToLibrary(
+              const addedBook = await libraryService.addBookToLibrary(
                 library.id,
                 user.id,
                 bookDto,
               );
               logger.log(`Added book ${bookId} to library ${library.name}`);
+
+              // 책 추가에 대한 히스토리 명시적으로 추가 (액티비티 타입 지정)
+              await updateHistoryRepository.save({
+                libraryId: library.id,
+                message: 'BOOK_ADD',
+                activityType: LibraryActivityType.BOOK_ADD,
+                userId: user.id,
+                bookId: bookId,
+                bookTitle: addedBook.book.title,
+              });
             } catch (error) {
               logger.error(`Error adding book ${bookId}: ${error.message}`);
             }
@@ -267,12 +469,72 @@ async function bootstrap() {
                   logger.log(
                     `User ${subscriber.username} (ID: ${subscriber.id}) subscribed to library ${library.name}`,
                   );
+
+                  // 구독 추가에 대한 히스토리 명시적으로 추가 (액티비티 타입 지정)
+                  await updateHistoryRepository.save({
+                    libraryId: library.id,
+                    message: 'SUBSCRIPTION_ADD',
+                    activityType: LibraryActivityType.SUBSCRIPTION_ADD,
+                    userId: subscriber.id,
+                  });
                 } catch (error) {
                   logger.error(
                     `Error subscribing user ${subscriber.email} (ID: ${subscriber.id}): ${error.message}`,
                   );
                 }
               }
+            }
+          }
+
+          // 서재 수정 이력도 추가 (일부 서재만)
+          if (Math.random() > 0.6) {
+            await updateHistoryRepository.save({
+              libraryId: library.id,
+              message: 'LIBRARY_UPDATE',
+              activityType: LibraryActivityType.LIBRARY_UPDATE,
+              userId: user.id,
+            });
+          }
+
+          // 일부 서재에만 책 제거 히스토리 추가 (실제로 책을 제거하지는 않음)
+          if (randomBookIds.length > 0 && Math.random() > 0.7) {
+            const randomBookIndex = Math.floor(
+              Math.random() * randomBookIds.length,
+            );
+            const sampleBook = await bookRepository.findOne({
+              where: { id: randomBookIds[randomBookIndex] },
+            });
+
+            if (sampleBook) {
+              await updateHistoryRepository.save({
+                libraryId: library.id,
+                message: 'BOOK_REMOVE',
+                activityType: LibraryActivityType.BOOK_REMOVE,
+                userId: user.id,
+                bookId: sampleBook.id,
+                bookTitle: sampleBook.title,
+              });
+            }
+          }
+
+          // 일부 서재에만 태그 제거 히스토리 추가 (실제로 태그를 제거하지는 않음)
+          if (librarySeed.tags.length > 0 && Math.random() > 0.7) {
+            const randomTagIndex = Math.floor(
+              Math.random() * librarySeed.tags.length,
+            );
+            const tagName = librarySeed.tags[randomTagIndex];
+            const tag = await tagRepository.findOne({
+              where: { name: tagName },
+            });
+
+            if (tag) {
+              await updateHistoryRepository.save({
+                libraryId: library.id,
+                message: 'TAG_REMOVE',
+                activityType: LibraryActivityType.TAG_REMOVE,
+                userId: user.id,
+                tagId: tag.id,
+              });
             }
           }
         } catch (error) {

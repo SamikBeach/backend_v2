@@ -21,7 +21,9 @@ export class SearchService {
     private readonly recentSearchRepository: Repository<RecentSearch>,
     @Inject(forwardRef(() => BookService))
     private readonly bookService: BookService,
+    @Inject(forwardRef(() => ReadingStatusService))
     private readonly readingStatusService: ReadingStatusService,
+    @Inject(forwardRef(() => RatingService))
     private readonly ratingService: RatingService,
   ) {}
 
@@ -240,8 +242,7 @@ export class SearchService {
   /**
    * 최근 검색어 조회
    * @param userId 사용자 ID
-   * @param limit 조회 개수
-   * @returns 최근 검색어 목록 (책 정보 포함)
+   * @param limit 결과 수
    */
   async getRecentSearchTerms(
     userId: number,
@@ -256,26 +257,22 @@ export class SearchService {
       order: { createdAt: 'DESC' },
       take: limit,
     });
-    console.log({ recentSearches });
 
     // 각 검색어에 대해 책 정보가 있으면 추가 정보 조회
     const enhancedSearches = await Promise.all(
       recentSearches.map(async (item) => {
-        // 최근 검색어 관련 정보 임시 저장
-        const recentSearchId = item.id;
-        console.log({ recentSearchId });
-
+        // 최근 검색어 관련 기본 정보 구성
         const bookResponse: BookResponse = {
-          id: recentSearchId,
-          bookId: item.bookId || -1, // 명시적으로 bookId 필드 추가
-          title: item.title || '',
+          id: item.id, // 최근 검색의 ID를 id로 사용
+          bookId: item.bookId || -1,
+          title: item.title || item.term, // 책 제목이 없으면 검색어를 사용
           author: item.author || '',
           coverImage: item.coverImage || '',
           publisher: item.publisher || '',
           isbn: item.isbn || '',
           isbn13: item.isbn13 || '',
           description: item.description || '',
-          // 기타 Book 엔티티에 필요한 필드 초기화
+          // 기본값 설정
           category: null,
           subcategory: null,
           discoverCategory: null,
@@ -292,71 +289,87 @@ export class SearchService {
           isFeatured: false,
           isDiscovered: false,
           readingStatuses: [],
-          // 날짜 필드
           createdAt: item.createdAt,
-          updatedAt: item.createdAt, // 최근 검색에서는 createdAt과 동일하게 설정
+          updatedAt: item.createdAt,
+          // 검색 관련 메타데이터 추가
+          searchTerm: item.term, // 실제 검색에 사용된 검색어
+          searchedAt: item.createdAt, // 검색 시간
         };
 
-        // bookId가 있고 DB에 실제로 저장된 책이면(id > 0) 추가 정보 조회
+        // 책 정보 조회 (DB에 저장된 책 확인)
+        let bookInfo = null;
+
+        // 방법 1: bookId로 직접 조회
         if (item.bookId && item.bookId > 0) {
           try {
-            // 1. 읽기 상태 통계 정보 가져오기
-            const readingStats =
-              await this.readingStatusService.getBookReadingStats(
-                item.bookId,
-                userId,
-              );
-
-            if (readingStats) {
-              bookResponse.readingStats = {
-                currentReaders: readingStats.currentReaders,
-                completedReaders: readingStats.completedReaders,
-                averageReadingTime: readingStats.averageReadingTime,
-                difficulty: readingStats.difficulty,
-                readingStatusCounts: readingStats.readingStatusCounts,
-              };
-
-              // 사용자의 읽기 상태가 있으면 포함
-              if (readingStats.userReadingStatus) {
-                bookResponse.userReadingStatus = readingStats.userReadingStatus;
-              }
-            }
+            bookInfo = await this.bookService.findById(item.bookId);
+            this.logger.log(`책 ID로 조회 성공: ${item.bookId}`);
           } catch (error) {
-            this.logger.error(`읽기 상태 조회 오류: ${error.message}`);
-            // 오류가 발생해도 계속 진행
-          }
-
-          // 2. 사용자 평점 정보 가져오기
-          try {
-            const userRating = await this.ratingService.findByUserAndBook(
-              userId,
-              item.bookId,
+            this.logger.warn(
+              `책 ID ${item.bookId} 조회 실패: ${error.message}`,
             );
-
-            if (userRating) {
-              bookResponse.userRating = userRating;
-            }
-          } catch (error) {
-            this.logger.error(`평점 조회 오류: ${error.message}`);
-            // 오류가 발생해도 계속 진행
           }
+        }
 
-          // 3. 실제 DB에 있는 책 정보 가져오기
+        // 방법 2: ISBN 또는 ISBN13으로 조회 (bookId로 조회 실패 시)
+        if (!bookInfo && (item.isbn || item.isbn13)) {
           try {
-            const bookInfo = await this.bookService.findById(item.bookId);
-            if (bookInfo) {
-              // 실제 책 정보로 업데이트 (평점, 리뷰 수 등)
-              bookResponse.rating = bookInfo.rating;
-              bookResponse.reviews = bookInfo.reviews;
-              bookResponse.totalRatings = bookInfo.totalRatings;
-              bookResponse.category = bookInfo.category;
-              bookResponse.subcategory = bookInfo.subcategory;
-              // 기타 필요한 필드 업데이트
+            const isbnToUse = item.isbn13 || item.isbn;
+            if (isbnToUse) {
+              this.logger.log(`ISBN(${isbnToUse})으로 책 정보 조회 시도`);
+              bookInfo = await this.bookService.findByIsbn(isbnToUse);
             }
           } catch (error) {
-            this.logger.error(`책 정보 조회 오류: ${error.message}`);
-            // 오류가 발생해도 계속 진행
+            this.logger.warn(`ISBN 조회 실패: ${error.message}`);
           }
+        }
+
+        // 책 정보가 조회되면 BookService의 enrichBookWithUserData 사용하여 사용자 데이터 결합
+        if (bookInfo) {
+          // 기본 책 정보 업데이트
+          Object.assign(bookResponse, {
+            bookId: bookInfo.id > 0 ? bookInfo.id : bookResponse.bookId,
+            title: bookInfo.title,
+            author: bookInfo.author,
+            translator: bookInfo.translator,
+            coverImage: bookInfo.coverImage,
+            publisher: bookInfo.publisher,
+            publishDate: bookInfo.publishDate,
+            description: bookInfo.description,
+            isbn: bookInfo.isbn,
+            isbn13: bookInfo.isbn13,
+            rating: bookInfo.rating,
+            reviews: bookInfo.reviews,
+            totalRatings: bookInfo.totalRatings,
+            pageCount: bookInfo.pageCount,
+            tags: bookInfo.tags,
+            priceSales: bookInfo.priceSales,
+            priceStandard: bookInfo.priceStandard,
+            category: bookInfo.category,
+            subcategory: bookInfo.subcategory,
+            isFeatured: bookInfo.isFeatured,
+            isDiscovered: bookInfo.isDiscovered,
+          });
+
+          // 실제 DB에 저장된 책인 경우, enrichBookWithUserData 활용하여 사용자 데이터 결합
+          if (bookInfo.id > 0) {
+            try {
+              const enrichedBook =
+                await this.bookService.enrichBookWithUserData(bookInfo, userId);
+
+              // 사용자별 데이터(읽기 상태, 평점) 업데이트
+              bookResponse.readingStats = enrichedBook.readingStats;
+              bookResponse.userRating = enrichedBook.userRating;
+              bookResponse.userReadingStatus = enrichedBook.userReadingStatus;
+            } catch (error) {
+              this.logger.error(`책 정보 보강 중 오류 발생: ${error.message}`);
+              // 오류가 발생해도 계속 진행
+            }
+          }
+        } else {
+          this.logger.log(
+            `책 정보를 찾을 수 없음: ${item.term} (ID: ${item.bookId || 'null'}, ISBN: ${item.isbn || item.isbn13 || 'null'})`,
+          );
         }
 
         return bookResponse;

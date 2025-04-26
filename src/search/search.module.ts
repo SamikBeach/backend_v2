@@ -11,8 +11,8 @@ import { RatingModule } from '../rating/rating.module';
   imports: [
     TypeOrmModule.forFeature([SearchLog, PopularSearch, RecentSearch]),
     forwardRef(() => BookModule),
-    ReadingStatusModule,
-    RatingModule,
+    forwardRef(() => ReadingStatusModule),
+    forwardRef(() => RatingModule),
   ],
   controllers: [SearchController],
   providers: [SearchService],

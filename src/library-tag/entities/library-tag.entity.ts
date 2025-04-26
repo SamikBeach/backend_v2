@@ -2,14 +2,14 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
-  OneToMany,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
-import { LibraryTag } from './library-tag.entity';
+import { LibraryTagMapping } from '../../library/entities/library-tag-mapping.entity';
 
-@Entity()
-export class Tag {
+@Entity('library_tag')
+export class LibraryTag {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -22,8 +22,12 @@ export class Tag {
   @Column({ default: 0 })
   usageCount: number;
 
-  @OneToMany(() => LibraryTag, (libraryTag) => libraryTag.tag)
-  libraryTags: LibraryTag[];
+  @OneToMany(() => LibraryTagMapping, (mapping) => mapping.libraryTag)
+  libraryTagMappings: LibraryTagMapping[];
+
+  // 태그에 대한 사용자 정의 메모 (선택 사항)
+  @Column({ nullable: true })
+  note: string;
 
   @CreateDateColumn()
   createdAt: Date;

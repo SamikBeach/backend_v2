@@ -15,6 +15,7 @@ import { ReviewImage } from './entities/review-image.entity';
 import { ReviewBook } from './entities/review-book.entity';
 import { ReviewLike } from './entities/review-like.entity';
 import { Comment } from './entities/comment.entity';
+import { CommentLike } from './entities/comment-like.entity';
 import { CommonModule } from '../common/common.module';
 import { FileService } from '../common/services/file.service';
 import { BookModule } from '../book/book.module';
@@ -30,6 +31,7 @@ import { RatingModule } from '../rating/rating.module';
       ReviewBook,
       ReviewLike,
       Comment,
+      CommentLike,
     ]),
     MulterModule.registerAsync({
       imports: [ConfigModule],

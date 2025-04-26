@@ -115,6 +115,7 @@ export class ReviewService {
     page: number = 1,
     limit: number = 10,
     type?: string,
+    filter: 'popular' | 'recent' = 'recent',
   ): Promise<{
     reviews: ReviewResponseDto[];
     total: number;
@@ -127,15 +128,31 @@ export class ReviewService {
         .leftJoinAndSelect('review.author', 'author')
         .leftJoinAndSelect('review.images', 'images')
         .leftJoinAndSelect('review.books', 'reviewBooks')
-        .leftJoinAndSelect('reviewBooks.book', 'book')
-        .orderBy('review.createdAt', 'DESC')
-        .skip((page - 1) * limit)
-        .take(limit);
+        .leftJoinAndSelect('reviewBooks.book', 'book');
 
       // 타입 필터링
       if (type) {
         queryBuilder.andWhere('review.type = :type', { type });
       }
+
+      // 필터 적용 (인기순 / 최신순)
+      switch (filter) {
+        case 'popular':
+          // 인기순: 좋아요가 많은 순서 + 댓글이 많은 순서
+          queryBuilder
+            .orderBy('review.likeCount', 'DESC')
+            .addOrderBy('review.commentCount', 'DESC')
+            .addOrderBy('review.createdAt', 'DESC');
+          break;
+        case 'recent':
+        default:
+          // 최신순: 생성일 기준 내림차순
+          queryBuilder.orderBy('review.createdAt', 'DESC');
+          break;
+      }
+
+      // 페이지네이션 적용
+      queryBuilder.skip((page - 1) * limit).take(limit);
 
       // 로그인한 사용자의 경우 좋아요 여부 체크
       if (userId) {
@@ -158,9 +175,66 @@ export class ReviewService {
       // 쿼리 실행
       const [reviews, total] = await queryBuilder.getManyAndCount();
 
-      // DTO로 변환
+      // 리뷰에 연결된 책들의 ID 수집
+      const bookIds = new Set<number>();
+      reviews.forEach((review) => {
+        if (review.books && review.books.length > 0) {
+          review.books.forEach((reviewBook) => {
+            if (reviewBook.book && reviewBook.book.id) {
+              bookIds.add(reviewBook.book.id);
+            }
+          });
+        }
+      });
+
+      // 책 정보를 미리 로드 (N+1 문제 방지)
+      const bookDetailsMap = new Map();
+      if (bookIds.size > 0) {
+        const books = await this.bookService.findByIds(Array.from(bookIds));
+        for (const book of books) {
+          const enrichedBook = await this.bookService.enrichBookWithUserData(
+            book,
+            userId,
+          );
+          bookDetailsMap.set(book.id, enrichedBook);
+        }
+      }
+
+      // DTO로 변환 (책 정보 강화)
       const reviewDtos = await Promise.all(
-        reviews.map((review) => this.mapReviewToResponseDto(review, userId)),
+        reviews.map(async (review) => {
+          const dto = await this.mapReviewToResponseDto(review, userId);
+
+          // 책 정보 강화
+          if (dto.books && dto.books.length > 0) {
+            dto.books = dto.books.map((book) => {
+              const enrichedBook = bookDetailsMap.get(book.id);
+              if (enrichedBook) {
+                return {
+                  id: book.id,
+                  title: book.title,
+                  author: book.author,
+                  coverImage: book.coverImage,
+                  publisher: book.publisher,
+                  isbn: enrichedBook.isbn,
+                  isbn13: enrichedBook.isbn13,
+                  publishDate: enrichedBook.publishDate,
+                  description:
+                    enrichedBook.description?.substring(0, 100) + '...',
+                  rating: enrichedBook.rating,
+                  reviews: enrichedBook.reviews,
+                  totalRatings: enrichedBook.totalRatings,
+                  readingStats: enrichedBook.readingStats,
+                  userRating: enrichedBook.userRating,
+                  userReadingStatus: enrichedBook.userReadingStatus,
+                };
+              }
+              return book;
+            });
+          }
+
+          return dto;
+        }),
       );
 
       return {
@@ -215,7 +289,48 @@ export class ReviewService {
         throw new NotFoundException(`리뷰를 찾을 수 없습니다. (ID: ${id})`);
       }
 
-      return this.mapReviewToResponseDto(review, userId);
+      // 기본 DTO 변환
+      const reviewDto = await this.mapReviewToResponseDto(review, userId);
+
+      // 책 정보 강화
+      if (reviewDto.books && reviewDto.books.length > 0) {
+        const enrichedBooks = await Promise.all(
+          reviewDto.books.map(async (book) => {
+            try {
+              const bookDetails = await this.bookService.findById(book.id);
+              const enrichedBook =
+                await this.bookService.enrichBookWithUserData(
+                  bookDetails,
+                  userId,
+                );
+
+              return {
+                ...book,
+                isbn: enrichedBook.isbn,
+                isbn13: enrichedBook.isbn13,
+                publishDate: enrichedBook.publishDate,
+                description:
+                  enrichedBook.description?.substring(0, 100) + '...',
+                rating: enrichedBook.rating,
+                reviews: enrichedBook.reviews,
+                totalRatings: enrichedBook.totalRatings,
+                readingStats: enrichedBook.readingStats,
+                userRating: enrichedBook.userRating,
+                userReadingStatus: enrichedBook.userReadingStatus,
+              };
+            } catch (error) {
+              this.logger.error(
+                `Error enriching book ${book.id}: ${error.message}`,
+              );
+              return book;
+            }
+          }),
+        );
+
+        reviewDto.books = enrichedBooks;
+      }
+
+      return reviewDto;
     } catch (error) {
       this.logger.error(`리뷰 조회 중 오류: ${error.message}`);
       throw error;
@@ -266,6 +381,20 @@ export class ReviewService {
 
       // 책 ID 업데이트
       if ('bookId' in updateReviewDto) {
+        // 기존 책 연결이 있는 경우 리뷰 카운트 감소
+        if (review.books && review.books.length > 0) {
+          for (const reviewBook of review.books) {
+            try {
+              await this.bookService.decrementReviewCount(reviewBook.bookId);
+              this.logger.log(`책 ID ${reviewBook.bookId}의 리뷰 수 감소 완료`);
+            } catch (error) {
+              this.logger.warn(
+                `책 ID ${reviewBook.bookId}의 리뷰 수 감소 실패: ${error.message}`,
+              );
+            }
+          }
+        }
+
         // 기존 책 연결을 완전히 삭제
         await this.reviewBookRepository
           .createQueryBuilder()
@@ -766,6 +895,13 @@ export class ReviewService {
         review.images = imagesByReviewId[review.id] || [];
       });
 
+      // 해당 책의 상세 정보를 가져옵니다 (사용자 별점, 리뷰 포함)
+      const bookDetails = await this.bookService.findById(bookId);
+      const enrichedBookDetails = await this.bookService.enrichBookWithUserData(
+        bookDetails,
+        userId,
+      );
+
       // 리뷰 정보 변환
       const reviewsWithDetails = await Promise.all(
         reviews.map(async (review) => {
@@ -786,7 +922,8 @@ export class ReviewService {
               where: { reviewId: review.id, userId },
             });
 
-            console.log({ userLike });
+            // userLike가 존재하면 사용자가 좋아요를 누른 것
+            userLiked = !!userLike;
           }
 
           // 책 정보 가져오기
@@ -846,6 +983,13 @@ export class ReviewService {
                   author: book.author,
                   coverImage: book.coverImage,
                   isbn: book.isbn,
+                  isbn13: book.isbn13,
+                  publisher: book.publisher,
+                  publishDate: book.publishDate,
+                  description: book.description?.substring(0, 100) + '...',
+                  rating: book.rating,
+                  reviews: book.reviews,
+                  totalRatings: book.totalRatings,
                 }
               : null,
             images: review.images
@@ -866,6 +1010,7 @@ export class ReviewService {
 
       // 페이지네이션 정보 반환
       return {
+        book: enrichedBookDetails,
         data: reviewsWithDetails,
         meta: {
           total,

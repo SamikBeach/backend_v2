@@ -1,4 +1,12 @@
-import { IsNotEmpty, IsString, IsBoolean, IsOptional } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsBoolean,
+  IsOptional,
+  IsArray,
+  IsNumber,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateLibraryDto {
   @IsNotEmpty()
@@ -12,4 +20,10 @@ export class CreateLibraryDto {
   @IsOptional()
   @IsBoolean()
   isPublic?: boolean = false;
+
+  @IsOptional()
+  @IsArray()
+  @Type(() => Number)
+  @IsNumber({}, { each: true })
+  tagIds?: number[];
 }
