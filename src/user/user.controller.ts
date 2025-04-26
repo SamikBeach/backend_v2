@@ -8,6 +8,12 @@ import {
   ParseIntPipe,
   Query,
   UnauthorizedException,
+  Delete,
+  HttpStatus,
+  HttpCode,
+  UseInterceptors,
+  ClassSerializerInterceptor,
+  Put,
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { User } from './entities/user.entity';
@@ -15,13 +21,20 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
 import { IsOwnProfile } from '../auth/decorators/is-own-profile.decorator';
-import { UserDetailResponseDto } from './dto/user.dto';
+import {
+  UserDetailResponseDto,
+  FollowersListResponseDto,
+  FollowingListResponseDto,
+  UpdateUserDto,
+} from './dto/user.dto';
 
 @Controller('user')
+@UseInterceptors(ClassSerializerInterceptor)
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Get('me')
+  @UseGuards(JwtAuthGuard)
   getCurrentUser(@GetUser() user: User) {
     if (!user) {
       throw new UnauthorizedException('사용자 인증이 필요합니다');
@@ -31,6 +44,7 @@ export class UserController {
       id: user.id,
       email: user.email,
       username: user.username,
+      bio: user.bio,
       provider: user.provider,
       isEmailVerified: user.isEmailVerified,
       marketingConsent: user.marketingConsent,
@@ -39,6 +53,7 @@ export class UserController {
   }
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   findAll(): Promise<User[]> {
     return this.userService.findAll();
   }
@@ -52,8 +67,10 @@ export class UserController {
   getUserProfile(
     @Param('id', ParseIntPipe) id: number,
     @IsOwnProfile() isOwnProfile: boolean,
+    @GetUser() currentUser?: User,
   ): Promise<UserDetailResponseDto> {
-    return this.userService.getUserProfile(id, isOwnProfile);
+    const currentUserId = currentUser?.id;
+    return this.userService.getUserProfile(id, isOwnProfile, currentUserId);
   }
 
   @Get(':id/libraries')
@@ -62,9 +79,10 @@ export class UserController {
     @IsOwnProfile() isOwnProfile: boolean,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
+    @GetUser() currentUser?: User,
   ) {
-    // This will be implemented later as per the requirements
-    return { message: 'This endpoint will be implemented later' };
+    const currentUserId = currentUser?.id;
+    return this.userService.getUserLibraries(id, page, limit, currentUserId);
   }
 
   @Get(':id/reviews')
@@ -87,6 +105,48 @@ export class UserController {
     return { message: 'This endpoint will be implemented later' };
   }
 
+  // 팔로워 목록 조회 엔드포인트
+  @Get(':id/followers')
+  getFollowers(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ): Promise<FollowersListResponseDto> {
+    const currentUserId = currentUser?.id;
+    return this.userService.getFollowers(id, currentUserId);
+  }
+
+  // 팔로잉 목록 조회 엔드포인트
+  @Get(':id/following')
+  getFollowing(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ): Promise<FollowingListResponseDto> {
+    const currentUserId = currentUser?.id;
+    return this.userService.getFollowing(id, currentUserId);
+  }
+
+  // 팔로우 엔드포인트
+  @Post(':id/follow')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async followUser(
+    @Param('id', ParseIntPipe) followingId: number,
+    @GetUser() user: User,
+  ): Promise<void> {
+    await this.userService.followUser(user.id, followingId);
+  }
+
+  // 언팔로우 엔드포인트
+  @Delete(':id/follow')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async unfollowUser(
+    @Param('id', ParseIntPipe) followingId: number,
+    @GetUser() user: User,
+  ): Promise<void> {
+    await this.userService.unfollowUser(user.id, followingId);
+  }
+
   @Post('verify')
   @IsPublic()
   verifyEmail(
@@ -94,5 +154,15 @@ export class UserController {
     @Body('code') code: string,
   ): Promise<User> {
     return this.userService.verifyEmail(email, code);
+  }
+
+  @Put('profile')
+  @UseGuards(JwtAuthGuard)
+  updateProfile(@GetUser() user: User, @Body() updateUserDto: UpdateUserDto) {
+    return this.userService.updateUserInfo(
+      user.id,
+      updateUserDto.username,
+      updateUserDto.bio,
+    );
   }
 }

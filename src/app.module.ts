@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { User } from './user/entities/user.entity';
+import { UserFollower } from './user/entities/user-follower.entity';
 import { CommonModule } from './common/common.module';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { LoggerMiddleware } from './common/middlewares/logger.middleware';
@@ -57,6 +58,7 @@ import { LibraryTagModule } from './library-tag/library-tag.module';
         database: configService.get('DB_NAME'),
         entities: [
           User,
+          UserFollower,
           Category,
           SubCategory,
           Book,

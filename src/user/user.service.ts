@@ -3,6 +3,7 @@ import {
   ConflictException,
   NotFoundException,
   UnauthorizedException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -10,15 +11,27 @@ import * as bcrypt from 'bcrypt';
 import { User, UserStatus, AuthProvider } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { randomBytes } from 'crypto';
-import { UserDetailResponseDto } from './dto/user.dto';
+import {
+  UserDetailResponseDto,
+  FollowersListResponseDto,
+  FollowingListResponseDto,
+  FollowerResponseDto,
+  LibraryPreviewDto,
+} from './dto/user.dto';
 import { Library } from '../library/entities/library.entity';
 import { Review } from '../review/entities/review.entity';
+import { UserFollower } from './entities/user-follower.entity';
+import { ReadingStatus } from '../reading-status/entities/reading-status.entity';
+import { LibrarySubscription } from '../library/entities/library-subscription.entity';
+import { LibraryBook } from '../library/entities/library-book.entity';
 
 @Injectable()
 export class UserService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(UserFollower)
+    private userFollowerRepository: Repository<UserFollower>,
   ) {}
 
   async findAll(): Promise<User[]> {
@@ -193,11 +206,19 @@ export class UserService {
     return this.userRepository.save(user);
   }
 
-  async updateUserInfo(id: number, username: string): Promise<User> {
+  async updateUserInfo(
+    id: number,
+    username: string,
+    bio?: string,
+  ): Promise<User> {
     const user = await this.findOne(id);
 
     if (username) {
       user.username = username;
+    }
+
+    if (bio !== undefined) {
+      user.bio = bio;
     }
 
     return this.userRepository.save(user);
@@ -329,119 +350,381 @@ export class UserService {
   async getUserProfile(
     id: number,
     isOwnProfile: boolean,
+    currentUserId?: number,
   ): Promise<UserDetailResponseDto> {
-    try {
-      console.log(
-        `getUserProfile called for id=${id}, isOwnProfile=${isOwnProfile}`,
-      );
+    const user = await this.findOne(id);
 
-      // 1. 사용자 기본 정보 로드
-      const user = await this.userRepository.findOne({
-        where: { id },
-      });
+    // 구독자 수(팔로워 수) 조회
+    const followersCount = await this.userFollowerRepository.count({
+      where: { following_id: id },
+    });
 
-      if (!user) {
-        throw new NotFoundException(`User with ID ${id} not found`);
-      }
+    // 팔로잉 수 조회
+    const followingCount = await this.userFollowerRepository.count({
+      where: { follower_id: id },
+    });
 
-      // 2. 카운트 정보 초기화
-      let libraryCount = 0;
-      let readCount = 0;
-      let reviewCount = 0;
-      let subscribedLibraryCount = 0;
-
-      // 3. 사용자의 서재 정보 조회
-      try {
-        const libraryQueryResult = await this.userRepository.manager.query(
-          `SELECT COUNT(id) as count FROM library WHERE owner_id = ?`,
-          [id],
-        );
-        libraryCount = parseInt(libraryQueryResult[0]?.count || '0', 10);
-
-        // 다른 사용자의 프로필을 볼 때는 공개 서재만 카운트
-        if (!isOwnProfile) {
-          const publicLibraryQueryResult =
-            await this.userRepository.manager.query(
-              `SELECT COUNT(id) as count FROM library WHERE owner_id = ? AND is_public = true`,
-              [id],
-            );
-          libraryCount = parseInt(
-            publicLibraryQueryResult[0]?.count || '0',
-            10,
-          );
-        }
-      } catch (error) {
-        console.error('Error getting library count:', error);
-      }
-
-      // 4. 읽은 책 권수 조회
-      try {
-        const bookCountQuery = isOwnProfile
-          ? `SELECT COUNT(lb.id) as count FROM library_book lb
-             JOIN library l ON lb.library_id = l.id
-             WHERE l.owner_id = ?`
-          : `SELECT COUNT(lb.id) as count FROM library_book lb
-             JOIN library l ON lb.library_id = l.id
-             WHERE l.owner_id = ? AND l.is_public = true`;
-
-        const readCountResult = await this.userRepository.manager.query(
-          bookCountQuery,
-          [id],
-        );
-        readCount = parseInt(readCountResult[0]?.count || '0', 10);
-      } catch (error) {
-        console.error('Error getting read book count:', error);
-      }
-
-      // 5. 리뷰 개수 조회
-      try {
-        const reviewCountResult = await this.userRepository.manager.query(
-          `SELECT COUNT(id) as count FROM review WHERE author_id = ?`,
-          [id],
-        );
-        reviewCount = parseInt(reviewCountResult[0]?.count || '0', 10);
-      } catch (error) {
-        console.error('Error getting review count:', error);
-      }
-
-      // 6. 구독중인 서재 개수 조회
-      try {
-        const subscriptionCountResult = await this.userRepository.manager.query(
-          `SELECT COUNT(*) as count FROM library_subscription WHERE subscriber_id = ?`,
-          [id],
-        );
-        subscribedLibraryCount = parseInt(
-          subscriptionCountResult[0]?.count || '0',
-          10,
-        );
-      } catch (error) {
-        console.error('Error getting subscription count:', error);
-      }
-
-      console.log(
-        `Profile counts - libraries: ${libraryCount}, books: ${readCount}, reviews: ${reviewCount}, subscriptions: ${subscribedLibraryCount}`,
-      );
-
-      // 7. 프로필 데이터 반환
-      return {
-        user: {
-          id: user.id,
-          username: user.username || '사용자',
-          email: isOwnProfile ? user.email : undefined,
-          provider: user.provider,
-          createdAt: user.createdAt,
-        },
-        libraryCount,
-        readCount,
-        subscribedLibraryCount,
-        reviewCount,
-        followers: 0, // 추후 구현 예정
-        following: 0, // 추후 구현 예정
-        isEditable: isOwnProfile,
-      };
-    } catch (error) {
-      console.error('Error in getUserProfile:', error);
-      throw error;
+    // 현재 사용자가 이 사용자를 팔로우하고 있는지 확인
+    let isFollowing = false;
+    if (currentUserId && currentUserId !== id) {
+      isFollowing = await this.isFollowing(currentUserId, id);
     }
+
+    // 라이브러리 수 조회
+    const libraryCount = await this.getLibraryCount(id);
+
+    // 리뷰 수 조회
+    const reviewCount = await this.getReviewCount(id);
+
+    // 읽은 책 수 조회
+    const readCount = await this.getReadCount(id);
+
+    // 구독 중인 라이브러리 수 조회
+    const subscribedLibraryCount = await this.getSubscribedLibraryCount(id);
+
+    // 사용자의 대표 라이브러리 조회 (상위 3개)
+    const libraries = await this.getUserLibraries(id, 1, 3, currentUserId);
+
+    return {
+      user: {
+        id: user.id,
+        username: user.username,
+        email: isOwnProfile ? user.email : undefined, // 자신의 프로필인 경우만 이메일 포함
+        bio: user.bio,
+        provider: user.provider,
+        createdAt: user.createdAt,
+      },
+      libraryCount,
+      readCount,
+      subscribedLibraryCount,
+      reviewCount,
+      followers: followersCount,
+      following: followingCount,
+      isEditable: isOwnProfile,
+      isFollowing,
+      libraries: libraries.items,
+    };
+  }
+
+  // 사용자 라이브러리 목록 조회
+  async getUserLibraries(
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+    currentUserId?: number,
+  ): Promise<{ items: LibraryPreviewDto[]; total: number }> {
+    // 사용자 존재여부 확인
+    await this.findOne(userId);
+
+    // TypeORM QueryBuilder를 사용한 라이브러리 조회
+    const libraryRepo = this.userRepository.manager.getRepository(Library);
+
+    const [libraries, total] = await libraryRepo
+      .createQueryBuilder('lib')
+      .where('lib.ownerId = :userId', { userId })
+      .leftJoinAndSelect('lib.owner', 'owner')
+      .orderBy('lib.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    // 도서 정보 및 구독자 수를 포함한 DTO로 변환
+    const libraryDtos: LibraryPreviewDto[] = await Promise.all(
+      libraries.map(async (library) => {
+        // 라이브러리 책 미리보기 조회 (최대 3권)
+        const previewBooks = await this.getLibraryPreviewBooks(library.id);
+
+        // 구독자 수 조회
+        const subscriberCount = await this.getLibrarySubscriberCount(
+          library.id,
+        );
+
+        // 책 수 조회
+        const bookCount = await this.getLibraryBookCount(library.id);
+
+        // 태그 정보 조회
+        const tagMappingRepo = this.userRepository.manager.getRepository(
+          'library_tag_mapping',
+        );
+        const tagMappings = await tagMappingRepo
+          .createQueryBuilder('mapping')
+          .innerJoinAndSelect('mapping.libraryTag', 'tag')
+          .where('mapping.libraryId = :libraryId', { libraryId: library.id })
+          .getMany();
+
+        // 현재 사용자가 이 라이브러리를 구독 중인지 확인
+        let isSubscribed = false;
+        if (currentUserId) {
+          const librarySubscriptionRepo =
+            this.userRepository.manager.getRepository('library_subscription');
+          const subscription = await librarySubscriptionRepo.findOne({
+            where: {
+              libraryId: library.id,
+              subscriberId: currentUserId,
+            },
+          });
+          isSubscribed = !!subscription;
+        }
+
+        // 태그 정보 변환
+        const tags = tagMappings.map((mapping) => {
+          const tag = mapping.libraryTag;
+          return {
+            id: mapping.id,
+            tagId: tag.id,
+            tagName: tag.name,
+            usageCount: 10, // 실제 사용 횟수는 추가 쿼리가 필요
+            libraryId: library.id,
+            note: mapping.note || null,
+            createdAt: mapping.createdAt,
+            updatedAt: mapping.updatedAt,
+          };
+        });
+
+        // 소유자 정보
+        const owner = {
+          id: library.owner.id,
+          username: library.owner.username,
+          email: library.owner.email,
+        };
+
+        return {
+          id: library.id,
+          name: library.name,
+          description: library.description || '',
+          isPublic: library.isPublic,
+          subscriberCount,
+          owner,
+          tags,
+          bookCount,
+          previewBooks,
+          isSubscribed,
+          createdAt: library.createdAt,
+          updatedAt: library.updatedAt,
+        };
+      }),
+    );
+
+    return {
+      items: libraryDtos,
+      total,
+    };
+  }
+
+  // 라이브러리 책 미리보기 조회
+  private async getLibraryPreviewBooks(libraryId: number): Promise<any[]> {
+    // LibraryBook 테이블을 조회하고 책 정보를 가져옴 (최대 3권)
+    const libraryBookRepo =
+      this.userRepository.manager.getRepository(LibraryBook);
+
+    const libraryBooks = await libraryBookRepo
+      .createQueryBuilder('lb')
+      .innerJoinAndSelect('lb.book', 'book')
+      .where('lb.libraryId = :libraryId', { libraryId })
+      .orderBy('lb.createdAt', 'DESC')
+      .limit(3)
+      .getMany();
+
+    // 책 정보를 DTO 형식으로 변환
+    return libraryBooks.map((lb) => {
+      const book = lb.book;
+      return {
+        id: book.id,
+        title: book.title,
+        author: book.author,
+        coverImage: book.coverImage,
+        isbn: book.isbn,
+        publisher: book.publisher,
+      };
+    });
+  }
+
+  // 라이브러리 구독자 수 조회
+  private async getLibrarySubscriberCount(libraryId: number): Promise<number> {
+    const librarySubscriptionRepo =
+      this.userRepository.manager.getRepository(LibrarySubscription);
+    return librarySubscriptionRepo.count({ where: { libraryId } });
+  }
+
+  // 라이브러리 책 수 조회
+  private async getLibraryBookCount(libraryId: number): Promise<number> {
+    const libraryBookRepo =
+      this.userRepository.manager.getRepository(LibraryBook);
+    return libraryBookRepo.count({ where: { libraryId } });
+  }
+
+  // 라이브러리 수 조회
+  private async getLibraryCount(userId: number): Promise<number> {
+    const libraryRepo = this.userRepository.manager.getRepository(Library);
+    return libraryRepo.count({ where: { ownerId: userId } });
+  }
+
+  // 리뷰 수 조회
+  private async getReviewCount(userId: number): Promise<number> {
+    const reviewRepo = this.userRepository.manager.getRepository(Review);
+    return reviewRepo.count({ where: { authorId: userId } });
+  }
+
+  // 읽은 책 수 조회
+  private async getReadCount(userId: number): Promise<number> {
+    // ReadingStatus 테이블에서 해당 사용자의 레코드 수를 조회
+    const readingStatusRepo =
+      this.userRepository.manager.getRepository(ReadingStatus);
+    return readingStatusRepo.count({ where: { userId } });
+  }
+
+  // 구독 중인 라이브러리 수 조회
+  private async getSubscribedLibraryCount(userId: number): Promise<number> {
+    // LibrarySubscription 테이블에서 해당 사용자의 구독 수를 조회
+    const librarySubscriptionRepo =
+      this.userRepository.manager.getRepository(LibrarySubscription);
+    return librarySubscriptionRepo.count({ where: { subscriberId: userId } });
+  }
+
+  // 팔로우 관련 메서드
+  async followUser(followerId: number, followingId: number): Promise<void> {
+    // 자기 자신을 팔로우하는 경우 방지
+    if (followerId === followingId) {
+      throw new BadRequestException('자기 자신을 팔로우할 수 없습니다.');
+    }
+
+    // 팔로우할 사용자가 존재하는지 확인
+    const followingUser = await this.findOne(followingId);
+    if (!followingUser) {
+      throw new NotFoundException('팔로우할 사용자를 찾을 수 없습니다.');
+    }
+
+    // 이미 팔로우 중인지 확인
+    const existingFollow = await this.userFollowerRepository.findOne({
+      where: {
+        follower_id: followerId,
+        following_id: followingId,
+      },
+    });
+
+    if (existingFollow) {
+      throw new ConflictException('이미 팔로우 중인 사용자입니다.');
+    }
+
+    // 새 팔로우 관계 생성
+    const newFollow = this.userFollowerRepository.create({
+      follower_id: followerId,
+      following_id: followingId,
+    });
+
+    await this.userFollowerRepository.save(newFollow);
+  }
+
+  async unfollowUser(followerId: number, followingId: number): Promise<void> {
+    // 자기 자신을 언팔로우하는 경우 방지
+    if (followerId === followingId) {
+      throw new BadRequestException('자기 자신을 언팔로우할 수 없습니다.');
+    }
+
+    const followRelation = await this.userFollowerRepository.findOne({
+      where: {
+        follower_id: followerId,
+        following_id: followingId,
+      },
+    });
+
+    if (!followRelation) {
+      throw new NotFoundException('팔로우 관계를 찾을 수 없습니다.');
+    }
+
+    await this.userFollowerRepository.remove(followRelation);
+  }
+
+  async getFollowers(
+    userId: number,
+    currentUserId?: number,
+  ): Promise<FollowersListResponseDto> {
+    const user = await this.findOne(userId);
+
+    const followersQuery = this.userFollowerRepository
+      .createQueryBuilder('uf')
+      .leftJoinAndSelect('uf.follower', 'follower')
+      .where('uf.following_id = :userId', { userId: user.id });
+
+    const [followers, total] = await followersQuery.getManyAndCount();
+
+    // 현재 사용자의 팔로우 목록 가져오기 (로그인한 경우)
+    let currentUserFollowing: UserFollower[] = [];
+    if (currentUserId) {
+      currentUserFollowing = await this.userFollowerRepository.find({
+        where: { follower_id: currentUserId },
+      });
+    }
+
+    // DTO 포맷으로 변환
+    const followersDTO = followers.map((follow) => {
+      const follower = follow.follower;
+      const isFollowing = currentUserId
+        ? currentUserFollowing.some((f) => f.following_id === follower.id)
+        : false;
+
+      return {
+        id: follower.id,
+        username: follower.username,
+        isFollowing,
+      } as FollowerResponseDto;
+    });
+
+    return {
+      followers: followersDTO,
+      total,
+    };
+  }
+
+  async getFollowing(
+    userId: number,
+    currentUserId?: number,
+  ): Promise<FollowingListResponseDto> {
+    const user = await this.findOne(userId);
+
+    const followingQuery = this.userFollowerRepository
+      .createQueryBuilder('uf')
+      .leftJoinAndSelect('uf.following', 'following')
+      .where('uf.follower_id = :userId', { userId: user.id });
+
+    const [following, total] = await followingQuery.getManyAndCount();
+
+    // 현재 사용자의 팔로우 목록 가져오기 (로그인한 경우)
+    let currentUserFollowing: UserFollower[] = [];
+    if (currentUserId) {
+      currentUserFollowing = await this.userFollowerRepository.find({
+        where: { follower_id: currentUserId },
+      });
+    }
+
+    // DTO 포맷으로 변환
+    const followingDTO = following.map((follow) => {
+      const followingUser = follow.following;
+      const isFollowing = currentUserId
+        ? currentUserFollowing.some((f) => f.following_id === followingUser.id)
+        : false;
+
+      return {
+        id: followingUser.id,
+        username: followingUser.username,
+        isFollowing,
+      } as FollowerResponseDto;
+    });
+
+    return {
+      following: followingDTO,
+      total,
+    };
+  }
+
+  async isFollowing(followerId: number, followingId: number): Promise<boolean> {
+    const follow = await this.userFollowerRepository.findOne({
+      where: {
+        follower_id: followerId,
+        following_id: followingId,
+      },
+    });
+
+    return !!follow;
   }
 }

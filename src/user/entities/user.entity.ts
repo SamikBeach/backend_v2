@@ -9,6 +9,7 @@ import {
 import { Library } from '../../library/entities/library.entity';
 import { Review } from '../../review/entities/review.entity';
 import { ReadingStatus } from '../../reading-status/entities/reading-status.entity';
+import { UserFollower } from './user-follower.entity';
 
 export enum UserStatus {
   ACTIVE = 'active',
@@ -35,6 +36,9 @@ export class User {
 
   @Column({ nullable: true })
   username: string;
+
+  @Column({ nullable: true })
+  bio: string;
 
   @Column({
     type: 'enum',
@@ -79,6 +83,12 @@ export class User {
 
   @OneToMany(() => ReadingStatus, (readingStatus) => readingStatus.user)
   readingStatuses: ReadingStatus[];
+
+  @OneToMany(() => UserFollower, (userFollower) => userFollower.following)
+  followers: UserFollower[];
+
+  @OneToMany(() => UserFollower, (userFollower) => userFollower.follower)
+  following: UserFollower[];
 
   @CreateDateColumn()
   createdAt: Date;
