@@ -10,6 +10,7 @@ import { Review } from '../review/entities/review.entity';
 import { ReviewImage } from '../review/entities/review-image.entity';
 import { ReviewBook } from '../review/entities/review-book.entity';
 import { BookModule } from '../book/book.module';
+import { RatingModule } from '../rating/rating.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { BookModule } from '../book/book.module';
     ]),
     forwardRef(() => ReadingStatusModule),
     forwardRef(() => BookModule),
+    forwardRef(() => RatingModule),
     CommonModule,
   ],
   controllers: [UserController],

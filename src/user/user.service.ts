@@ -42,6 +42,7 @@ import { ReviewResponseDto } from '../review/dto/review-response.dto';
 import { ReviewImage } from '../review/entities/review-image.entity';
 import { ReviewBook } from '../review/entities/review-book.entity';
 import { BookService } from '../book/book.service';
+import { RatingService } from '../rating/rating.service';
 
 @Injectable()
 export class UserService {
@@ -72,6 +73,8 @@ export class UserService {
     private readingStatusService: ReadingStatusService,
     @Inject(forwardRef(() => BookService))
     private bookService: BookService,
+    @Inject(forwardRef(() => RatingService))
+    private ratingService: RatingService,
     private fileService: FileService,
     private configService: ConfigService,
   ) {
@@ -445,6 +448,9 @@ export class UserService {
     // 사용자의 대표 라이브러리 조회 (상위 3개)
     const libraries = await this.getUserLibraries(id, 1, 3, currentUserId);
 
+    // 사용자의 평균 평점 조회
+    const averageRating = await this.ratingService.getUserAverageRating(id);
+
     return {
       user: {
         id: user.id,
@@ -458,6 +464,7 @@ export class UserService {
       libraryCount,
       readCount,
       subscribedLibraryCount,
+      averageRating,
       reviewCount: {
         total: reviewCounts.total,
         general: reviewCounts[this.REVIEW_TYPES.GENERAL],

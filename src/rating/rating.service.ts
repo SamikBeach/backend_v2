@@ -254,20 +254,41 @@ export class RatingService {
    * Rating 엔티티를 RatingResponseDto로 변환
    */
   private mapToResponseDto(rating: Rating): RatingResponseDto {
-    // Ensure numeric conversion of rating value
-    const ratingValue =
-      typeof rating.rating === 'string'
-        ? parseInt(rating.rating, 10)
-        : Number(rating.rating);
-
     return {
       id: rating.id,
       userId: rating.userId,
       bookId: rating.bookId,
-      rating: ratingValue,
+      rating: rating.rating,
       comment: rating.comment,
       createdAt: rating.createdAt,
       updatedAt: rating.updatedAt,
     };
+  }
+
+  /**
+   * 특정 사용자의 평균 평점 계산
+   */
+  async getUserAverageRating(userId: number): Promise<number | null> {
+    try {
+      const result = await this.ratingRepository
+        .createQueryBuilder('rating')
+        .select('AVG(rating.rating)', 'averageRating')
+        .where('rating.userId = :userId', { userId })
+        .andWhere('rating.rating IS NOT NULL')
+        .getRawOne();
+
+      // 평점이 없으면 null 반환
+      if (!result.averageRating) {
+        return null;
+      }
+
+      // 소수점 1자리까지 반올림
+      return Math.round(result.averageRating * 10) / 10;
+    } catch (error) {
+      this.logger.error(
+        `유저 ${userId}의 평균 평점 계산 중 오류: ${error.message}`,
+      );
+      return null;
+    }
   }
 }

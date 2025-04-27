@@ -110,6 +110,7 @@ export class UserDetailResponseDto {
   readCount: number;
   subscribedLibraryCount: number;
   reviewCount: ReviewCountsDto;
+  averageRating: number | null;
   followers: number;
   following: number;
   isEditable: boolean;
