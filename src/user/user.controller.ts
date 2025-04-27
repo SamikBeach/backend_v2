@@ -15,7 +15,6 @@ import {
   ClassSerializerInterceptor,
   Put,
   UploadedFile,
-  Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserService } from './user.service';
@@ -191,16 +190,19 @@ export class UserController {
     @Query('status') status: ReadingStatusType,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 12,
-    @GetUser() currentUser?: User,
   ) {
-    const currentUserId = currentUser?.id;
-    return this.userService.getUserBooks(
-      id,
-      status,
-      page,
-      limit,
-      isOwnProfile,
-      currentUserId,
-    );
+    return this.userService.getUserBooks(id, status, page, limit);
+  }
+
+  @Get(':id/reading-status-counts')
+  @IsPublic()
+  async getUserReadingStatusCounts(@Param('id', ParseIntPipe) id: number) {
+    return this.userService.getUserReadingStatusCounts(id);
+  }
+
+  @Get(':id/review-type-counts')
+  @IsPublic()
+  async getUserReviewTypeCounts(@Param('id', ParseIntPipe) id: number) {
+    return this.userService.getUserReviewTypeCounts(id);
   }
 }

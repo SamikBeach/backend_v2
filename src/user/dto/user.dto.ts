@@ -95,12 +95,21 @@ export class ReadingCategoryStatDto {
   count: number;
 }
 
+export class ReviewCountsDto {
+  total: number;
+  general: number;
+  discussion: number;
+  review: number;
+  question: number;
+  meetup: number;
+}
+
 export class UserDetailResponseDto {
   user: UserDetailDto;
   libraryCount: number;
   readCount: number;
   subscribedLibraryCount: number;
-  reviewCount: number;
+  reviewCount: ReviewCountsDto;
   followers: number;
   following: number;
   isEditable: boolean;

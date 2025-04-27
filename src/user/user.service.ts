@@ -34,7 +34,6 @@ import {
 import { LibrarySubscription } from '../library/entities/library-subscription.entity';
 import { LibraryBook } from '../library/entities/library-book.entity';
 import { ReadingStatusService } from '../reading-status/reading-status.service';
-import { ReadingStatusResponseDto } from '../reading-status/dto/reading-status.dto';
 import { FileService } from '../common/services/file.service';
 import { ConfigService } from '@nestjs/config';
 import { Book } from '../book/entities/book.entity';
@@ -48,6 +47,15 @@ import { BookService } from '../book/book.service';
 export class UserService {
   private serverUrl: string;
   private readonly logger = new Logger(UserService.name);
+
+  // 상수 정의: ReviewType 값
+  private readonly REVIEW_TYPES = {
+    GENERAL: 'general' as const,
+    DISCUSSION: 'discussion' as const,
+    REVIEW: 'review' as const,
+    QUESTION: 'question' as const,
+    MEETUP: 'meetup' as const,
+  };
 
   constructor(
     @InjectRepository(User)
@@ -425,8 +433,8 @@ export class UserService {
     // 라이브러리 수 조회
     const libraryCount = await this.getLibraryCount(id);
 
-    // 리뷰 수 조회
-    const reviewCount = await this.getReviewCount(id);
+    // 리뷰 카운트 세부 정보 조회
+    const reviewCounts = await this.getUserReviewTypeCounts(id);
 
     // 읽은 책 수 조회
     const readCount = await this.getReadCount(id);
@@ -450,7 +458,14 @@ export class UserService {
       libraryCount,
       readCount,
       subscribedLibraryCount,
-      reviewCount,
+      reviewCount: {
+        total: reviewCounts.total,
+        general: reviewCounts[this.REVIEW_TYPES.GENERAL],
+        discussion: reviewCounts[this.REVIEW_TYPES.DISCUSSION],
+        review: reviewCounts[this.REVIEW_TYPES.REVIEW],
+        question: reviewCounts[this.REVIEW_TYPES.QUESTION],
+        meetup: reviewCounts[this.REVIEW_TYPES.MEETUP],
+      },
       followers: followersCount,
       following: followingCount,
       isEditable: isOwnProfile,
@@ -694,7 +709,7 @@ export class UserService {
     limit: number = 10,
     currentUserId?: number,
   ): Promise<FollowersListResponseDto> {
-    const user = await this.findOne(userId);
+    await this.findOne(userId);
 
     // 변경된 쿼리: relations 옵션 사용
     const skip = (page - 1) * limit;
@@ -752,7 +767,7 @@ export class UserService {
     limit: number = 10,
     currentUserId?: number,
   ): Promise<FollowingListResponseDto> {
-    const user = await this.findOne(userId);
+    await this.findOne(userId);
 
     // 변경된 쿼리: relations 옵션 사용
     const skip = (page - 1) * limit;
@@ -823,8 +838,6 @@ export class UserService {
     status: ReadingStatusType,
     page: number = 1,
     limit: number = 10,
-    isOwnProfile: boolean = false,
-    currentUserId?: number,
   ): Promise<{ items: ExtendedReadingStatusResponseDto[]; total: number }> {
     try {
       // 사용자 존재 여부 확인
@@ -1042,7 +1055,7 @@ export class UserService {
   }> {
     try {
       // 사용자 존재 확인
-      const user = await this.findOne(userId);
+      await this.findOne(userId);
 
       this.logger.log(
         `유저 리뷰 조회 - 유저ID: ${userId}, 타입: ${type ? type.join(', ') : '전체'}, 필터: ${filter}`,
@@ -1229,6 +1242,119 @@ export class UserService {
       };
     } catch (error) {
       this.logger.error(`사용자 리뷰 조회 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // 사용자의 읽기 상태별 책 수 조회
+  async getUserReadingStatusCounts(userId: number): Promise<{
+    [ReadingStatusType.WANT_TO_READ]: number;
+    [ReadingStatusType.READING]: number;
+    [ReadingStatusType.READ]: number;
+    total: number;
+  }> {
+    try {
+      // 사용자 존재 여부 확인
+      await this.findOne(userId);
+
+      // ReadingStatus 테이블 접근
+      const readingStatusRepo =
+        this.userRepository.manager.getRepository(ReadingStatus);
+
+      // 상태별 카운트 조회
+      const [wantToReadCount, readingCount, readCount, totalCount] =
+        await Promise.all([
+          readingStatusRepo.count({
+            where: {
+              userId,
+              status: ReadingStatusType.WANT_TO_READ,
+            },
+          }),
+          readingStatusRepo.count({
+            where: {
+              userId,
+              status: ReadingStatusType.READING,
+            },
+          }),
+          readingStatusRepo.count({
+            where: {
+              userId,
+              status: ReadingStatusType.READ,
+            },
+          }),
+          readingStatusRepo.count({
+            where: { userId },
+          }),
+        ]);
+
+      return {
+        [ReadingStatusType.WANT_TO_READ]: wantToReadCount,
+        [ReadingStatusType.READING]: readingCount,
+        [ReadingStatusType.READ]: readCount,
+        total: totalCount,
+      };
+    } catch (error) {
+      this.logger.error(
+        `사용자 읽기 상태별 책 수 조회 중 오류: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  // 사용자의 리뷰 타입별 수 조회
+  async getUserReviewTypeCounts(userId: number): Promise<{
+    [key: string]: number;
+    general: number;
+    discussion: number;
+    review: number;
+    question: number;
+    meetup: number;
+    total: number;
+  }> {
+    try {
+      // 사용자 존재 여부 확인
+      await this.findOne(userId);
+
+      // 전체 리뷰 개수
+      const totalCount = await this.reviewRepository.count({
+        where: { authorId: userId },
+      });
+
+      // 각 타입별 개수 조회
+      const [
+        generalCount,
+        discussionCount,
+        reviewCount,
+        questionCount,
+        meetupCount,
+      ] = await Promise.all([
+        this.reviewRepository.count({
+          where: { authorId: userId, type: this.REVIEW_TYPES.GENERAL },
+        }),
+        this.reviewRepository.count({
+          where: { authorId: userId, type: this.REVIEW_TYPES.DISCUSSION },
+        }),
+        this.reviewRepository.count({
+          where: { authorId: userId, type: this.REVIEW_TYPES.REVIEW },
+        }),
+        this.reviewRepository.count({
+          where: { authorId: userId, type: this.REVIEW_TYPES.QUESTION },
+        }),
+        this.reviewRepository.count({
+          where: { authorId: userId, type: this.REVIEW_TYPES.MEETUP },
+        }),
+      ]);
+
+      return {
+        [this.REVIEW_TYPES.GENERAL]: generalCount,
+        [this.REVIEW_TYPES.DISCUSSION]: discussionCount,
+        [this.REVIEW_TYPES.REVIEW]: reviewCount,
+        [this.REVIEW_TYPES.QUESTION]: questionCount,
+        [this.REVIEW_TYPES.MEETUP]: meetupCount,
+        total: totalCount,
+      };
+    } catch (error) {
+      this.logger.error(`사용자 리뷰 타입별 수 조회 중 오류: ${error.message}`);
       throw error;
     }
   }
