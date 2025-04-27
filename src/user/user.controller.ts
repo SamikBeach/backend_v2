@@ -222,6 +222,15 @@ export class UserController {
     );
   }
 
+  @Get(':userId/ratings-by-score')
+  @IsPublic()
+  async getUserRatingsByScore(
+    @Param('userId', ParseIntPipe) userId: number,
+    @GetUser() user?: User,
+  ) {
+    return this.userService.getUserRatingsByScore(userId);
+  }
+
   @Get(':userId/activity')
   @IsPublic()
   async getUserActivity(

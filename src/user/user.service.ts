@@ -9,7 +9,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserStatus, AuthProvider } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -37,12 +37,12 @@ import { ReadingStatusService } from '../reading-status/reading-status.service';
 import { FileService } from '../common/services/file.service';
 import { ConfigService } from '@nestjs/config';
 import { Book } from '../book/entities/book.entity';
-import { In } from 'typeorm';
 import { ReviewResponseDto } from '../review/dto/review-response.dto';
 import { ReviewImage } from '../review/entities/review-image.entity';
 import { ReviewBook } from '../review/entities/review-book.entity';
 import { BookService } from '../book/book.service';
 import { RatingService } from '../rating/rating.service';
+import { ReviewLike } from '../review/entities/review-like.entity';
 
 @Injectable()
 export class UserService {
@@ -428,10 +428,13 @@ export class UserService {
     const subscribedLibraryCount = await this.getSubscribedLibraryCount(id);
     const reviewCounts = await this.getUserReviewTypeCounts(id);
     const averageRating = await this.ratingService.getUserAverageRating(id);
-    const ratingCount = await this.getRatingCount(id);
+    const ratingCount = await this.getRatingCount(id, currentUserId);
 
     // 중복 제거된 리뷰와 평점 수 계산
-    const reviewAndRatingCount = await this.getReviewAndRatingCount(id);
+    const reviewAndRatingCount = await this.getReviewAndRatingCount(
+      id,
+      currentUserId,
+    );
 
     // 팔로워, 팔로잉 수 계산
     const followerCount = await this.userFollowerRepository.count({
@@ -1122,6 +1125,7 @@ export class UserService {
             currentUserId,
           },
         );
+        // 필드명을 review_isLiked로 변경 (TypeORM에서 실제 값을 가져오는 방식에 맞게)
         queryBuilder.addSelect(
           'CASE WHEN likes.id IS NOT NULL THEN true ELSE false END',
           'review_isLiked',
@@ -1132,6 +1136,36 @@ export class UserService {
 
       // 쿼리 실행
       const [reviews, total] = await queryBuilder.getManyAndCount();
+
+      // 로그 추가 - 리뷰의 isLiked 필드 확인
+      if (reviews.length > 0) {
+        const rawObject = {};
+        // 객체의 모든 키를 확인
+        for (const key in reviews[0]) {
+          if (typeof key === 'string') {
+            rawObject[key] = reviews[0][key];
+          }
+        }
+
+        this.logger.log(
+          `첫 번째 리뷰의 필드 확인: ${JSON.stringify({
+            review_id: reviews[0].id,
+            review_type: reviews[0].type,
+            raw_isLiked: reviews[0]['isLiked'],
+            raw_review_isLiked: reviews[0]['review_isLiked'],
+          })}`,
+        );
+
+        // 좋아요 상태 집계
+        if (currentUserId) {
+          const likedReviews = reviews.filter(
+            (r) => r['review_isLiked'] === true,
+          );
+          this.logger.log(
+            `유저 리뷰 목록 isLiked 상태: 총 ${reviews.length}개 중 좋아요된 리뷰 ${likedReviews.length}개`,
+          );
+        }
+      }
 
       // 리뷰에 연결된 책들의 ID 수집
       const bookIds = new Set<number>();
@@ -1158,8 +1192,8 @@ export class UserService {
         }
       }
 
-      // DTO로 변환
-      const reviewDtos = reviews.map((review) => {
+      // 매퍼 함수를 한 번만 정의
+      const mapReviewsData = async (review: any) => {
         const images = review.images
           ? review.images.map((img) => ({
               id: img.id,
@@ -1215,6 +1249,21 @@ export class UserService {
           };
         }
 
+        // 좋아요 상태 확인 및 로깅 (review 타입인 경우에만)
+        let isLiked = review['review_isLiked'] === true;
+
+        // review_isLiked가 undefined인 경우 직접 체크
+        if (currentUserId && review['review_isLiked'] === undefined) {
+          isLiked = await this.isReviewLikedByUser(review.id, currentUserId);
+          this.logger.debug(
+            `리뷰 ID=${review.id}, 타입=${review.type} isLiked 직접 체크: ${isLiked}`,
+          );
+        } else if (currentUserId) {
+          this.logger.debug(
+            `리뷰 ID=${review.id}, 타입=${review.type} isLiked 설정: ${isLiked}, raw_value=${review['review_isLiked']}`,
+          );
+        }
+
         return {
           id: review.id,
           content: review.content,
@@ -1232,12 +1281,18 @@ export class UserService {
           userRating,
           likeCount: review.likeCount || 0,
           commentCount: review.commentCount || 0,
-          isLiked: review['isLiked'] || false,
+          isLiked,
         } as ReviewResponseDto;
-      });
+      };
+
+      // 매핑 작업 수행
+      const mappedReviews = [];
+      for (const review of reviews) {
+        mappedReviews.push(await mapReviewsData(review));
+      }
 
       return {
-        reviews: reviewDtos,
+        reviews: mappedReviews,
         total,
         page,
         totalPages: Math.ceil(total / limit),
@@ -1362,16 +1417,19 @@ export class UserService {
   }
 
   // 별점만 매긴 것들의 개수 조회 (리뷰가 있는 책의 평점 제외)
-  private async getRatingCount(userId: number): Promise<number> {
+  private async getRatingCount(
+    userId: number,
+    currentUserId?: number,
+  ): Promise<number> {
     try {
-      // 리뷰 타입의 리뷰를 가져와서 해당 책 ID 수집
+      // 리뷰 조회 - 리뷰 타입의 리뷰만 가져오기
       const reviewsResult = await this.getUserReviews(
         userId,
         1,
         1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
         ['review'], // review 타입만 필터링
         'recent',
-        undefined,
+        currentUserId, // 좋아요 여부 확인을 위해 currentUserId 전달
       );
 
       // 리뷰에 포함된 책의 ID 목록 생성
@@ -1418,7 +1476,7 @@ export class UserService {
       // 사용자 존재 여부 확인
       const user = await this.findOne(userId);
 
-      // 리뷰 타입의 리뷰를 가져와서 해당 책 ID 수집
+      // 리뷰 조회 - 리뷰 타입의 리뷰만 가져오기
       const reviewsResult = await this.getUserReviews(
         userId,
         1,
@@ -1480,6 +1538,54 @@ export class UserService {
     }
   }
 
+  async getUserRatingsByScore(userId: number) {
+    try {
+      const ratings =
+        await this.ratingService.findAllByUserWithBookInfo(userId);
+
+      // 각 평점 점수별 개수 초기화
+      const ratingCounts = {
+        1: 0,
+        2: 0,
+        3: 0,
+        4: 0,
+        5: 0,
+        total: 0,
+      };
+
+      // 평점 점수별로 개수 세기
+      ratings.forEach((rating) => {
+        if (rating.rating >= 1 && rating.rating <= 5) {
+          ratingCounts[rating.rating]++;
+          ratingCounts.total++;
+        }
+      });
+
+      return ratingCounts;
+    } catch (error) {
+      this.logger.error(
+        `Failed to get ratings by score for user ${userId}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  private async isReviewLikedByUser(
+    reviewId: number,
+    userId?: number,
+  ): Promise<boolean> {
+    if (!userId) return false;
+
+    const like = await this.userRepository.manager
+      .getRepository(ReviewLike)
+      .findOne({
+        where: { reviewId, userId },
+      });
+
+    return !!like;
+  }
+
   async getUserActivity(
     userId: number,
     page: number = 1,
@@ -1493,15 +1599,39 @@ export class UserService {
     totalPages: number;
   }> {
     try {
-      // 리뷰 조회 - 리뷰 타입의 리뷰만 가져오기
+      this.logger.log(
+        `getUserActivity 호출: userId=${userId}, currentUserId=${currentUserId}, filter=${filter}`,
+      );
+
+      // 모든 타입의 리뷰를 가져옵니다 (review 타입만이 아닌 모든 타입)
       const reviewsResult = await this.getUserReviews(
         userId,
         1,
         1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
-        ['review'], // review 타입만 필터링
+        undefined, // 모든 타입 포함
         filter,
         currentUserId,
       );
+
+      // 디버그 로그 - 리뷰 결과
+      if (reviewsResult.reviews.length > 0) {
+        // 모든 리뷰의 isLiked 상태 로깅
+        const likedCount = reviewsResult.reviews.filter(
+          (r) => r.isLiked,
+        ).length;
+
+        this.logger.log(
+          `Activity - 리뷰 조회 결과: 총 ${reviewsResult.reviews.length}개, 좋아요 표시된 리뷰: ${likedCount}개`,
+        );
+
+        this.logger.log(
+          `Activity - 첫 번째 리뷰 isLiked 확인: ${JSON.stringify({
+            review_id: reviewsResult.reviews[0].id,
+            type: reviewsResult.reviews[0].type,
+            isLiked: reviewsResult.reviews[0].isLiked,
+          })}`,
+        );
+      }
 
       // 평점 조회
       const ratingsResult = await this.getUserRatings(
@@ -1512,19 +1642,80 @@ export class UserService {
       );
 
       // 리뷰와 평점을 합치고 타입 필드 추가
-      const reviews = reviewsResult.reviews.map((review) => ({
+      const reviewsWithType = reviewsResult.reviews.map((review) => ({
         ...review,
         activityType: 'review',
       }));
 
-      const ratings = ratingsResult.ratings.map((rating) => ({
-        ...rating,
-        activityType: 'rating',
-      }));
+      // 다시 확인 로그
+      if (reviewsWithType.length > 0) {
+        this.logger.log(
+          `Activity - 타입 추가 후 첫 번째 리뷰 isLiked 확인: ${JSON.stringify({
+            activity_type: reviewsWithType[0].activityType,
+            review_id: reviewsWithType[0].id,
+            type: reviewsWithType[0].type,
+            isLiked: reviewsWithType[0].isLiked,
+          })}`,
+        );
+      }
+
+      // 이 부분은 필요한 경우에만 실행합니다 (getUserReviews 메서드에서 이미 isLiked 설정 시도함)
+      if (reviewsWithType.length > 0 && currentUserId) {
+        // 모든 리뷰의 isLiked 상태를 확인하기 위해 누락된 값이 있는지 검사
+        const hasAnyUndefinedIsLiked = reviewsWithType.some(
+          (review) => review.isLiked === undefined || review.isLiked === null,
+        );
+
+        if (hasAnyUndefinedIsLiked) {
+          this.logger.log(
+            `Activity - 리뷰 타입 활동 중 isLiked가 undefined인 항목이 있어 좋아요 상태 재확인 시작`,
+          );
+
+          // 모든 리뷰에 대한 좋아요 데이터를 한 번에 가져오기
+          const reviewIds = reviewsWithType.map((review) => review.id);
+          const likes = await this.userRepository.manager
+            .getRepository(ReviewLike)
+            .find({
+              where: {
+                reviewId: In(reviewIds),
+                userId: currentUserId,
+              },
+            });
+
+          this.logger.log(
+            `Activity - 좋아요 데이터 조회 결과: ${likes.length}개`,
+          );
+
+          // 좋아요 데이터를 Map으로 변환하여 빠르게 접근할 수 있도록 함
+          const likeMap = new Map();
+          likes.forEach((like) => {
+            likeMap.set(like.reviewId, true);
+          });
+
+          // 각 리뷰의 isLiked 값을 설정
+          for (const review of reviewsWithType) {
+            // isLiked 값을 명시적으로 설정 (기존 값이 있으면 유지)
+            if (review.isLiked === undefined || review.isLiked === null) {
+              review.isLiked = likeMap.has(review.id);
+
+              // 복구된 좋아요 여부 로깅
+              if (likeMap.has(review.id)) {
+                this.logger.log(
+                  `Activity - isLiked 직접 설정: 리뷰 ID=${review.id}, 타입=${review.type}, isLiked=true`,
+                );
+              }
+            }
+          }
+        } else {
+          this.logger.log(
+            `Activity - 모든 리뷰에 이미 isLiked 값이 설정되어 있습니다.`,
+          );
+        }
+      }
 
       // 리뷰에 포함된 책의 ID 목록 생성
       const reviewBookIds = new Set<number>();
-      reviews.forEach((review) => {
+      reviewsWithType.forEach((review) => {
         if (review.books && review.books.length > 0) {
           review.books.forEach((book) => {
             reviewBookIds.add(book.id);
@@ -1532,14 +1723,20 @@ export class UserService {
         }
       });
 
+      // 평점에 타입 추가
+      const ratingsWithType = ratingsResult.ratings.map((rating) => ({
+        ...rating,
+        activityType: 'rating',
+      }));
+
       // 리뷰에 포함된 책에 대한 별점 필터링
-      const filteredRatings = ratings.filter((rating) => {
+      const filteredRatings = ratingsWithType.filter((rating) => {
         // 리뷰에 포함된 책에 대한 별점이 아닌 경우만 포함
         return !reviewBookIds.has(rating.book?.id);
       });
 
       // 활동들을 합치고 정렬
-      let allActivities = [...reviews, ...filteredRatings];
+      let allActivities = [...reviewsWithType, ...filteredRatings];
 
       // 필터에 따라 정렬
       if (filter === 'recent') {
@@ -1556,6 +1753,20 @@ export class UserService {
             b.activityType === 'review' ? b.likeCount : b.rating;
           return bPopularity - aPopularity;
         });
+      }
+
+      // 최종 확인 로그
+      if (
+        allActivities.length > 0 &&
+        allActivities[0].activityType === 'review'
+      ) {
+        this.logger.log(
+          `Activity - 정렬 후 첫 번째 활동 isLiked 확인: ${JSON.stringify({
+            activity_type: allActivities[0].activityType,
+            review_id: allActivities[0].id,
+            isLiked: allActivities[0].isLiked,
+          })}`,
+        );
       }
 
       // 페이지네이션 적용
@@ -1578,7 +1789,10 @@ export class UserService {
   }
 
   // 중복 제거된 리뷰와 평점 수 계산
-  private async getReviewAndRatingCount(userId: number): Promise<number> {
+  private async getReviewAndRatingCount(
+    userId: number,
+    currentUserId?: number,
+  ): Promise<number> {
     try {
       // 리뷰 조회 - 리뷰 타입의 리뷰만 가져오기
       const reviewsResult = await this.getUserReviews(
@@ -1587,7 +1801,7 @@ export class UserService {
         1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
         ['review'], // review 타입만 필터링
         'recent',
-        undefined,
+        currentUserId,
       );
 
       // 평점 조회
@@ -1595,7 +1809,7 @@ export class UserService {
         userId,
         1,
         1000, // 충분히 큰 숫자로 모든 평점 가져오기
-        undefined,
+        currentUserId,
       );
 
       // 리뷰와 평점을 합치고 타입 필드 추가

@@ -213,7 +213,25 @@ export class ReviewService {
       // DTO로 변환 (책 정보 강화)
       const reviewDtos = await Promise.all(
         reviews.map(async (review) => {
+          // 좋아요 상태 확인
+          let isLiked = review['review_isLiked'] === true;
+
+          // review_isLiked가 undefined인 경우에만 추가 체크
+          if (userId && review['review_isLiked'] === undefined) {
+            const like = await this.reviewLikeRepository.findOne({
+              where: { reviewId: review.id, userId },
+            });
+            isLiked = !!like;
+            this.logger.debug(
+              `리뷰 ID ${review.id} isLiked 직접 조회: ${isLiked}`,
+            );
+          }
+
+          // 기본 DTO 변환
           const dto = await this.mapReviewToResponseDto(review, userId);
+
+          // isLiked 값 명시적으로 설정
+          dto.isLiked = isLiked;
 
           // 책 정보 강화
           if (dto.books && dto.books.length > 0) {
@@ -297,6 +315,13 @@ export class ReviewService {
 
       if (!review) {
         throw new NotFoundException(`리뷰를 찾을 수 없습니다. (ID: ${id})`);
+      }
+
+      // 로그 추가: isLiked 값 확인
+      if (userId) {
+        this.logger.log(
+          `리뷰 상세 조회 - 리뷰 ID ${id}의 isLiked 값: ${review['review_isLiked']}`,
+        );
       }
 
       // 기본 DTO 변환
@@ -722,15 +747,23 @@ export class ReviewService {
     review: any,
     userId?: number,
   ): Promise<ReviewResponseDto> {
-    // 좋아요 여부
+    // 좋아요 여부 확인
     let isLiked = false;
+
+    // 1. SQL 쿼리에서 가져온 review_isLiked 필드가 있는 경우
     if (review.review_isLiked !== undefined) {
-      isLiked = review.review_isLiked;
-    } else if (userId) {
+      isLiked = review.review_isLiked === true;
+      this.logger.debug(
+        `리뷰 ID ${review.id} SQL에서 isLiked 확인: ${isLiked}`,
+      );
+    }
+    // 2. 로그인한 사용자이면서 isLiked 값이 없는 경우 직접 조회
+    else if (userId) {
       const like = await this.reviewLikeRepository.findOne({
         where: { reviewId: review.id, userId },
       });
       isLiked = !!like;
+      this.logger.debug(`리뷰 ID ${review.id} 직접 isLiked 조회: ${isLiked}`);
     }
 
     // 책 정보
@@ -862,6 +895,22 @@ export class ReviewService {
         .leftJoinAndSelect('review.author', 'author')
         .where('reviewBooks.bookId = :bookId', { bookId });
 
+      // 로그인한 사용자의 경우 좋아요 여부 체크 (SQL 쿼리에서)
+      if (userId) {
+        queryBuilder.leftJoin(
+          'review.likes',
+          'userLikes',
+          'userLikes.reviewId = review.id AND userLikes.userId = :userId',
+          { userId },
+        );
+        queryBuilder.addSelect(
+          'CASE WHEN userLikes.id IS NOT NULL THEN true ELSE false END',
+          'review_isLiked',
+        );
+      } else {
+        queryBuilder.addSelect('false', 'review_isLiked');
+      }
+
       // 정렬 방식 설정
       switch (sort) {
         case 'likes':
@@ -897,8 +946,18 @@ export class ReviewService {
       // 리뷰 가져오기
       const [reviews, total] = await queryBuilder.getManyAndCount();
 
-      // 이미지를 별도로 로드
+      // 첫 번째 리뷰의 review_isLiked 필드 확인 로깅
+      if (reviews.length > 0 && userId) {
+        this.logger.log(
+          `첫 번째 리뷰 좋아요 상태 확인: reviewId=${reviews[0].id}, review_isLiked=${reviews[0]['review_isLiked']}`,
+        );
+      }
+
+      // 필요한 데이터를 한 번에 가져오기 위한 ID 목록 준비
       const reviewIds = reviews.map((review) => review.id);
+      const authorIds = reviews.map((review) => review.author.id);
+
+      // 1. 이미지를 별도로 로드
       const reviewImages = await this.reviewImageRepository.find({
         where: { reviewId: In(reviewIds) },
       });
@@ -912,10 +971,74 @@ export class ReviewService {
         return acc;
       }, {});
 
-      // 각 리뷰에 이미지 설정
-      reviews.forEach((review) => {
-        review.images = imagesByReviewId[review.id] || [];
+      // 2. 한 번에 모든 좋아요 수 가져오기
+      const likesCountQuery = this.reviewLikeRepository
+        .createQueryBuilder('like')
+        .select('like.reviewId', 'reviewId')
+        .addSelect('COUNT(like.id)', 'count')
+        .where('like.reviewId IN (:...reviewIds)', { reviewIds })
+        .groupBy('like.reviewId');
+
+      const likesCountResults = await likesCountQuery.getRawMany();
+      const likesCountMap = likesCountResults.reduce((acc, item) => {
+        acc[item.reviewId] = parseInt(item.count, 10);
+        return acc;
+      }, {});
+
+      // 3. 한 번에 모든 댓글 수 가져오기
+      const commentsCountQuery = this.commentRepository
+        .createQueryBuilder('comment')
+        .select('comment.reviewId', 'reviewId')
+        .addSelect('COUNT(comment.id)', 'count')
+        .where('comment.reviewId IN (:...reviewIds)', { reviewIds })
+        .groupBy('comment.reviewId');
+
+      const commentsCountResults = await commentsCountQuery.getRawMany();
+      const commentsCountMap = commentsCountResults.reduce((acc, item) => {
+        acc[item.reviewId] = parseInt(item.count, 10);
+        return acc;
+      }, {});
+
+      // 4. 사용자의 좋아요 정보 가져오기 (로그인한 경우)
+      let userLikesMap = {};
+      if (userId) {
+        const userLikes = await this.reviewLikeRepository.find({
+          where: { reviewId: In(reviewIds), userId },
+        });
+
+        userLikesMap = userLikes.reduce((acc, like) => {
+          acc[like.reviewId] = true;
+          return acc;
+        }, {});
+      }
+
+      // 5. ReviewBook 정보 일괄 가져오기
+      const reviewBooks = await this.reviewBookRepository.find({
+        where: { reviewId: In(reviewIds), bookId },
+        relations: ['book'],
       });
+
+      // 리뷰ID로 매핑
+      const booksByReviewId = reviewBooks.reduce((acc, item) => {
+        acc[item.reviewId] = item.book;
+        return acc;
+      }, {});
+
+      // 6. 한 번에 모든 저자의 별점 정보 가져오기
+      const ratingsPromises = authorIds.map((authorId) =>
+        this.ratingService.findByUserAndBook(authorId, bookId).catch((err) => {
+          this.logger.error(`Error fetching rating: ${err.message}`);
+          return null;
+        }),
+      );
+
+      const ratings = await Promise.all(ratingsPromises);
+      const ratingsByAuthorId = ratings.reduce((acc, rating, index) => {
+        if (rating) {
+          acc[authorIds[index]] = rating;
+        }
+        return acc;
+      }, {});
 
       // 해당 책의 상세 정보를 가져옵니다 (사용자 별점, 리뷰 포함)
       const bookDetails = await this.bookService.findById(bookId);
@@ -924,111 +1047,77 @@ export class ReviewService {
         userId,
       );
 
-      // 리뷰 정보 변환
-      const reviewsWithDetails = await Promise.all(
-        reviews.map(async (review) => {
-          // 좋아요 수 가져오기
-          const likesCount = await this.reviewLikeRepository.count({
-            where: { reviewId: review.id },
-          });
+      // 각 리뷰에 데이터 설정
+      reviews.forEach((review) => {
+        review.images = imagesByReviewId[review.id] || [];
+      });
 
-          // 댓글 수 가져오기
-          const commentsCount = await this.commentRepository.count({
-            where: { reviewId: review.id },
-          });
+      // 리뷰 정보 변환 (이제 추가 비동기 작업 없이 모든 데이터를 사용)
+      const reviewsWithDetails = reviews.map((review) => {
+        const authorId = review.author.id;
+        const book = booksByReviewId[review.id] || null;
 
-          // 로그인한 사용자가 좋아요를 눌렀는지 확인
-          let userLiked = false;
-          if (userId) {
-            const userLike = await this.reviewLikeRepository.findOne({
-              where: { reviewId: review.id, userId },
-            });
+        // 이미 가져온 데이터 사용
+        const likesCount = likesCountMap[review.id] || 0;
+        const commentsCount = commentsCountMap[review.id] || 0;
 
-            // userLike가 존재하면 사용자가 좋아요를 누른 것
-            userLiked = !!userLike;
-          }
+        // SQL 쿼리의 결과에서 먼저 isLiked 값을 확인하고, 없으면 Map에서 확인
+        let userLiked = review['review_isLiked'] === true;
+        if (review['review_isLiked'] === undefined) {
+          userLiked = userLikesMap[review.id] || false;
+          this.logger.debug(
+            `ID ${review.id} 리뷰의 isLiked가 SQL 쿼리에서 누락되어 Map 사용: ${userLiked}`,
+          );
+        }
 
-          // 책 정보 가져오기
-          const reviewBook = await this.reviewBookRepository.findOne({
-            where: { reviewId: review.id, bookId: bookId },
-            relations: ['book'],
-          });
-
-          const book = reviewBook?.book || null;
-
-          // 리뷰 작성자의 별점 정보 가져오기
-          let userRating = null;
-          if (book) {
-            try {
-              this.logger.debug(
-                `Fetching rating for review author ${review.authorId} and book ${book.id}`,
-              );
-              const rating = await this.ratingService.findByUserAndBook(
-                review.authorId,
-                book.id,
-              );
-
-              if (rating) {
-                this.logger.debug(`Found rating: ${JSON.stringify(rating)}`);
-                userRating = {
-                  bookId: book.id,
-                  rating: rating.rating,
-                  comment: rating.comment,
-                };
-              } else {
-                this.logger.debug(
-                  `No rating found for review author ${review.authorId} and book ${book.id}`,
-                );
-              }
-            } catch (error) {
-              this.logger.error(`Error fetching rating: ${error.message}`);
-              // Still allow the request to proceed even if rating fetch fails
-              userRating = null;
-            }
-          } else {
-            this.logger.debug(
-              `Skipping rating fetch: authorId=${review.authorId}, book=${book?.id}`,
-            );
-          }
-
-          return {
-            id: review.id,
-            content: review.content,
-            author: {
-              id: review.author.id,
-              username: review.author.username,
-            },
-            book: book
-              ? {
-                  id: book.id,
-                  title: book.title,
-                  author: book.author,
-                  coverImage: book.coverImage,
-                  isbn: book.isbn,
-                  isbn13: book.isbn13,
-                  publisher: book.publisher,
-                  publishDate: book.publishDate,
-                  description: book.description?.substring(0, 100) + '...',
-                  rating: book.rating,
-                  reviews: book.reviews,
-                  totalRatings: book.totalRatings,
-                }
-              : null,
-            images: review.images
-              ? review.images.map((image) => ({
-                  id: image.id,
-                  url: image.url,
-                }))
-              : [],
-            userRating,
-            likesCount,
-            commentsCount,
-            userLiked,
-            createdAt: review.createdAt,
-            updatedAt: review.updatedAt,
+        // 별점 정보
+        let userRating = null;
+        const rating = ratingsByAuthorId[authorId];
+        if (rating && book) {
+          userRating = {
+            bookId: book.id,
+            rating: rating.rating,
+            comment: rating.comment,
           };
-        }),
-      );
+        }
+
+        return {
+          id: review.id,
+          content: review.content,
+          author: {
+            id: review.author.id,
+            username: review.author.username,
+          },
+          book: book
+            ? {
+                id: book.id,
+                title: book.title,
+                author: book.author,
+                coverImage: book.coverImage,
+                isbn: book.isbn,
+                isbn13: book.isbn13,
+                publisher: book.publisher,
+                publishDate: book.publishDate,
+                description: book.description?.substring(0, 100) + '...',
+                rating: book.rating,
+                reviews: book.reviews,
+                totalRatings: book.totalRatings,
+              }
+            : null,
+          images: review.images
+            ? review.images.map((image) => ({
+                id: image.id,
+                url: image.url,
+              }))
+            : [],
+          userRating,
+          likesCount,
+          commentsCount,
+          isLiked: userLiked,
+          createdAt: review.createdAt,
+          updatedAt: review.updatedAt,
+        };
+      });
 
       // 페이지네이션 정보 반환
       return {
