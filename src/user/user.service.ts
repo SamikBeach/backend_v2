@@ -415,47 +415,40 @@ export class UserService {
     isOwnProfile: boolean,
     currentUserId?: number,
   ): Promise<UserDetailResponseDto> {
-    const user = await this.findOne(id);
-
-    // 구독자 수(팔로워 수) 조회
-    const followersCount = await this.userFollowerRepository.count({
-      where: { following_id: id },
+    const user = await this.userRepository.findOne({
+      where: { id },
     });
 
-    // 팔로잉 수 조회
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    const libraryCount = await this.getLibraryCount(id);
+    const readCount = await this.getReadCount(id);
+    const subscribedLibraryCount = await this.getSubscribedLibraryCount(id);
+    const reviewCounts = await this.getUserReviewTypeCounts(id);
+    const averageRating = await this.ratingService.getUserAverageRating(id);
+    const ratingCount = await this.getRatingCount(id);
+
+    // 팔로워, 팔로잉 수 계산
+    const followerCount = await this.userFollowerRepository.count({
+      where: { following_id: id },
+    });
     const followingCount = await this.userFollowerRepository.count({
       where: { follower_id: id },
     });
 
-    // 현재 사용자가 이 사용자를 팔로우하고 있는지 확인
+    // 본인 여부 또는 현재 사용자가 팔로우 중인지 여부 확인
     let isFollowing = false;
     if (currentUserId && currentUserId !== id) {
       isFollowing = await this.isFollowing(currentUserId, id);
     }
 
-    // 라이브러리 수 조회
-    const libraryCount = await this.getLibraryCount(id);
-
-    // 리뷰 카운트 세부 정보 조회
-    const reviewCounts = await this.getUserReviewTypeCounts(id);
-
-    // 읽은 책 수 조회
-    const readCount = await this.getReadCount(id);
-
-    // 구독 중인 라이브러리 수 조회
-    const subscribedLibraryCount = await this.getSubscribedLibraryCount(id);
-
-    // 사용자의 대표 라이브러리 조회 (상위 3개)
-    const libraries = await this.getUserLibraries(id, 1, 3, currentUserId);
-
-    // 사용자의 평균 평점 조회
-    const averageRating = await this.ratingService.getUserAverageRating(id);
-
     return {
       user: {
         id: user.id,
         username: user.username,
-        email: isOwnProfile ? user.email : undefined, // 자신의 프로필인 경우만 이메일 포함
+        email: isOwnProfile ? user.email : undefined,
         bio: user.bio,
         profileImage: this.ensureFullImageUrl(user.profileImage),
         provider: user.provider,
@@ -464,20 +457,13 @@ export class UserService {
       libraryCount,
       readCount,
       subscribedLibraryCount,
+      reviewCount: reviewCounts,
       averageRating,
-      reviewCount: {
-        total: reviewCounts.total,
-        general: reviewCounts[this.REVIEW_TYPES.GENERAL],
-        discussion: reviewCounts[this.REVIEW_TYPES.DISCUSSION],
-        review: reviewCounts[this.REVIEW_TYPES.REVIEW],
-        question: reviewCounts[this.REVIEW_TYPES.QUESTION],
-        meetup: reviewCounts[this.REVIEW_TYPES.MEETUP],
-      },
-      followers: followersCount,
+      ratingCount,
+      followers: followerCount,
       following: followingCount,
       isEditable: isOwnProfile,
-      isFollowing,
-      libraries: libraries.items,
+      isFollowing: currentUserId !== id ? isFollowing : undefined,
     };
   }
 
@@ -1362,6 +1348,141 @@ export class UserService {
       };
     } catch (error) {
       this.logger.error(`사용자 리뷰 타입별 수 조회 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  private async getRatingCount(userId: number): Promise<number> {
+    return this.ratingService.getRatingCountByUser(userId);
+  }
+
+  async getUserRatings(
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+    currentUserId?: number,
+  ): Promise<{
+    ratings: any[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    try {
+      // 사용자 존재 여부 확인
+      const user = await this.findOne(userId);
+
+      // 총 평점 수 계산
+      const total = await this.ratingService.getRatingCountByUser(userId);
+
+      // 페이지네이션을 위한 skip 계산
+      const skip = (page - 1) * limit;
+
+      // 평점 목록 조회 (페이지네이션 적용)
+      const allRatings =
+        await this.ratingService.findAllByUserWithBookInfo(userId);
+      const ratings = allRatings.slice(skip, skip + limit);
+
+      // 각 평점에 사용자 정보 추가
+      const ratingsWithUserInfo = ratings.map((rating) => ({
+        ...rating,
+        user: {
+          id: user.id,
+          username: user.username,
+          profileImage: this.ensureFullImageUrl(user.profileImage),
+        },
+      }));
+
+      return {
+        ratings: ratingsWithUserInfo,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      this.logger.error(
+        `사용자 ID ${userId}의 평점 조회 중 오류: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  async getUserActivity(
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+    filter: 'popular' | 'recent' = 'recent',
+    currentUserId?: number,
+  ): Promise<{
+    activities: any[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    try {
+      // 리뷰 조회 - 리뷰 타입의 리뷰만 가져오기
+      const reviewsResult = await this.getUserReviews(
+        userId,
+        1,
+        1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
+        ['review'], // review 타입만 필터링
+        filter,
+        currentUserId,
+      );
+
+      // 평점 조회
+      const ratingsResult = await this.getUserRatings(
+        userId,
+        1,
+        1000, // 충분히 큰 숫자로 모든 평점 가져오기
+        currentUserId,
+      );
+
+      // 리뷰와 평점을 합치고 타입 필드 추가
+      const reviews = reviewsResult.reviews.map((review) => ({
+        ...review,
+        activityType: 'review',
+      }));
+
+      const ratings = ratingsResult.ratings.map((rating) => ({
+        ...rating,
+        activityType: 'rating',
+      }));
+
+      // 활동들을 합치고 정렬
+      let allActivities = [...reviews, ...ratings];
+
+      // 필터에 따라 정렬
+      if (filter === 'recent') {
+        allActivities.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+      } else if (filter === 'popular') {
+        allActivities.sort((a, b) => {
+          // 리뷰는 좋아요 수, 평점은 별점 숫자로 정렬
+          const aPopularity =
+            a.activityType === 'review' ? a.likeCount : a.rating;
+          const bPopularity =
+            b.activityType === 'review' ? b.likeCount : b.rating;
+          return bPopularity - aPopularity;
+        });
+      }
+
+      // 페이지네이션 적용
+      const total = allActivities.length;
+      const skip = (page - 1) * limit;
+      const activities = allActivities.slice(skip, skip + limit);
+
+      return {
+        activities,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      this.logger.error(
+        `사용자 ID ${userId}의 활동 조회 중 오류: ${error.message}`,
+      );
       throw error;
     }
   }

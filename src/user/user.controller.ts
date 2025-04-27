@@ -205,4 +205,38 @@ export class UserController {
   async getUserReviewTypeCounts(@Param('id', ParseIntPipe) id: number) {
     return this.userService.getUserReviewTypeCounts(id);
   }
+
+  @Get(':userId/ratings')
+  @IsPublic()
+  async getUserRatings(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @GetUser() user?: User,
+  ) {
+    return this.userService.getUserRatings(
+      userId,
+      page ? +page : 1,
+      limit ? +limit : 10,
+      user?.id,
+    );
+  }
+
+  @Get(':userId/activity')
+  @IsPublic()
+  async getUserActivity(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('filter') filter?: 'popular' | 'recent',
+    @GetUser() user?: User,
+  ) {
+    return this.userService.getUserActivity(
+      userId,
+      page ? +page : 1,
+      limit ? +limit : 10,
+      filter || 'recent',
+      user?.id,
+    );
+  }
 }

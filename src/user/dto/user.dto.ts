@@ -111,6 +111,7 @@ export class UserDetailResponseDto {
   subscribedLibraryCount: number;
   reviewCount: ReviewCountsDto;
   averageRating: number | null;
+  ratingCount: number;
   followers: number;
   following: number;
   isEditable: boolean;

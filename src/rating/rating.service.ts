@@ -291,4 +291,65 @@ export class RatingService {
       return null;
     }
   }
+
+  /**
+   * 특정 사용자의 평점 개수 조회
+   */
+  async getRatingCountByUser(userId: number): Promise<number> {
+    try {
+      const count = await this.ratingRepository.count({
+        where: { userId },
+      });
+      return count;
+    } catch (error) {
+      this.logger.error(
+        `유저 ${userId}의 평점 개수 조회 중 오류: ${error.message}`,
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * 특정 사용자의 모든 평점 조회 (책 정보 포함)
+   */
+  async findAllByUserWithBookInfo(
+    userId: number,
+  ): Promise<RatingResponseDto[]> {
+    try {
+      const ratings = await this.ratingRepository.find({
+        where: { userId },
+        relations: ['book'],
+        order: { createdAt: 'DESC' },
+      });
+
+      return await Promise.all(
+        ratings.map(async (rating) => {
+          const book = rating.book;
+
+          return {
+            ...this.mapToResponseDto(rating),
+            book: book
+              ? {
+                  id: book.id,
+                  title: book.title,
+                  author: book.author,
+                  coverImage: book.coverImage,
+                  isbn: book.isbn,
+                  isbn13: book.isbn13,
+                  publisher: book.publisher,
+                  publishDate: book.publishDate,
+                  description: book.description,
+                  rating: book.rating,
+                  reviews: book.reviews,
+                  totalRatings: book.totalRatings,
+                }
+              : null,
+          };
+        }),
+      );
+    } catch (error) {
+      this.logger.error(`유저 ${userId}의 평점 조회 중 오류: ${error.message}`);
+      return [];
+    }
+  }
 }
