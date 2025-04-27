@@ -430,6 +430,9 @@ export class UserService {
     const averageRating = await this.ratingService.getUserAverageRating(id);
     const ratingCount = await this.getRatingCount(id);
 
+    // 중복 제거된 리뷰와 평점 수 계산
+    const reviewAndRatingCount = await this.getReviewAndRatingCount(id);
+
     // 팔로워, 팔로잉 수 계산
     const followerCount = await this.userFollowerRepository.count({
       where: { following_id: id },
@@ -460,6 +463,7 @@ export class UserService {
       reviewCount: reviewCounts,
       averageRating,
       ratingCount,
+      reviewAndRatingCount,
       followers: followerCount,
       following: followingCount,
       isEditable: isOwnProfile,
@@ -628,10 +632,15 @@ export class UserService {
 
   // 읽은 책 수 조회
   private async getReadCount(userId: number): Promise<number> {
-    // ReadingStatus 테이블에서 해당 사용자의 레코드 수를 조회
+    // ReadingStatus 테이블에서 READ 상태인 책의 수만 조회
     const readingStatusRepo =
       this.userRepository.manager.getRepository(ReadingStatus);
-    return readingStatusRepo.count({ where: { userId } });
+    return readingStatusRepo.count({
+      where: {
+        userId,
+        status: ReadingStatusType.READ,
+      },
+    });
   }
 
   // 구독 중인 라이브러리 수 조회
@@ -1352,8 +1361,46 @@ export class UserService {
     }
   }
 
+  // 별점만 매긴 것들의 개수 조회 (리뷰가 있는 책의 평점 제외)
   private async getRatingCount(userId: number): Promise<number> {
-    return this.ratingService.getRatingCountByUser(userId);
+    try {
+      // 리뷰 타입의 리뷰를 가져와서 해당 책 ID 수집
+      const reviewsResult = await this.getUserReviews(
+        userId,
+        1,
+        1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
+        ['review'], // review 타입만 필터링
+        'recent',
+        undefined,
+      );
+
+      // 리뷰에 포함된 책의 ID 목록 생성
+      const reviewBookIds = new Set<number>();
+      reviewsResult.reviews.forEach((review) => {
+        if (review.books && review.books.length > 0) {
+          review.books.forEach((book) => {
+            reviewBookIds.add(book.id);
+          });
+        }
+      });
+
+      // 모든 평점 가져오기
+      const allRatings =
+        await this.ratingService.findAllByUserWithBookInfo(userId);
+
+      // 리뷰가 있는 책에 대한 평점 필터링
+      const filteredRatings = allRatings.filter((rating) => {
+        return !reviewBookIds.has(rating.book?.id);
+      });
+
+      // 필터링된 평점 개수 반환
+      return filteredRatings.length;
+    } catch (error) {
+      this.logger.error(
+        `사용자 ID ${userId}의 평점 개수 조회 중 오류: ${error.message}`,
+      );
+      return 0;
+    }
   }
 
   async getUserRatings(
@@ -1371,16 +1418,43 @@ export class UserService {
       // 사용자 존재 여부 확인
       const user = await this.findOne(userId);
 
-      // 총 평점 수 계산
-      const total = await this.ratingService.getRatingCountByUser(userId);
+      // 리뷰 타입의 리뷰를 가져와서 해당 책 ID 수집
+      const reviewsResult = await this.getUserReviews(
+        userId,
+        1,
+        1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
+        ['review'], // review 타입만 필터링
+        'recent',
+        undefined,
+      );
+
+      // 리뷰에 포함된 책의 ID 목록 생성
+      const reviewBookIds = new Set<number>();
+      reviewsResult.reviews.forEach((review) => {
+        if (review.books && review.books.length > 0) {
+          review.books.forEach((book) => {
+            reviewBookIds.add(book.id);
+          });
+        }
+      });
+
+      // 모든 평점 가져오기
+      const allRatings =
+        await this.ratingService.findAllByUserWithBookInfo(userId);
+
+      // 리뷰가 있는 책에 대한 평점 필터링
+      const filteredRatings = allRatings.filter((rating) => {
+        return !reviewBookIds.has(rating.book?.id);
+      });
+
+      // 총 평점 수 계산 (필터링 후)
+      const total = filteredRatings.length;
 
       // 페이지네이션을 위한 skip 계산
       const skip = (page - 1) * limit;
 
-      // 평점 목록 조회 (페이지네이션 적용)
-      const allRatings =
-        await this.ratingService.findAllByUserWithBookInfo(userId);
-      const ratings = allRatings.slice(skip, skip + limit);
+      // 페이지네이션 적용
+      const ratings = filteredRatings.slice(skip, skip + limit);
 
       // 각 평점에 사용자 정보 추가
       const ratingsWithUserInfo = ratings.map((rating) => ({
@@ -1448,8 +1522,24 @@ export class UserService {
         activityType: 'rating',
       }));
 
+      // 리뷰에 포함된 책의 ID 목록 생성
+      const reviewBookIds = new Set<number>();
+      reviews.forEach((review) => {
+        if (review.books && review.books.length > 0) {
+          review.books.forEach((book) => {
+            reviewBookIds.add(book.id);
+          });
+        }
+      });
+
+      // 리뷰에 포함된 책에 대한 별점 필터링
+      const filteredRatings = ratings.filter((rating) => {
+        // 리뷰에 포함된 책에 대한 별점이 아닌 경우만 포함
+        return !reviewBookIds.has(rating.book?.id);
+      });
+
       // 활동들을 합치고 정렬
-      let allActivities = [...reviews, ...ratings];
+      let allActivities = [...reviews, ...filteredRatings];
 
       // 필터에 따라 정렬
       if (filter === 'recent') {
@@ -1484,6 +1574,64 @@ export class UserService {
         `사용자 ID ${userId}의 활동 조회 중 오류: ${error.message}`,
       );
       throw error;
+    }
+  }
+
+  // 중복 제거된 리뷰와 평점 수 계산
+  private async getReviewAndRatingCount(userId: number): Promise<number> {
+    try {
+      // 리뷰 조회 - 리뷰 타입의 리뷰만 가져오기
+      const reviewsResult = await this.getUserReviews(
+        userId,
+        1,
+        1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
+        ['review'], // review 타입만 필터링
+        'recent',
+        undefined,
+      );
+
+      // 평점 조회
+      const ratingsResult = await this.getUserRatings(
+        userId,
+        1,
+        1000, // 충분히 큰 숫자로 모든 평점 가져오기
+        undefined,
+      );
+
+      // 리뷰와 평점을 합치고 타입 필드 추가
+      const reviews = reviewsResult.reviews.map((review) => ({
+        ...review,
+        activityType: 'review',
+      }));
+
+      const ratings = ratingsResult.ratings.map((rating) => ({
+        ...rating,
+        activityType: 'rating',
+      }));
+
+      // 리뷰에 포함된 책의 ID 목록 생성
+      const reviewBookIds = new Set<number>();
+      reviews.forEach((review) => {
+        if (review.books && review.books.length > 0) {
+          review.books.forEach((book) => {
+            reviewBookIds.add(book.id);
+          });
+        }
+      });
+
+      // 리뷰에 포함된 책에 대한 별점 필터링
+      const filteredRatings = ratings.filter((rating) => {
+        // 리뷰에 포함된 책에 대한 별점이 아닌 경우만 포함
+        return !reviewBookIds.has(rating.book?.id);
+      });
+
+      // 총 활동 수 (총 리뷰 수 + 필터링된 평점 수)
+      return reviews.length + filteredRatings.length;
+    } catch (error) {
+      this.logger.error(
+        `사용자 ID ${userId}의 리뷰 및 평점 수 계산 중 오류: ${error.message}`,
+      );
+      return 0;
     }
   }
 }

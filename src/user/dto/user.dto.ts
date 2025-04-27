@@ -112,6 +112,7 @@ export class UserDetailResponseDto {
   reviewCount: ReviewCountsDto;
   averageRating: number | null;
   ratingCount: number;
+  reviewAndRatingCount: number;
   followers: number;
   following: number;
   isEditable: boolean;
