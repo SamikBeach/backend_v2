@@ -80,14 +80,6 @@ export class UserController {
     return this.userService.getUserLibraries(id, page, limit, currentUserId);
   }
 
-  /**
-   * 사용자가 작성한 리뷰 목록 조회
-   * @param userId 사용자 ID
-   * @param page 페이지 번호
-   * @param limit 페이지당 결과 수
-   * @param type 리뷰 타입 필터 (여러 타입 지정 가능: type=review&type=general 또는 type[]=review&type[]=general)
-   * @param filter 정렬 방식 (popular: 인기순, recent: 최신순)
-   */
   @Get(':userId/reviews')
   @IsPublic()
   async getUserReviews(
@@ -98,7 +90,14 @@ export class UserController {
     @Query('filter') filter?: 'popular' | 'recent',
     @GetUser() user?: User,
   ) {
-    const typeArray = Array.isArray(type) ? type : type ? [type] : undefined;
+    // Express의 기본 동작에 의해 배열 쿼리 파라미터는 자동으로 배열로 변환됨
+    // 단일 값인 경우도 처리하기 위해 항상 배열로 변환
+    const typeArray =
+      typeof type === 'string'
+        ? [type]
+        : Array.isArray(type)
+          ? type
+          : undefined;
 
     return this.userService.getUserReviews(
       userId,

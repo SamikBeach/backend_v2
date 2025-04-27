@@ -1044,6 +1044,10 @@ export class UserService {
       // 사용자 존재 확인
       const user = await this.findOne(userId);
 
+      this.logger.log(
+        `유저 리뷰 조회 - 유저ID: ${userId}, 타입: ${type ? type.join(', ') : '전체'}, 필터: ${filter}`,
+      );
+
       const queryBuilder = this.reviewRepository
         .createQueryBuilder('review')
         .leftJoinAndSelect('review.author', 'author')
@@ -1053,10 +1057,25 @@ export class UserService {
         .where('review.authorId = :userId', { userId });
 
       // 타입 필터링
-      if (type && type.length > 0) {
-        queryBuilder.andWhere('review.type IN (:...types)', {
-          types: type,
-        });
+      if (type && Array.isArray(type) && type.length > 0) {
+        // 유효한 타입 목록
+        const validTypes = [
+          'general',
+          'discussion',
+          'review',
+          'question',
+          'meetup',
+        ];
+
+        // 유효한 타입만 필터링
+        const filteredTypes = type.filter((t) => validTypes.includes(t));
+
+        if (filteredTypes.length > 0) {
+          queryBuilder.andWhere('review.type IN (:...types)', {
+            types: filteredTypes,
+          });
+          this.logger.log(`타입 필터 적용: ${filteredTypes.join(', ')}`);
+        }
       }
 
       // 필터 적용 (인기순 / 최신순)

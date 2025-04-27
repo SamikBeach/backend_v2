@@ -114,7 +114,7 @@ export class ReviewService {
     userId?: number,
     page: number = 1,
     limit: number = 10,
-    type?: string[],
+    type?: string | string[],
     filter: 'popular' | 'recent' = 'recent',
   ): Promise<{
     reviews: ReviewResponseDto[];
@@ -131,10 +131,18 @@ export class ReviewService {
         .leftJoinAndSelect('reviewBooks.book', 'book');
 
       // 타입 필터링
-      if (type && type.length > 0) {
-        queryBuilder.andWhere('review.type IN (:...types)', {
-          types: type,
-        });
+      if (type) {
+        if (Array.isArray(type)) {
+          // 여러 타입이 배열로 전달된 경우
+          if (type.length > 0) {
+            queryBuilder.andWhere('review.type IN (:...types)', {
+              types: type,
+            });
+          }
+        } else {
+          // 단일 타입이 문자열로 전달된 경우 (기존 로직 유지)
+          queryBuilder.andWhere('review.type = :type', { type });
+        }
       }
 
       // 필터 적용 (인기순 / 최신순)

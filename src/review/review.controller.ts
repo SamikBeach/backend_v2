@@ -56,10 +56,6 @@ export class ReviewController {
 
   /**
    * 리뷰 목록 조회 (페이지네이션, 필터링 지원)
-   * @param page 페이지 번호
-   * @param limit 페이지당 결과 수
-   * @param type 리뷰 타입 필터 (여러 타입 지정 가능: type=review&type=general 또는 type[]=review&type[]=general)
-   * @param filter 정렬 방식 (popular: 인기순, recent: 최신순)
    */
   @Get()
   @IsPublic()
@@ -70,6 +66,7 @@ export class ReviewController {
     @Query('type') type?: string | string[],
     @Query('filter') filter?: 'popular' | 'recent',
   ) {
+    // type이 string[] 또는 string 둘 다 처리
     const typeArray = Array.isArray(type) ? type : type ? [type] : undefined;
 
     return this.reviewService.findAllReviews(
