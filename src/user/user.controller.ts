@@ -15,6 +15,7 @@ import {
   ClassSerializerInterceptor,
   Put,
   UploadedFile,
+  Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserService } from './user.service';
@@ -79,25 +80,33 @@ export class UserController {
     return this.userService.getUserLibraries(id, page, limit, currentUserId);
   }
 
-  @Get(':id/reviews')
+  /**
+   * 사용자가 작성한 리뷰 목록 조회
+   * @param userId 사용자 ID
+   * @param page 페이지 번호
+   * @param limit 페이지당 결과 수
+   * @param type 리뷰 타입 필터 (여러 타입 지정 가능: type=review&type=general 또는 type[]=review&type[]=general)
+   * @param filter 정렬 방식 (popular: 인기순, recent: 최신순)
+   */
+  @Get(':userId/reviews')
   @IsPublic()
-  getUserReviews(
-    @Param('id', ParseIntPipe) id: number,
-    @IsOwnProfile() isOwnProfile: boolean,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('type') type?: string,
+  async getUserReviews(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('type') type?: string | string[],
     @Query('filter') filter?: 'popular' | 'recent',
-    @GetUser() currentUser?: User,
+    @GetUser() user?: User,
   ) {
-    const currentUserId = currentUser?.id;
+    const typeArray = Array.isArray(type) ? type : type ? [type] : undefined;
+
     return this.userService.getUserReviews(
-      id,
-      page,
-      limit,
-      type,
+      userId,
+      page ? +page : 1,
+      limit ? +limit : 10,
+      typeArray,
       filter || 'recent',
-      currentUserId,
+      user?.id,
     );
   }
 

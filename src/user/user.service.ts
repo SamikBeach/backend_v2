@@ -1031,7 +1031,7 @@ export class UserService {
     userId: number,
     page: number = 1,
     limit: number = 10,
-    type?: string,
+    type?: string[],
     filter: 'popular' | 'recent' = 'recent',
     currentUserId?: number,
   ): Promise<{
@@ -1053,8 +1053,10 @@ export class UserService {
         .where('review.authorId = :userId', { userId });
 
       // 타입 필터링
-      if (type) {
-        queryBuilder.andWhere('review.type = :type', { type });
+      if (type && type.length > 0) {
+        queryBuilder.andWhere('review.type IN (:...types)', {
+          types: type,
+        });
       }
 
       // 필터 적용 (인기순 / 최신순)
