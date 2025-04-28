@@ -202,7 +202,7 @@ export class LibraryService {
     );
 
     try {
-      // 공개 서재만 가져오거나, 사용자 ID가 제공된 경우 해당 사용자의 서재까지 가져옴
+      // 공개 서재만 가져오기
       let qb = this.libraryRepository
         .createQueryBuilder('library')
         .leftJoinAndSelect('library.owner', 'owner')
@@ -213,18 +213,8 @@ export class LibraryService {
 
       this.logger.debug('기본 쿼리 생성됨');
 
-      // 기본 조건: 공개 서재만 보이거나, 자신의 서재도 보이게 함
-      if (userId) {
-        qb = qb.where(
-          '(library.isPublic = :isPublic OR library.ownerId = :ownerId)',
-          {
-            isPublic: true,
-            ownerId: userId,
-          },
-        );
-      } else {
-        qb = qb.where('library.isPublic = :isPublic', { isPublic: true });
-      }
+      // 항상 공개 서재만 표시하도록 수정 (사용자 자신의 비공개 서재도 제외)
+      qb = qb.where('library.isPublic = :isPublic', { isPublic: true });
 
       // 태그 ID가 제공된 경우 해당 태그를 가진 서재만 필터링
       if (tagId) {

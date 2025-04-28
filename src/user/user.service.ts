@@ -1933,13 +1933,23 @@ export class UserService {
   }> {
     const skip = (page - 1) * limit;
 
-    const [libraries, total] = await this.librarySubscriptionRepository
+    // 공개 서재 또는 자신이 소유한 서재만 표시하도록 수정
+    const queryBuilder = this.librarySubscriptionRepository
       .createQueryBuilder('subscription')
       .leftJoinAndSelect('subscription.library', 'library')
       .leftJoinAndSelect('library.owner', 'owner')
       .leftJoinAndSelect('library.libraryTagMappings', 'libraryTagMappings')
       .leftJoinAndSelect('libraryTagMappings.libraryTag', 'libraryTag')
       .where('subscription.subscriberId = :userId', { userId })
+      .andWhere(
+        '(library.isPublic = :isPublic OR library.ownerId = :ownerId)',
+        {
+          isPublic: true,
+          ownerId: userId,
+        },
+      );
+
+    const [libraries, total] = await queryBuilder
       .skip(skip)
       .take(limit)
       .getManyAndCount();
