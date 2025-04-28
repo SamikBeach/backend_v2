@@ -9,7 +9,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, FindOptionsWhere } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserStatus, AuthProvider } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -23,6 +23,10 @@ import {
   UpdateUserDto,
   ExtendedBookInfoDto,
   ExtendedReadingStatusResponseDto,
+  RatingWithBookInfoDto,
+  UserActivityItem,
+  isReviewActivity,
+  isRatingActivity,
 } from './dto/user.dto';
 import { Library } from '../library/entities/library.entity';
 import { Review } from '../review/entities/review.entity';
@@ -854,7 +858,7 @@ export class UserService {
       const bookRepo = this.userRepository.manager.getRepository(Book);
 
       // 조건 설정
-      const where: any = { userId };
+      const where: FindOptionsWhere<ReadingStatus> = { userId };
       if (status) {
         where.status = status;
       }
@@ -1192,8 +1196,8 @@ export class UserService {
         }
       }
 
-      // 매퍼 함수를 한 번만 정의
-      const mapReviewsData = async (review: any) => {
+      // Map reviews data with book information
+      const mapReviewsData = async (review: Review) => {
         const images = review.images
           ? review.images.map((img) => ({
               id: img.id,
@@ -1467,7 +1471,7 @@ export class UserService {
     limit: number = 10,
     currentUserId?: number,
   ): Promise<{
-    ratings: any[];
+    ratings: RatingWithBookInfoDto[];
     total: number;
     page: number;
     totalPages: number;
@@ -1483,7 +1487,7 @@ export class UserService {
         1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
         ['review'], // review 타입만 필터링
         'recent',
-        undefined,
+        currentUserId,
       );
 
       // 리뷰에 포함된 책의 ID 목록 생성
@@ -1514,15 +1518,35 @@ export class UserService {
       // 페이지네이션 적용
       const ratings = filteredRatings.slice(skip, skip + limit);
 
-      // 각 평점에 사용자 정보 추가
-      const ratingsWithUserInfo = ratings.map((rating) => ({
-        ...rating,
-        user: {
-          id: user.id,
-          username: user.username,
-          profileImage: this.ensureFullImageUrl(user.profileImage),
-        },
-      }));
+      // 사용자 정보와 책 정보를 포함한 평점 데이터 반환
+      const ratingsWithUserInfo = await Promise.all(
+        ratings.map(async (rating) => {
+          const profileImageUrl = this.ensureFullImageUrl(user.profileImage);
+
+          // BookInfoDto 형식으로 book 속성 변환
+          let bookInfo = null;
+          if (rating.book) {
+            bookInfo = {
+              id: rating.book.id,
+              title: rating.book.title,
+              author: rating.book.author,
+              coverImage: rating.book.coverImage,
+              isbn: rating.book.isbn,
+              publisher: rating.book.publisher,
+            };
+          }
+
+          return {
+            ...rating,
+            user: {
+              id: user.id,
+              username: user.username || '사용자',
+              profileImage: profileImageUrl,
+            },
+            book: bookInfo,
+          };
+        }),
+      );
 
       return {
         ratings: ratingsWithUserInfo,
@@ -1593,7 +1617,7 @@ export class UserService {
     filter: 'popular' | 'recent' = 'recent',
     currentUserId?: number,
   ): Promise<{
-    activities: any[];
+    activities: UserActivityItem[];
     total: number;
     page: number;
     totalPages: number;
@@ -1603,35 +1627,15 @@ export class UserService {
         `getUserActivity 호출: userId=${userId}, currentUserId=${currentUserId}, filter=${filter}`,
       );
 
-      // 모든 타입의 리뷰를 가져옵니다 (review 타입만이 아닌 모든 타입)
+      // 리뷰 타입이 'review'인 항목만 가져옵니다
       const reviewsResult = await this.getUserReviews(
         userId,
         1,
         1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
-        undefined, // 모든 타입 포함
+        ['review'], // 'review' 타입만 포함
         filter,
         currentUserId,
       );
-
-      // 디버그 로그 - 리뷰 결과
-      if (reviewsResult.reviews.length > 0) {
-        // 모든 리뷰의 isLiked 상태 로깅
-        const likedCount = reviewsResult.reviews.filter(
-          (r) => r.isLiked,
-        ).length;
-
-        this.logger.log(
-          `Activity - 리뷰 조회 결과: 총 ${reviewsResult.reviews.length}개, 좋아요 표시된 리뷰: ${likedCount}개`,
-        );
-
-        this.logger.log(
-          `Activity - 첫 번째 리뷰 isLiked 확인: ${JSON.stringify({
-            review_id: reviewsResult.reviews[0].id,
-            type: reviewsResult.reviews[0].type,
-            isLiked: reviewsResult.reviews[0].isLiked,
-          })}`,
-        );
-      }
 
       // 평점 조회
       const ratingsResult = await this.getUserRatings(
@@ -1647,14 +1651,21 @@ export class UserService {
         activityType: 'review',
       }));
 
-      // 다시 확인 로그
+      // 디버그 로그 - 리뷰 결과
       if (reviewsWithType.length > 0) {
+        // 리뷰의 isLiked 상태 로깅
+        const likedCount = reviewsWithType.filter((r) => r.isLiked).length;
+
         this.logger.log(
-          `Activity - 타입 추가 후 첫 번째 리뷰 isLiked 확인: ${JSON.stringify({
-            activity_type: reviewsWithType[0].activityType,
+          `Activity - 'review' 타입 리뷰 조회 결과: 총 ${reviewsWithType.length}개, 좋아요 표시된 리뷰: ${likedCount}개`,
+        );
+
+        this.logger.log(
+          `Activity - 첫 번째 리뷰 isLiked 확인: ${JSON.stringify({
             review_id: reviewsWithType[0].id,
             type: reviewsWithType[0].type,
             isLiked: reviewsWithType[0].isLiked,
+            activity_type: reviewsWithType[0].activityType,
           })}`,
         );
       }
@@ -1746,20 +1757,27 @@ export class UserService {
         );
       } else if (filter === 'popular') {
         allActivities.sort((a, b) => {
-          // 리뷰는 좋아요 수, 평점은 별점 숫자로 정렬
-          const aPopularity =
-            a.activityType === 'review' ? a.likeCount : a.rating;
-          const bPopularity =
-            b.activityType === 'review' ? b.likeCount : b.rating;
+          let aPopularity = 0;
+          let bPopularity = 0;
+
+          if (isReviewActivity(a)) {
+            aPopularity = a.likeCount;
+          } else if (isRatingActivity(a)) {
+            aPopularity = a.rating;
+          }
+
+          if (isReviewActivity(b)) {
+            bPopularity = b.likeCount;
+          } else if (isRatingActivity(b)) {
+            bPopularity = b.rating;
+          }
+
           return bPopularity - aPopularity;
         });
       }
 
       // 최종 확인 로그
-      if (
-        allActivities.length > 0 &&
-        allActivities[0].activityType === 'review'
-      ) {
+      if (allActivities.length > 0 && isReviewActivity(allActivities[0])) {
         this.logger.log(
           `Activity - 정렬 후 첫 번째 활동 isLiked 확인: ${JSON.stringify({
             activity_type: allActivities[0].activityType,

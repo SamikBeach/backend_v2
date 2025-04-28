@@ -957,51 +957,60 @@ export class ReviewService {
       const reviewIds = reviews.map((review) => review.id);
       const authorIds = reviews.map((review) => review.author.id);
 
-      // 1. 이미지를 별도로 로드
-      const reviewImages = await this.reviewImageRepository.find({
-        where: { reviewId: In(reviewIds) },
-      });
+      // 이미지를 별도로 로드
+      let imagesByReviewId = {};
+      if (reviewIds.length > 0) {
+        const reviewImages = await this.reviewImageRepository.find({
+          where: { reviewId: In(reviewIds) },
+        });
 
-      // 이미지를 리뷰별로 매핑
-      const imagesByReviewId = reviewImages.reduce((acc, img) => {
-        if (!acc[img.reviewId]) {
-          acc[img.reviewId] = [];
-        }
-        acc[img.reviewId].push(img);
-        return acc;
-      }, {});
+        // 이미지를 리뷰별로 매핑
+        imagesByReviewId = reviewImages.reduce((acc, img) => {
+          if (!acc[img.reviewId]) {
+            acc[img.reviewId] = [];
+          }
+          acc[img.reviewId].push(img);
+          return acc;
+        }, {});
+      }
 
-      // 2. 한 번에 모든 좋아요 수 가져오기
-      const likesCountQuery = this.reviewLikeRepository
-        .createQueryBuilder('like')
-        .select('like.reviewId', 'reviewId')
-        .addSelect('COUNT(like.id)', 'count')
-        .where('like.reviewId IN (:...reviewIds)', { reviewIds })
-        .groupBy('like.reviewId');
+      // 한 번에 모든 좋아요 수 가져오기
+      let likesCountMap = {};
+      if (reviewIds.length > 0) {
+        const likesCountQuery = this.reviewLikeRepository
+          .createQueryBuilder('like')
+          .select('like.reviewId', 'reviewId')
+          .addSelect('COUNT(like.id)', 'count')
+          .where('like.reviewId IN (:...reviewIds)', { reviewIds })
+          .groupBy('like.reviewId');
 
-      const likesCountResults = await likesCountQuery.getRawMany();
-      const likesCountMap = likesCountResults.reduce((acc, item) => {
-        acc[item.reviewId] = parseInt(item.count, 10);
-        return acc;
-      }, {});
+        const likesCountResults = await likesCountQuery.getRawMany();
+        likesCountMap = likesCountResults.reduce((acc, item) => {
+          acc[item.reviewId] = parseInt(item.count, 10);
+          return acc;
+        }, {});
+      }
 
-      // 3. 한 번에 모든 댓글 수 가져오기
-      const commentsCountQuery = this.commentRepository
-        .createQueryBuilder('comment')
-        .select('comment.reviewId', 'reviewId')
-        .addSelect('COUNT(comment.id)', 'count')
-        .where('comment.reviewId IN (:...reviewIds)', { reviewIds })
-        .groupBy('comment.reviewId');
+      // 한 번에 모든 댓글 수 가져오기
+      let commentsCountMap = {};
+      if (reviewIds.length > 0) {
+        const commentsCountQuery = this.commentRepository
+          .createQueryBuilder('comment')
+          .select('comment.reviewId', 'reviewId')
+          .addSelect('COUNT(comment.id)', 'count')
+          .where('comment.reviewId IN (:...reviewIds)', { reviewIds })
+          .groupBy('comment.reviewId');
 
-      const commentsCountResults = await commentsCountQuery.getRawMany();
-      const commentsCountMap = commentsCountResults.reduce((acc, item) => {
-        acc[item.reviewId] = parseInt(item.count, 10);
-        return acc;
-      }, {});
+        const commentsCountResults = await commentsCountQuery.getRawMany();
+        commentsCountMap = commentsCountResults.reduce((acc, item) => {
+          acc[item.reviewId] = parseInt(item.count, 10);
+          return acc;
+        }, {});
+      }
 
-      // 4. 사용자의 좋아요 정보 가져오기 (로그인한 경우)
+      // 사용자의 좋아요 정보 가져오기 (로그인한 경우)
       let userLikesMap = {};
-      if (userId) {
+      if (userId && reviewIds.length > 0) {
         const userLikes = await this.reviewLikeRepository.find({
           where: { reviewId: In(reviewIds), userId },
         });
@@ -1012,40 +1021,58 @@ export class ReviewService {
         }, {});
       }
 
-      // 5. ReviewBook 정보 일괄 가져오기
-      const reviewBooks = await this.reviewBookRepository.find({
-        where: { reviewId: In(reviewIds), bookId },
-        relations: ['book'],
-      });
+      // ReviewBook 정보 일괄 가져오기
+      let booksByReviewId = {};
+      if (reviewIds.length > 0) {
+        const reviewBooks = await this.reviewBookRepository.find({
+          where: { reviewId: In(reviewIds), bookId },
+          relations: ['book'],
+        });
 
-      // 리뷰ID로 매핑
-      const booksByReviewId = reviewBooks.reduce((acc, item) => {
-        acc[item.reviewId] = item.book;
-        return acc;
-      }, {});
+        // 리뷰ID로 매핑
+        booksByReviewId = reviewBooks.reduce((acc, item) => {
+          acc[item.reviewId] = item.book;
+          return acc;
+        }, {});
+      }
 
       // 6. 한 번에 모든 저자의 별점 정보 가져오기
-      const ratingsPromises = authorIds.map((authorId) =>
-        this.ratingService.findByUserAndBook(authorId, bookId).catch((err) => {
-          this.logger.error(`Error fetching rating: ${err.message}`);
-          return null;
-        }),
-      );
+      let ratingsByAuthorId = {};
+      if (authorIds.length > 0) {
+        const ratingsPromises = authorIds.map((authorId) =>
+          this.ratingService
+            .findByUserAndBook(authorId, bookId)
+            .catch((err) => {
+              this.logger.error(`Error fetching rating: ${err.message}`);
+              return null;
+            }),
+        );
 
-      const ratings = await Promise.all(ratingsPromises);
-      const ratingsByAuthorId = ratings.reduce((acc, rating, index) => {
-        if (rating) {
-          acc[authorIds[index]] = rating;
-        }
-        return acc;
-      }, {});
+        const ratings = await Promise.all(ratingsPromises);
+        ratingsByAuthorId = ratings.reduce((acc, rating, index) => {
+          if (rating) {
+            acc[authorIds[index]] = rating;
+          }
+          return acc;
+        }, {});
+      }
 
       // 해당 책의 상세 정보를 가져옵니다 (사용자 별점, 리뷰 포함)
-      const bookDetails = await this.bookService.findById(bookId);
-      const enrichedBookDetails = await this.bookService.enrichBookWithUserData(
-        bookDetails,
-        userId,
-      );
+      let enrichedBookDetails = null;
+      try {
+        const bookDetails = await this.bookService.findById(bookId);
+        if (bookDetails) {
+          enrichedBookDetails = await this.bookService.enrichBookWithUserData(
+            bookDetails,
+            userId,
+          );
+        }
+      } catch (error) {
+        this.logger.error(
+          `책 ID ${bookId}의 상세 정보 조회 중 오류: ${error.message}`,
+        );
+        // 책 정보 조회 실패해도 리뷰 정보는 계속 처리
+      }
 
       // 각 리뷰에 데이터 설정
       reviews.forEach((review) => {

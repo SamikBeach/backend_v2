@@ -1,6 +1,10 @@
 import { IsOptional, IsString, Length } from 'class-validator';
 import { AuthProvider } from '../entities/user.entity';
 import { ReadingStatusType } from '../../reading-status/entities/reading-status.entity';
+import { RatingResponseDto } from '../../rating/dto/rating.dto';
+import { BookInfoDto } from '../../reading-status/dto/reading-status.dto';
+import { ReviewType } from '../../review/entities/review.entity';
+import { User } from '../../user/entities/user.entity';
 
 export class UpdateUserDto {
   @IsString({ message: '사용자명은 문자열이어야 합니다.' })
@@ -180,4 +184,66 @@ export interface ExtendedReadingStatusResponseDto {
   createdAt: Date;
   updatedAt: Date;
   book: ExtendedBookInfoDto;
+}
+
+export interface RatingWithBookInfoDto extends RatingResponseDto {
+  book: BookInfoDto;
+}
+
+export type ReviewActivityItem = {
+  activityType: string;
+  id: number;
+  content: string;
+  type: ReviewType;
+  author: {
+    id: number;
+    username: string;
+    email: string;
+    profileImage?: string;
+  };
+  images: {
+    id: number;
+    url: string;
+    caption?: string;
+  }[];
+  books: {
+    id: number;
+    title: string;
+    author: string;
+    coverImage: string;
+    publisher: string;
+    isbn?: string;
+  }[];
+  likeCount: number;
+  commentCount: number;
+  isLiked?: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type RatingActivityItem = {
+  activityType: string;
+  id: number;
+  userId: number;
+  bookId: number;
+  rating: number;
+  comment: string;
+  createdAt: Date;
+  updatedAt: Date;
+  book: BookInfoDto;
+  user?: Partial<User>;
+};
+
+export type UserActivityItem = ReviewActivityItem | RatingActivityItem;
+
+export function isReviewActivity(
+  activity: UserActivityItem,
+): activity is ReviewActivityItem {
+  return activity.activityType === 'review';
+}
+
+export function isRatingActivity(
+  activity: UserActivityItem,
+): activity is RatingActivityItem {
+  return activity.activityType === 'rating';
 }

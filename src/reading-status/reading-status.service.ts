@@ -7,7 +7,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, FindOptionsWhere } from 'typeorm';
 import {
   ReadingStatus,
   ReadingStatusType,
@@ -285,7 +285,9 @@ export class ReadingStatusService {
     userId: number,
     status: ReadingStatusType | null,
   ): Promise<ReadingStatusResponseDto[]> {
-    const whereCondition: any = { user: { id: userId } };
+    const whereCondition: FindOptionsWhere<ReadingStatus> = {
+      user: { id: userId },
+    };
 
     if (status !== null) {
       whereCondition.status = status;

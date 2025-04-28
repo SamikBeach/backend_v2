@@ -36,6 +36,7 @@ import {
   LibrarySortOption,
   PaginatedLibraryResponse,
   BookInfoDto,
+  PopularLibraryResponseDto,
 } from './dto/library-response.dto';
 import { UserService } from '../user/user.service';
 import { NotificationService } from '../notification/notification.service';
@@ -43,6 +44,7 @@ import { Brackets } from 'typeorm';
 import { LibraryTagService } from '../library-tag/library-tag.service';
 import { ReadingStatusService } from '../reading-status/reading-status.service';
 import { RatingService } from '../rating/rating.service';
+import { Book } from '../book/entities/book.entity';
 
 @Injectable()
 export class LibraryService {
@@ -140,7 +142,9 @@ export class LibraryService {
   }
 
   // 홈화면용 인기 서재 목록 조회
-  async findPopularLibrariesForHome(limit: number = 3): Promise<any> {
+  async findPopularLibrariesForHome(
+    limit: number = 3,
+  ): Promise<PopularLibraryResponseDto[]> {
     // 구독자 수가 많은 순으로 공개 서재 조회
     const popularLibraries = await this.libraryRepository
       .createQueryBuilder('library')
@@ -816,7 +820,7 @@ export class LibraryService {
       }
 
       // 책 처리
-      let book: any;
+      let book: Book;
 
       // bookId가 -1이고 ISBN이 제공된 경우: ISBN으로 책을 검색하거나 새로 등록
       if (addBookToLibraryDto.bookId === -1 && addBookToLibraryDto.isbn) {

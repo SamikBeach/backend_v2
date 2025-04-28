@@ -99,6 +99,15 @@ export interface PaginatedLibraryResponse {
   meta: LibraryResponseMeta;
 }
 
+export interface PopularLibraryResponseDto {
+  id: number;
+  name: string;
+  ownerName: string;
+  subscriberCount: number;
+  bookCount: number;
+  previewBooks: BookInfoDto[];
+}
+
 export enum LibrarySortOption {
   SUBSCRIBERS = 'subscribers', // 구독자 많은 순
   BOOKS = 'books', // 담긴 책 많은 순
