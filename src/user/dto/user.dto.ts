@@ -186,8 +186,26 @@ export interface ExtendedReadingStatusResponseDto {
   book: ExtendedBookInfoDto;
 }
 
+// Enhanced book info for ratings response
+export interface EnhancedBookInfoDto extends BookInfoDto {
+  isbn13?: string;
+  publishDate?: Date;
+  description?: string;
+  rating?: number;
+  reviews?: number;
+  totalRatings?: number;
+  readingStats?: any;
+  userRating?: any;
+  userReadingStatus?: any;
+}
+
 export interface RatingWithBookInfoDto extends RatingResponseDto {
-  book: BookInfoDto;
+  book: EnhancedBookInfoDto;
+  user?: {
+    id: number;
+    username: string;
+    profileImage?: string;
+  };
 }
 
 export type ReviewActivityItem = {

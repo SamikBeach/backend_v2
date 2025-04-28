@@ -1518,22 +1518,63 @@ export class UserService {
       // 페이지네이션 적용
       const ratings = filteredRatings.slice(skip, skip + limit);
 
+      // 책 ID 목록 수집
+      const bookIds = ratings
+        .filter((rating) => rating.book?.id)
+        .map((rating) => rating.book.id);
+
+      // 책 정보를 미리 로드 (N+1 문제 방지)
+      const bookDetailsMap = new Map();
+      if (bookIds.length > 0) {
+        const books = await this.bookService.findByIds(bookIds);
+        for (const book of books) {
+          const enrichedBook = await this.bookService.enrichBookWithUserData(
+            book,
+            currentUserId,
+          );
+          bookDetailsMap.set(book.id, enrichedBook);
+        }
+      }
+
       // 사용자 정보와 책 정보를 포함한 평점 데이터 반환
       const ratingsWithUserInfo = await Promise.all(
         ratings.map(async (rating) => {
           const profileImageUrl = this.ensureFullImageUrl(user.profileImage);
 
-          // BookInfoDto 형식으로 book 속성 변환
+          // 향상된 책 정보 가져오기
           let bookInfo = null;
           if (rating.book) {
-            bookInfo = {
-              id: rating.book.id,
-              title: rating.book.title,
-              author: rating.book.author,
-              coverImage: rating.book.coverImage,
-              isbn: rating.book.isbn,
-              publisher: rating.book.publisher,
-            };
+            const enrichedBook = bookDetailsMap.get(rating.book.id);
+            if (enrichedBook) {
+              bookInfo = {
+                id: enrichedBook.id,
+                title: enrichedBook.title,
+                author: enrichedBook.author,
+                coverImage: enrichedBook.coverImage,
+                publisher: enrichedBook.publisher,
+                isbn: enrichedBook.isbn,
+                isbn13: enrichedBook.isbn13,
+                publishDate: enrichedBook.publishDate,
+                description:
+                  enrichedBook.description?.substring(0, 100) + '...',
+                rating: enrichedBook.rating,
+                reviews: enrichedBook.reviews,
+                totalRatings: enrichedBook.totalRatings,
+                readingStats: enrichedBook.readingStats,
+                userRating: enrichedBook.userRating,
+                userReadingStatus: enrichedBook.userReadingStatus,
+              };
+            } else {
+              // 기본 책 정보만 있는 경우 (enrichedBook을 가져오지 못한 경우)
+              bookInfo = {
+                id: rating.book.id,
+                title: rating.book.title,
+                author: rating.book.author,
+                coverImage: rating.book.coverImage,
+                isbn: rating.book.isbn,
+                publisher: rating.book.publisher,
+              };
+            }
           }
 
           return {
