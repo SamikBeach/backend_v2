@@ -15,6 +15,7 @@ import {
   ClassSerializerInterceptor,
   Put,
   UploadedFile,
+  DefaultValuePipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserService } from './user.service';
@@ -30,6 +31,7 @@ import {
   UpdateUserDto,
 } from './dto/user.dto';
 import { ReadingStatusType } from '../reading-status/entities/reading-status.entity';
+import { LibrarySortOption } from '../library/dto/library-response.dto';
 
 @Controller('user')
 @UseInterceptors(ClassSerializerInterceptor)
@@ -247,5 +249,23 @@ export class UserController {
       filter || 'recent',
       user?.id,
     );
+  }
+
+  /**
+   * 사용자가 구독한 서재 목록을 페이지네이션과 함께 반환합니다.
+   * @param userId 사용자 ID
+   * @param page 페이지 번호
+   * @param limit 페이지당 항목 수
+   * @param sort 정렬 옵션
+   * @returns 구독한 서재 목록과 페이지네이션 정보
+   */
+  @Get(':userId/libraries/subscribed')
+  async getUserSubscribedLibraries(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+    @Query('sort') sort?: LibrarySortOption,
+  ) {
+    return this.userService.getUserSubscribedLibraries(userId, page, limit);
   }
 }

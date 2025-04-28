@@ -99,14 +99,6 @@ export class LibraryController {
     );
   }
 
-  @Get('subscribed')
-  findSubscribedLibraries(
-    @GetUser() user: User,
-    @Query('sort') sort?: LibrarySortOption,
-  ) {
-    return this.libraryService.findSubscribedLibraries(user.id, sort);
-  }
-
   @Get(':id')
   @IsPublic()
   findOne(@Param('id', ParseIntPipe) id: number, @GetUser() user?: User) {

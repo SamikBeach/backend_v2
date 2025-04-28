@@ -13,4 +13,8 @@ export class UpdateReviewDto {
   @IsNumber()
   @IsOptional()
   bookId?: number;
+
+  @IsString()
+  @IsOptional()
+  isbn?: string;
 }

@@ -416,6 +416,14 @@ export class ReviewService {
 
       // 책 ID 업데이트
       if ('bookId' in updateReviewDto) {
+        // bookId가 -1인 경우는 ISBN으로 처리되는 경우이므로 기존 연결 유지
+        if (updateReviewDto.bookId === -1) {
+          this.logger.log(
+            `리뷰 ID ${id}의 bookId가 -1인 경우, 기존 책 연결 유지`,
+          );
+          return this.findReviewById(id, userId);
+        }
+
         // 기존 책 연결이 있는 경우 리뷰 카운트 감소
         if (review.books && review.books.length > 0) {
           for (const reviewBook of review.books) {
@@ -843,6 +851,10 @@ export class ReviewService {
     const skip = (page - 1) * limit;
 
     try {
+      this.logger.log(
+        `findReviewsByBookId 호출 - BookID: ${bookId}, ISBN: ${isbn}, userID: ${userId}, sort: ${sort}`,
+      );
+
       // bookId가 -1이고 ISBN이 제공된 경우, ISBN으로 책을 찾음
       if (bookId === -1 && isbn) {
         this.logger.log(
@@ -850,15 +862,17 @@ export class ReviewService {
         );
 
         try {
-          // ISBN으로 책 조회 (saveToDb=false로 설정하여 DB에 저장하지 않음)
-          const book = await this.bookService.getBookDetailByIsbn(isbn, false);
+          // ISBN으로 책 조회 (saveToDb=true로 설정하여 DB에 저장하도록 수정)
+          const book = await this.bookService.getBookDetailByIsbn(isbn, true);
           this.logger.log(`ISBN ${isbn}로 책을 찾았습니다. ID: ${book.id}`);
 
           // DB에 이미 존재하는 책인 경우에만 실제 bookId로 검색 진행
           if (book.id > 0) {
             bookId = book.id;
+            this.logger.log(`새로운 BookID로 검색 진행: ${bookId}`);
           } else {
-            // 책이 DB에 없는 경우 빈 결과 반환
+            // 책이 DB에 없는 경우 빈 결과 반환 (이 부분은 이제 발생하지 않아야 함)
+            this.logger.log(`책 ID가 아직 유효하지 않습니다: ${book.id}`);
             return {
               data: [],
               meta: {
@@ -894,6 +908,8 @@ export class ReviewService {
         .innerJoin('reviewBooks.book', 'book')
         .leftJoinAndSelect('review.author', 'author')
         .where('reviewBooks.bookId = :bookId', { bookId });
+
+      this.logger.log(`리뷰 쿼리 실행 - 책 ID: ${bookId}`);
 
       // 로그인한 사용자의 경우 좋아요 여부 체크 (SQL 쿼리에서)
       if (userId) {
@@ -945,6 +961,10 @@ export class ReviewService {
 
       // 리뷰 가져오기
       const [reviews, total] = await queryBuilder.getManyAndCount();
+
+      this.logger.log(
+        `리뷰 쿼리 결과 - 총 ${total}개의 리뷰 찾음, 페이지에서 ${reviews.length}개 반환`,
+      );
 
       // 첫 번째 리뷰의 review_isLiked 필드 확인 로깅
       if (reviews.length > 0 && userId) {

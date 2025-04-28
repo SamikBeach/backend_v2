@@ -396,68 +396,6 @@ export class LibraryService {
     return result;
   }
 
-  // 구독중인 서재 목록 조회
-  async findSubscribedLibraries(
-    userId: number,
-    sortOption?: LibrarySortOption,
-  ): Promise<LibraryListResponseDto[]> {
-    const subscriptions = await this.librarySubscriptionRepository.find({
-      where: { subscriberId: userId },
-      relations: ['library'],
-    });
-
-    if (subscriptions.length === 0) {
-      return [];
-    }
-
-    const libraryIds = subscriptions.map(
-      (subscription) => subscription.libraryId,
-    );
-
-    let qb = this.libraryRepository
-      .createQueryBuilder('library')
-      .leftJoinAndSelect('library.owner', 'owner')
-      .leftJoinAndSelect('library.libraryTagMappings', 'tagMappings')
-      .leftJoinAndSelect('tagMappings.libraryTag', 'tag')
-      .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
-      .leftJoinAndSelect('libraryBooks.book', 'book')
-      .where('library.id IN (:...ids)', { ids: libraryIds });
-
-    // 정렬 옵션 적용
-    switch (sortOption) {
-      case LibrarySortOption.SUBSCRIBERS:
-        qb = qb.orderBy('library.subscriberCount', 'DESC');
-        break;
-      case LibrarySortOption.BOOKS:
-        // 책 수로 정렬하려면 추가 작업 필요
-        // 쿼리 결과를 가져온 후 JS에서 정렬
-        break;
-      case LibrarySortOption.RECENT:
-        qb = qb.orderBy('library.createdAt', 'DESC');
-        break;
-      default:
-        // 기본은 최신순
-        qb = qb.orderBy('library.createdAt', 'DESC');
-        break;
-    }
-
-    const libraries = await qb.getMany();
-
-    // 공통 변환 메서드를 사용하여 응답 데이터 구성 (모두 구독 중인 서재)
-    const result = await Promise.all(
-      libraries.map(async (library) =>
-        this.transformLibraryToListResponseDto(library, true),
-      ),
-    );
-
-    // 책 개수로 정렬해야 하는 경우 메모리에서 정렬
-    if (sortOption === LibrarySortOption.BOOKS) {
-      return result.sort((a, b) => b.bookCount - a.bookCount);
-    }
-
-    return result;
-  }
-
   // 특정 서재 상세 조회
   async findOne(
     id: number,

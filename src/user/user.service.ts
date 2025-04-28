@@ -47,6 +47,7 @@ import { ReviewBook } from '../review/entities/review-book.entity';
 import { BookService } from '../book/book.service';
 import { RatingService } from '../rating/rating.service';
 import { ReviewLike } from '../review/entities/review-like.entity';
+import { LibraryListResponseDto } from '../library/dto/library-response.dto';
 
 @Injectable()
 export class UserService {
@@ -73,6 +74,10 @@ export class UserService {
     private reviewImageRepository: Repository<ReviewImage>,
     @InjectRepository(ReviewBook)
     private reviewBookRepository: Repository<ReviewBook>,
+    @InjectRepository(LibrarySubscription)
+    private librarySubscriptionRepository: Repository<LibrarySubscription>,
+    @InjectRepository(Library)
+    private libraryRepository: Repository<Library>,
     @Inject(forwardRef(() => ReadingStatusService))
     private readingStatusService: ReadingStatusService,
     @Inject(forwardRef(() => BookService))
@@ -1906,5 +1911,87 @@ export class UserService {
       );
       return 0;
     }
+  }
+
+  /**
+   * 사용자가 구독한 서재 목록을 페이지네이션과 함께 반환합니다.
+   * @param userId 사용자 ID
+   * @param page 페이지 번호
+   * @param limit 페이지당 항목 수
+   * @param sortOption 정렬 옵션
+   * @returns 구독한 서재 목록과 페이지네이션 정보
+   */
+  async getUserSubscribedLibraries(
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{
+    libraries: LibraryListResponseDto[];
+    total: number;
+    currentPage: number;
+    totalPages: number;
+  }> {
+    const skip = (page - 1) * limit;
+
+    const [libraries, total] = await this.librarySubscriptionRepository
+      .createQueryBuilder('subscription')
+      .leftJoinAndSelect('subscription.library', 'library')
+      .leftJoinAndSelect('library.owner', 'owner')
+      .leftJoinAndSelect('library.libraryTagMappings', 'libraryTagMappings')
+      .leftJoinAndSelect('libraryTagMappings.libraryTag', 'libraryTag')
+      .where('subscription.subscriberId = :userId', { userId })
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    const totalPages = Math.ceil(total / limit);
+
+    const libraryListResponseDtos = libraries.map((subscription) => {
+      const library = subscription.library;
+      return {
+        id: library.id,
+        name: library.name,
+        description: library.description,
+        isPublic: library.isPublic,
+        subscriberCount: library.subscriberCount,
+        owner: {
+          id: library.owner.id,
+          username: library.owner.username,
+          email: library.owner.email,
+        },
+        createdAt: library.createdAt,
+        updatedAt: library.updatedAt,
+        bookCount: library.libraryBooks?.length || 0,
+        previewBooks:
+          library.libraryBooks?.slice(0, 3).map((lb) => ({
+            id: lb.book.id,
+            title: lb.book.title,
+            author: lb.book.author,
+            coverImage: lb.book.coverImage,
+            isbn: lb.book.isbn,
+            publisher: lb.book.publisher,
+          })) || [],
+        tags:
+          library.libraryTagMappings?.map((mapping) => ({
+            id: mapping.id,
+            tagId: mapping.libraryTag.id,
+            tagName: mapping.libraryTag.name,
+            description: mapping.libraryTag.description,
+            usageCount: mapping.libraryTag.usageCount,
+            libraryId: library.id,
+            note: mapping.note,
+            createdAt: mapping.createdAt,
+            updatedAt: mapping.updatedAt,
+          })) || [],
+        isSubscribed: true,
+      };
+    });
+
+    return {
+      libraries: libraryListResponseDtos,
+      total,
+      currentPage: page,
+      totalPages,
+    };
   }
 }

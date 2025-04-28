@@ -11,6 +11,8 @@ import { ReviewImage } from '../review/entities/review-image.entity';
 import { ReviewBook } from '../review/entities/review-book.entity';
 import { BookModule } from '../book/book.module';
 import { RatingModule } from '../rating/rating.module';
+import { LibrarySubscription } from '../library/entities/library-subscription.entity';
+import { Library } from '../library/entities/library.entity';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { RatingModule } from '../rating/rating.module';
       Review,
       ReviewImage,
       ReviewBook,
+      LibrarySubscription,
+      Library,
     ]),
     forwardRef(() => ReadingStatusModule),
     forwardRef(() => BookModule),
