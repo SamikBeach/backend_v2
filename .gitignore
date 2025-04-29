@@ -21,7 +21,7 @@ node_modules
 .env.development
 /dist
 
-./uploads
+/uploads
 
 # AuthKey
 AuthKey_B87FH5JM49.p8
