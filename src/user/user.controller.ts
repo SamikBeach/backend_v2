@@ -16,6 +16,7 @@ import {
   Put,
   UploadedFile,
   DefaultValuePipe,
+  Patch,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UserService } from './user.service';
@@ -32,11 +33,17 @@ import {
 } from './dto/user.dto';
 import { ReadingStatusType } from '../reading-status/entities/reading-status.entity';
 import { LibrarySortOption } from '../library/dto/library-response.dto';
+import { StatisticsService } from '../statistics/statistics.service';
+import { UpdateStatisticsSettingDto } from '../statistics/dto/statistics-setting.dto';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 @Controller('user')
 @UseInterceptors(ClassSerializerInterceptor)
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly statisticsService: StatisticsService,
+  ) {}
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
@@ -267,5 +274,336 @@ export class UserController {
     @Query('sort') sort?: LibrarySortOption,
   ) {
     return this.userService.getUserSubscribedLibraries(userId, page, limit);
+  }
+
+  // 통계 설정 조회
+  @Get(':id/statistics-settings')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: '사용자 통계 설정 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '사용자 통계 설정 정보',
+  })
+  async getUserStatisticsSettings(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: User,
+  ) {
+    if (user.id !== id) {
+      throw new UnauthorizedException('자신의 통계 설정만 조회할 수 있습니다.');
+    }
+    return this.statisticsService.getUserStatisticsSettings(id);
+  }
+
+  // 통계 설정 업데이트
+  @Patch(':id/statistics-settings')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: '사용자 통계 설정 업데이트' })
+  @ApiResponse({
+    status: 200,
+    description: '업데이트된 사용자 통계 설정 정보',
+  })
+  async updateUserStatisticsSettings(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateDto: UpdateStatisticsSettingDto,
+    @GetUser() user: User,
+  ) {
+    if (user.id !== id) {
+      throw new UnauthorizedException(
+        '자신의 통계 설정만 업데이트할 수 있습니다.',
+      );
+    }
+    return this.statisticsService.updateUserStatisticsSetting(id, updateDto);
+  }
+
+  // 독서 상태 통계
+  @Get(':id/statistics/reading-status')
+  @ApiOperation({ summary: '독서 상태별 도서 수 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '독서 상태별 도서 수 통계',
+  })
+  async getReadingStatusStats(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getReadingStatusStats(id, requestUserId);
+  }
+
+  // 장르/카테고리 분석 통계
+  @Get(':id/statistics/genre-analysis')
+  @IsPublic()
+  @ApiOperation({ summary: '장르/카테고리 분석 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '장르/카테고리 분석 통계',
+  })
+  async getGenreAnalysis(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getGenreAnalysis(id, requestUserId);
+  }
+
+  // 저자/출판사 통계
+  @Get(':id/statistics/author-publisher')
+  @IsPublic()
+  @ApiOperation({ summary: '저자/출판사 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '저자/출판사 통계',
+  })
+  async getAuthorPublisherStats(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getAuthorPublisherStats(id, requestUserId);
+  }
+
+  // 리뷰 통계
+  @Get(':id/statistics/reviews')
+  @IsPublic()
+  @ApiOperation({ summary: '리뷰 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '리뷰 작성 통계',
+  })
+  async getReviewStats(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getReviewStats(id, requestUserId);
+  }
+
+  // 평점 통계
+  @Get(':id/statistics/ratings')
+  @IsPublic()
+  @ApiOperation({ summary: '평점 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '평점 통계',
+  })
+  async getRatingStats(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getRatingStats(id, requestUserId);
+  }
+
+  // 액티비티 빈도 통계
+  @Get(':id/statistics/activity-frequency')
+  @IsPublic()
+  @ApiOperation({ summary: '액티비티 빈도 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '액티비티 빈도 통계',
+  })
+  async getActivityFrequency(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getActivityFrequency(id, requestUserId);
+  }
+
+  // 평가 습관 통계
+  @Get(':id/statistics/rating-habits')
+  @ApiOperation({ summary: '평가 습관 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '평가 습관 통계',
+  })
+  async getRatingHabits(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getRatingHabits(id, requestUserId);
+  }
+
+  // 사용자 상호작용 통계
+  @Get(':id/statistics/user-interaction')
+  @ApiOperation({ summary: '사용자 상호작용 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '사용자 상호작용 통계',
+  })
+  async getUserInteraction(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getUserInteraction(id, requestUserId);
+  }
+
+  // 팔로워/팔로잉 통계
+  @Get(':id/statistics/follower')
+  @ApiOperation({ summary: '팔로워/팔로잉 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '팔로워/팔로잉 통계',
+  })
+  async getFollowerStats(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getFollowerStats(id, requestUserId);
+  }
+
+  // 댓글 활동 통계
+  @Get(':id/statistics/comment-activity')
+  @ApiOperation({ summary: '댓글 활동 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '댓글 활동 통계',
+  })
+  async getCommentActivity(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getCommentActivity(id, requestUserId);
+  }
+
+  // 리뷰 영향력 통계
+  @Get(':id/statistics/review-influence')
+  @ApiOperation({ summary: '리뷰 영향력 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '리뷰 영향력 통계',
+  })
+  async getReviewInfluence(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getReviewInfluence(id, requestUserId);
+  }
+
+  // 서재 구성 통계
+  @Get(':id/statistics/library-composition')
+  @ApiOperation({ summary: '서재 구성 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '서재 구성 통계',
+  })
+  async getLibraryComposition(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getLibraryComposition(id, requestUserId);
+  }
+
+  // 서재 인기도 통계
+  @Get(':id/statistics/library-popularity')
+  @ApiOperation({ summary: '서재 인기도 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '서재 인기도 통계',
+  })
+  async getLibraryPopularity(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getLibraryPopularity(id, requestUserId);
+  }
+
+  // 서재 업데이트 패턴 통계
+  @Get(':id/statistics/library-update-pattern')
+  @ApiOperation({ summary: '서재 업데이트 패턴 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '서재 업데이트 패턴 통계',
+  })
+  async getLibraryUpdatePattern(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getLibraryUpdatePattern(id, requestUserId);
+  }
+
+  // 서재 다양성 통계
+  @Get(':id/statistics/library-diversity')
+  @ApiOperation({ summary: '서재 다양성 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '서재 다양성 통계',
+  })
+  async getLibraryDiversity(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getLibraryDiversity(id, requestUserId);
+  }
+
+  // 금액 통계
+  @Get(':id/statistics/amount')
+  @ApiOperation({ summary: '금액 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '금액 통계',
+  })
+  async getAmountStats(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getAmountStats(id, requestUserId);
+  }
+
+  // 검색 활동 통계
+  @Get(':id/statistics/search-activity')
+  @ApiOperation({ summary: '검색 활동 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '검색 활동 통계',
+  })
+  async getSearchActivity(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getSearchActivity(id, requestUserId);
+  }
+
+  // 도서 메타데이터 통계
+  @Get(':id/statistics/book-metadata')
+  @IsPublic()
+  @ApiOperation({ summary: '도서 메타데이터 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '도서 메타데이터 통계',
+  })
+  async getBookMetadataStats(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getBookMetadataStats(id, requestUserId);
+  }
+
+  // 기간별 독서 상태 통계
+  @Get(':id/statistics/reading-status-by-period')
+  @IsPublic()
+  @ApiOperation({ summary: '기간별 독서 상태 통계 조회' })
+  @ApiResponse({
+    status: 200,
+    description: '연도별, 월별, 주별, 일별 독서 상태 통계',
+  })
+  async getReadingStatusByPeriod(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() currentUser?: User,
+  ) {
+    const requestUserId = currentUser?.id;
+    return this.statisticsService.getReadingStatusByPeriod(id, requestUserId);
   }
 }
