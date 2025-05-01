@@ -15,6 +15,9 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
     bufferLogs: true,
   });
+
+  app.set('query parser', 'extended');
+
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3001);
   const logger = new Logger('Bootstrap');

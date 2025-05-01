@@ -254,20 +254,102 @@ export class RatingService {
    * Rating 엔티티를 RatingResponseDto로 변환
    */
   private mapToResponseDto(rating: Rating): RatingResponseDto {
-    // Ensure numeric conversion of rating value
-    const ratingValue =
-      typeof rating.rating === 'string'
-        ? parseInt(rating.rating, 10)
-        : Number(rating.rating);
-
     return {
       id: rating.id,
       userId: rating.userId,
       bookId: rating.bookId,
-      rating: ratingValue,
+      rating: rating.rating,
       comment: rating.comment,
       createdAt: rating.createdAt,
       updatedAt: rating.updatedAt,
     };
+  }
+
+  /**
+   * 특정 사용자의 평균 평점 계산
+   */
+  async getUserAverageRating(userId: number): Promise<number | null> {
+    try {
+      const result = await this.ratingRepository
+        .createQueryBuilder('rating')
+        .select('AVG(rating.rating)', 'averageRating')
+        .where('rating.userId = :userId', { userId })
+        .andWhere('rating.rating IS NOT NULL')
+        .getRawOne();
+
+      // 평점이 없으면 null 반환
+      if (!result.averageRating) {
+        return null;
+      }
+
+      // 소수점 1자리까지 반올림
+      return Math.round(result.averageRating * 10) / 10;
+    } catch (error) {
+      this.logger.error(
+        `유저 ${userId}의 평균 평점 계산 중 오류: ${error.message}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * 특정 사용자의 평점 개수 조회
+   */
+  async getRatingCountByUser(userId: number): Promise<number> {
+    try {
+      const count = await this.ratingRepository.count({
+        where: { userId },
+      });
+      return count;
+    } catch (error) {
+      this.logger.error(
+        `유저 ${userId}의 평점 개수 조회 중 오류: ${error.message}`,
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * 특정 사용자의 모든 평점 조회 (책 정보 포함)
+   */
+  async findAllByUserWithBookInfo(
+    userId: number,
+  ): Promise<RatingResponseDto[]> {
+    try {
+      const ratings = await this.ratingRepository.find({
+        where: { userId },
+        relations: ['book'],
+        order: { createdAt: 'DESC' },
+      });
+
+      return await Promise.all(
+        ratings.map(async (rating) => {
+          const book = rating.book;
+
+          return {
+            ...this.mapToResponseDto(rating),
+            book: book
+              ? {
+                  id: book.id,
+                  title: book.title,
+                  author: book.author,
+                  coverImage: book.coverImage,
+                  isbn: book.isbn,
+                  isbn13: book.isbn13,
+                  publisher: book.publisher,
+                  publishDate: book.publishDate,
+                  description: book.description,
+                  rating: book.rating,
+                  reviews: book.reviews,
+                  totalRatings: book.totalRatings,
+                }
+              : null,
+          };
+        }),
+      );
+    } catch (error) {
+      this.logger.error(`유저 ${userId}의 평점 조회 중 오류: ${error.message}`);
+      return [];
+    }
   }
 }

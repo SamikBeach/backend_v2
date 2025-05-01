@@ -36,6 +36,7 @@ import {
   LibrarySortOption,
   PaginatedLibraryResponse,
   BookInfoDto,
+  PopularLibraryResponseDto,
 } from './dto/library-response.dto';
 import { UserService } from '../user/user.service';
 import { NotificationService } from '../notification/notification.service';
@@ -43,6 +44,7 @@ import { Brackets } from 'typeorm';
 import { LibraryTagService } from '../library-tag/library-tag.service';
 import { ReadingStatusService } from '../reading-status/reading-status.service';
 import { RatingService } from '../rating/rating.service';
+import { Book } from '../book/entities/book.entity';
 
 @Injectable()
 export class LibraryService {
@@ -140,7 +142,9 @@ export class LibraryService {
   }
 
   // 홈화면용 인기 서재 목록 조회
-  async findPopularLibrariesForHome(limit: number = 3): Promise<any> {
+  async findPopularLibrariesForHome(
+    limit: number = 3,
+  ): Promise<PopularLibraryResponseDto[]> {
     // 구독자 수가 많은 순으로 공개 서재 조회
     const popularLibraries = await this.libraryRepository
       .createQueryBuilder('library')
@@ -198,7 +202,7 @@ export class LibraryService {
     );
 
     try {
-      // 공개 서재만 가져오거나, 사용자 ID가 제공된 경우 해당 사용자의 서재까지 가져옴
+      // 공개 서재만 가져오기
       let qb = this.libraryRepository
         .createQueryBuilder('library')
         .leftJoinAndSelect('library.owner', 'owner')
@@ -209,18 +213,8 @@ export class LibraryService {
 
       this.logger.debug('기본 쿼리 생성됨');
 
-      // 기본 조건: 공개 서재만 보이거나, 자신의 서재도 보이게 함
-      if (userId) {
-        qb = qb.where(
-          '(library.isPublic = :isPublic OR library.ownerId = :ownerId)',
-          {
-            isPublic: true,
-            ownerId: userId,
-          },
-        );
-      } else {
-        qb = qb.where('library.isPublic = :isPublic', { isPublic: true });
-      }
+      // 항상 공개 서재만 표시하도록 수정 (사용자 자신의 비공개 서재도 제외)
+      qb = qb.where('library.isPublic = :isPublic', { isPublic: true });
 
       // 태그 ID가 제공된 경우 해당 태그를 가진 서재만 필터링
       if (tagId) {
@@ -382,68 +376,6 @@ export class LibraryService {
 
         return this.transformLibraryToListResponseDto(library, isSubscribed);
       }),
-    );
-
-    // 책 개수로 정렬해야 하는 경우 메모리에서 정렬
-    if (sortOption === LibrarySortOption.BOOKS) {
-      return result.sort((a, b) => b.bookCount - a.bookCount);
-    }
-
-    return result;
-  }
-
-  // 구독중인 서재 목록 조회
-  async findSubscribedLibraries(
-    userId: number,
-    sortOption?: LibrarySortOption,
-  ): Promise<LibraryListResponseDto[]> {
-    const subscriptions = await this.librarySubscriptionRepository.find({
-      where: { subscriberId: userId },
-      relations: ['library'],
-    });
-
-    if (subscriptions.length === 0) {
-      return [];
-    }
-
-    const libraryIds = subscriptions.map(
-      (subscription) => subscription.libraryId,
-    );
-
-    let qb = this.libraryRepository
-      .createQueryBuilder('library')
-      .leftJoinAndSelect('library.owner', 'owner')
-      .leftJoinAndSelect('library.libraryTagMappings', 'tagMappings')
-      .leftJoinAndSelect('tagMappings.libraryTag', 'tag')
-      .leftJoinAndSelect('library.libraryBooks', 'libraryBooks')
-      .leftJoinAndSelect('libraryBooks.book', 'book')
-      .where('library.id IN (:...ids)', { ids: libraryIds });
-
-    // 정렬 옵션 적용
-    switch (sortOption) {
-      case LibrarySortOption.SUBSCRIBERS:
-        qb = qb.orderBy('library.subscriberCount', 'DESC');
-        break;
-      case LibrarySortOption.BOOKS:
-        // 책 수로 정렬하려면 추가 작업 필요
-        // 쿼리 결과를 가져온 후 JS에서 정렬
-        break;
-      case LibrarySortOption.RECENT:
-        qb = qb.orderBy('library.createdAt', 'DESC');
-        break;
-      default:
-        // 기본은 최신순
-        qb = qb.orderBy('library.createdAt', 'DESC');
-        break;
-    }
-
-    const libraries = await qb.getMany();
-
-    // 공통 변환 메서드를 사용하여 응답 데이터 구성 (모두 구독 중인 서재)
-    const result = await Promise.all(
-      libraries.map(async (library) =>
-        this.transformLibraryToListResponseDto(library, true),
-      ),
     );
 
     // 책 개수로 정렬해야 하는 경우 메모리에서 정렬
@@ -816,7 +748,7 @@ export class LibraryService {
       }
 
       // 책 처리
-      let book: any;
+      let book: Book;
 
       // bookId가 -1이고 ISBN이 제공된 경우: ISBN으로 책을 검색하거나 새로 등록
       if (addBookToLibraryDto.bookId === -1 && addBookToLibraryDto.isbn) {

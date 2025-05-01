@@ -7,7 +7,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, FindOptionsWhere } from 'typeorm';
 import {
   ReadingStatus,
   ReadingStatusType,
@@ -285,7 +285,9 @@ export class ReadingStatusService {
     userId: number,
     status: ReadingStatusType | null,
   ): Promise<ReadingStatusResponseDto[]> {
-    const whereCondition: any = { user: { id: userId } };
+    const whereCondition: FindOptionsWhere<ReadingStatus> = {
+      user: { id: userId },
+    };
 
     if (status !== null) {
       whereCondition.status = status;
@@ -402,7 +404,7 @@ export class ReadingStatusService {
       bookId: book.id,
       title: book.title,
       author: book.author,
-      coverImageUrl: book.coverImage,
+      coverImage: book.coverImage,
       readingStatusCounts,
       userReadingStatus,
       currentReaders,
@@ -431,10 +433,10 @@ export class ReadingStatusService {
           createdAt: readingStatus.createdAt,
           updatedAt: readingStatus.updatedAt,
           book: {
-            id: readingStatus.bookId,
+            id: -1,
             title: '정보 없음',
             author: '정보 없음',
-            coverImageUrl: '',
+            coverImage: '',
             isbn: '',
           },
         };
@@ -444,7 +446,7 @@ export class ReadingStatusService {
         id: readingStatus.book.id,
         title: readingStatus.book.title,
         author: readingStatus.book.author,
-        coverImageUrl: readingStatus.book.coverImage,
+        coverImage: readingStatus.book.coverImage,
         isbn: readingStatus.book.isbn,
       };
 
@@ -476,7 +478,7 @@ export class ReadingStatusService {
           id: readingStatus.bookId || 0,
           title: '오류 발생',
           author: '오류 발생',
-          coverImageUrl: '',
+          coverImage: '',
           isbn: '',
         },
       };

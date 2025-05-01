@@ -63,14 +63,17 @@ export class ReviewController {
     @GetUser() user: User,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
-    @Query('type') type?: string,
+    @Query('type') type?: string | string[],
     @Query('filter') filter?: 'popular' | 'recent',
   ) {
+    // type이 string[] 또는 string 둘 다 처리
+    const typeArray = Array.isArray(type) ? type : type ? [type] : undefined;
+
     return this.reviewService.findAllReviews(
       user?.id,
       page ? +page : 1,
       limit ? +limit : 10,
-      type,
+      typeArray,
       filter || 'recent', // 기본값은 최신순
     );
   }

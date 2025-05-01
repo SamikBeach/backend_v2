@@ -1,5 +1,10 @@
 import { IsOptional, IsString, Length } from 'class-validator';
 import { AuthProvider } from '../entities/user.entity';
+import { ReadingStatusType } from '../../reading-status/entities/reading-status.entity';
+import { RatingResponseDto } from '../../rating/dto/rating.dto';
+import { BookInfoDto } from '../../reading-status/dto/reading-status.dto';
+import { ReviewType } from '../../review/entities/review.entity';
+import { User } from '../../user/entities/user.entity';
 
 export class UpdateUserDto {
   @IsString({ message: '사용자명은 문자열이어야 합니다.' })
@@ -94,12 +99,24 @@ export class ReadingCategoryStatDto {
   count: number;
 }
 
+export class ReviewCountsDto {
+  total: number;
+  general: number;
+  discussion: number;
+  review: number;
+  question: number;
+  meetup: number;
+}
+
 export class UserDetailResponseDto {
   user: UserDetailDto;
   libraryCount: number;
   readCount: number;
   subscribedLibraryCount: number;
-  reviewCount: number;
+  reviewCount: ReviewCountsDto;
+  averageRating: number | null;
+  ratingCount: number;
+  reviewAndRatingCount: number;
   followers: number;
   following: number;
   isEditable: boolean;
@@ -129,4 +146,122 @@ export class FollowingListResponseDto {
   page: number;
   totalPages: number;
   hasNextPage: boolean;
+}
+
+// 확장된 BookInfoDto, 더 많은 책 정보를 포함
+export class ExtendedBookInfoDto {
+  id: number;
+  title: string;
+  author: string;
+  coverImage: string;
+  isbn: string;
+  publisher: string;
+  isbn13?: string;
+  translator?: string;
+  pageCount?: number;
+  publishDate?: Date;
+  rating?: number;
+  reviews?: number;
+  totalRatings?: number;
+  description?: string;
+  tags?: string[];
+  categoryId?: number;
+  subcategoryId?: number;
+  priceSales?: number;
+  priceStandard?: number;
+  isFeatured?: boolean;
+  isDiscovered?: boolean;
+}
+
+// ReadingStatusResponseDto와 동일하지만 book 속성이 ExtendedBookInfoDto 타입인 인터페이스
+export interface ExtendedReadingStatusResponseDto {
+  id: number;
+  status: ReadingStatusType;
+  currentPage?: number;
+  startDate?: Date;
+  finishDate?: Date;
+  readingMemo?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  book: ExtendedBookInfoDto;
+}
+
+// Enhanced book info for ratings response
+export interface EnhancedBookInfoDto extends BookInfoDto {
+  isbn13?: string;
+  publishDate?: Date;
+  description?: string;
+  rating?: number;
+  reviews?: number;
+  totalRatings?: number;
+  readingStats?: any;
+  userRating?: any;
+  userReadingStatus?: any;
+}
+
+export interface RatingWithBookInfoDto extends RatingResponseDto {
+  book: EnhancedBookInfoDto;
+  user?: {
+    id: number;
+    username: string;
+    profileImage?: string;
+  };
+}
+
+export type ReviewActivityItem = {
+  activityType: string;
+  id: number;
+  content: string;
+  type: ReviewType;
+  author: {
+    id: number;
+    username: string;
+    email: string;
+    profileImage?: string;
+  };
+  images: {
+    id: number;
+    url: string;
+    caption?: string;
+  }[];
+  books: {
+    id: number;
+    title: string;
+    author: string;
+    coverImage: string;
+    publisher: string;
+    isbn?: string;
+  }[];
+  likeCount: number;
+  commentCount: number;
+  isLiked?: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type RatingActivityItem = {
+  activityType: string;
+  id: number;
+  userId: number;
+  bookId: number;
+  rating: number;
+  comment: string;
+  createdAt: Date;
+  updatedAt: Date;
+  book: BookInfoDto;
+  user?: Partial<User>;
+};
+
+export type UserActivityItem = ReviewActivityItem | RatingActivityItem;
+
+export function isReviewActivity(
+  activity: UserActivityItem,
+): activity is ReviewActivityItem {
+  return activity.activityType === 'review';
+}
+
+export function isRatingActivity(
+  activity: UserActivityItem,
+): activity is RatingActivityItem {
+  return activity.activityType === 'rating';
 }

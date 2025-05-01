@@ -8,6 +8,7 @@ export class ReviewResponseDto {
     id: number;
     username: string;
     email: string;
+    profileImage?: string;
   };
   images: {
     id: number;
@@ -22,11 +23,11 @@ export class ReviewResponseDto {
     publisher: string;
   }[];
   // 리뷰 작성자의 해당 책에 대한 평점 정보
-  authorRatings?: {
+  userRating?: {
     bookId: number;
     rating: number;
     comment?: string;
-  }[];
+  };
   likeCount: number;
   commentCount: number;
   isLiked: boolean;
@@ -40,6 +41,7 @@ export class CommentResponseDto {
   author: {
     id: number;
     username: string;
+    profileImage?: string;
   };
   likeCount: number;
   isLiked: boolean;

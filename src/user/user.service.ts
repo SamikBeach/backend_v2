@@ -6,9 +6,10 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In, FindOptionsWhere } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserStatus, AuthProvider } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -20,6 +21,12 @@ import {
   FollowerResponseDto,
   LibraryPreviewDto,
   UpdateUserDto,
+  ExtendedBookInfoDto,
+  ExtendedReadingStatusResponseDto,
+  RatingWithBookInfoDto,
+  UserActivityItem,
+  isReviewActivity,
+  isRatingActivity,
 } from './dto/user.dto';
 import { Library } from '../library/entities/library.entity';
 import { Review } from '../review/entities/review.entity';
@@ -31,23 +38,52 @@ import {
 import { LibrarySubscription } from '../library/entities/library-subscription.entity';
 import { LibraryBook } from '../library/entities/library-book.entity';
 import { ReadingStatusService } from '../reading-status/reading-status.service';
-import { ReadingStatusResponseDto } from '../reading-status/dto/reading-status.dto';
 import { FileService } from '../common/services/file.service';
 import { ConfigService } from '@nestjs/config';
 import { Book } from '../book/entities/book.entity';
-import { In } from 'typeorm';
+import { ReviewResponseDto } from '../review/dto/review-response.dto';
+import { ReviewImage } from '../review/entities/review-image.entity';
+import { ReviewBook } from '../review/entities/review-book.entity';
+import { BookService } from '../book/book.service';
+import { RatingService } from '../rating/rating.service';
+import { ReviewLike } from '../review/entities/review-like.entity';
+import { LibraryListResponseDto } from '../library/dto/library-response.dto';
 
 @Injectable()
 export class UserService {
   private serverUrl: string;
+  private readonly logger = new Logger(UserService.name);
+
+  // 상수 정의: ReviewType 값
+  private readonly REVIEW_TYPES = {
+    GENERAL: 'general' as const,
+    DISCUSSION: 'discussion' as const,
+    REVIEW: 'review' as const,
+    QUESTION: 'question' as const,
+    MEETUP: 'meetup' as const,
+  };
 
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
     @InjectRepository(UserFollower)
     private userFollowerRepository: Repository<UserFollower>,
+    @InjectRepository(Review)
+    private reviewRepository: Repository<Review>,
+    @InjectRepository(ReviewImage)
+    private reviewImageRepository: Repository<ReviewImage>,
+    @InjectRepository(ReviewBook)
+    private reviewBookRepository: Repository<ReviewBook>,
+    @InjectRepository(LibrarySubscription)
+    private librarySubscriptionRepository: Repository<LibrarySubscription>,
+    @InjectRepository(Library)
+    private libraryRepository: Repository<Library>,
     @Inject(forwardRef(() => ReadingStatusService))
     private readingStatusService: ReadingStatusService,
+    @Inject(forwardRef(() => BookService))
+    private bookService: BookService,
+    @Inject(forwardRef(() => RatingService))
+    private ratingService: RatingService,
     private fileService: FileService,
     private configService: ConfigService,
   ) {
@@ -388,44 +424,46 @@ export class UserService {
     isOwnProfile: boolean,
     currentUserId?: number,
   ): Promise<UserDetailResponseDto> {
-    const user = await this.findOne(id);
-
-    // 구독자 수(팔로워 수) 조회
-    const followersCount = await this.userFollowerRepository.count({
-      where: { following_id: id },
+    const user = await this.userRepository.findOne({
+      where: { id },
     });
 
-    // 팔로잉 수 조회
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    const libraryCount = await this.getLibraryCount(id);
+    const readCount = await this.getReadCount(id);
+    const subscribedLibraryCount = await this.getSubscribedLibraryCount(id);
+    const reviewCounts = await this.getUserReviewTypeCounts(id);
+    const averageRating = await this.ratingService.getUserAverageRating(id);
+    const ratingCount = await this.getRatingCount(id, currentUserId);
+
+    // 중복 제거된 리뷰와 평점 수 계산
+    const reviewAndRatingCount = await this.getReviewAndRatingCount(
+      id,
+      currentUserId,
+    );
+
+    // 팔로워, 팔로잉 수 계산
+    const followerCount = await this.userFollowerRepository.count({
+      where: { following_id: id },
+    });
     const followingCount = await this.userFollowerRepository.count({
       where: { follower_id: id },
     });
 
-    // 현재 사용자가 이 사용자를 팔로우하고 있는지 확인
+    // 본인 여부 또는 현재 사용자가 팔로우 중인지 여부 확인
     let isFollowing = false;
     if (currentUserId && currentUserId !== id) {
       isFollowing = await this.isFollowing(currentUserId, id);
     }
 
-    // 라이브러리 수 조회
-    const libraryCount = await this.getLibraryCount(id);
-
-    // 리뷰 수 조회
-    const reviewCount = await this.getReviewCount(id);
-
-    // 읽은 책 수 조회
-    const readCount = await this.getReadCount(id);
-
-    // 구독 중인 라이브러리 수 조회
-    const subscribedLibraryCount = await this.getSubscribedLibraryCount(id);
-
-    // 사용자의 대표 라이브러리 조회 (상위 3개)
-    const libraries = await this.getUserLibraries(id, 1, 3, currentUserId);
-
     return {
       user: {
         id: user.id,
         username: user.username,
-        email: isOwnProfile ? user.email : undefined, // 자신의 프로필인 경우만 이메일 포함
+        email: isOwnProfile ? user.email : undefined,
         bio: user.bio,
         profileImage: this.ensureFullImageUrl(user.profileImage),
         provider: user.provider,
@@ -434,12 +472,14 @@ export class UserService {
       libraryCount,
       readCount,
       subscribedLibraryCount,
-      reviewCount,
-      followers: followersCount,
+      reviewCount: reviewCounts,
+      averageRating,
+      ratingCount,
+      reviewAndRatingCount,
+      followers: followerCount,
       following: followingCount,
       isEditable: isOwnProfile,
-      isFollowing,
-      libraries: libraries.items,
+      isFollowing: currentUserId !== id ? isFollowing : undefined,
     };
   }
 
@@ -604,10 +644,15 @@ export class UserService {
 
   // 읽은 책 수 조회
   private async getReadCount(userId: number): Promise<number> {
-    // ReadingStatus 테이블에서 해당 사용자의 레코드 수를 조회
+    // ReadingStatus 테이블에서 READ 상태인 책의 수만 조회
     const readingStatusRepo =
       this.userRepository.manager.getRepository(ReadingStatus);
-    return readingStatusRepo.count({ where: { userId } });
+    return readingStatusRepo.count({
+      where: {
+        userId,
+        status: ReadingStatusType.READ,
+      },
+    });
   }
 
   // 구독 중인 라이브러리 수 조회
@@ -678,7 +723,7 @@ export class UserService {
     limit: number = 10,
     currentUserId?: number,
   ): Promise<FollowersListResponseDto> {
-    const user = await this.findOne(userId);
+    await this.findOne(userId);
 
     // 변경된 쿼리: relations 옵션 사용
     const skip = (page - 1) * limit;
@@ -736,7 +781,7 @@ export class UserService {
     limit: number = 10,
     currentUserId?: number,
   ): Promise<FollowingListResponseDto> {
-    const user = await this.findOne(userId);
+    await this.findOne(userId);
 
     // 변경된 쿼리: relations 옵션 사용
     const skip = (page - 1) * limit;
@@ -807,9 +852,7 @@ export class UserService {
     status: ReadingStatusType,
     page: number = 1,
     limit: number = 10,
-    isOwnProfile: boolean = false,
-    currentUserId?: number,
-  ): Promise<{ items: ReadingStatusResponseDto[]; total: number }> {
+  ): Promise<{ items: ExtendedReadingStatusResponseDto[]; total: number }> {
     try {
       // 사용자 존재 여부 확인
       await this.findOne(userId);
@@ -820,7 +863,7 @@ export class UserService {
       const bookRepo = this.userRepository.manager.getRepository(Book);
 
       // 조건 설정
-      const where: any = { userId };
+      const where: FindOptionsWhere<ReadingStatus> = { userId };
       if (status) {
         where.status = status;
       }
@@ -864,6 +907,31 @@ export class UserService {
             return null;
           }
 
+          // 응답 객체 생성
+          const bookInfo: ExtendedBookInfoDto = {
+            id: book.id,
+            title: book.title,
+            author: book.author,
+            coverImage: book.coverImage,
+            isbn: book.isbn,
+            publisher: book.publisher,
+            isbn13: book.isbn13,
+            translator: book.translator,
+            pageCount: book.pageCount,
+            publishDate: book.publishDate,
+            rating: book.rating,
+            reviews: book.reviews,
+            totalRatings: book.totalRatings,
+            description: book.description,
+            tags: book.tags,
+            categoryId: book.category?.id,
+            subcategoryId: book.subcategory?.id,
+            priceSales: book.priceSales,
+            priceStandard: book.priceStandard,
+            isFeatured: book.isFeatured,
+            isDiscovered: book.isDiscovered,
+          };
+
           return {
             id: status.id,
             status: status.status,
@@ -873,14 +941,8 @@ export class UserService {
             readingMemo: status.readingMemo,
             createdAt: status.createdAt,
             updatedAt: status.updatedAt,
-            book: {
-              id: book.id,
-              title: book.title,
-              author: book.author,
-              coverImageUrl: book.coverImage,
-              isbn: book.isbn,
-            },
-          } as ReadingStatusResponseDto;
+            book: bookInfo,
+          } as ExtendedReadingStatusResponseDto;
         })
         .filter((dto) => dto !== null);
 
@@ -986,6 +1048,960 @@ export class UserService {
       isEmailVerified: user.isEmailVerified,
       marketingConsent: user.marketingConsent,
       createdAt: user.createdAt,
+    };
+  }
+
+  /**
+   * 특정 사용자가 작성한 리뷰 목록 조회 (페이지네이션)
+   */
+  async getUserReviews(
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+    type?: string[],
+    filter: 'popular' | 'recent' = 'recent',
+    currentUserId?: number,
+  ): Promise<{
+    reviews: ReviewResponseDto[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    try {
+      // 사용자 존재 확인
+      await this.findOne(userId);
+
+      this.logger.log(
+        `유저 리뷰 조회 - 유저ID: ${userId}, 타입: ${type ? type.join(', ') : '전체'}, 필터: ${filter}`,
+      );
+
+      const queryBuilder = this.reviewRepository
+        .createQueryBuilder('review')
+        .leftJoinAndSelect('review.author', 'author')
+        .leftJoinAndSelect('review.images', 'images')
+        .leftJoinAndSelect('review.books', 'reviewBooks')
+        .leftJoinAndSelect('reviewBooks.book', 'book')
+        .where('review.authorId = :userId', { userId });
+
+      // 타입 필터링
+      if (type && Array.isArray(type) && type.length > 0) {
+        // 유효한 타입 목록
+        const validTypes = [
+          'general',
+          'discussion',
+          'review',
+          'question',
+          'meetup',
+        ];
+
+        // 유효한 타입만 필터링
+        const filteredTypes = type.filter((t) => validTypes.includes(t));
+
+        if (filteredTypes.length > 0) {
+          queryBuilder.andWhere('review.type IN (:...types)', {
+            types: filteredTypes,
+          });
+          this.logger.log(`타입 필터 적용: ${filteredTypes.join(', ')}`);
+        }
+      }
+
+      // 필터 적용 (인기순 / 최신순)
+      switch (filter) {
+        case 'popular':
+          // 인기순: 좋아요가 많은 순서 + 댓글이 많은 순서
+          queryBuilder
+            .orderBy('review.likeCount', 'DESC')
+            .addOrderBy('review.commentCount', 'DESC')
+            .addOrderBy('review.createdAt', 'DESC');
+          break;
+        case 'recent':
+        default:
+          // 최신순: 생성일 기준 내림차순
+          queryBuilder.orderBy('review.createdAt', 'DESC');
+          break;
+      }
+
+      // 페이지네이션 적용
+      queryBuilder.skip((page - 1) * limit).take(limit);
+
+      // 좋아요 여부 체크
+      if (currentUserId) {
+        queryBuilder.leftJoin(
+          'review.likes',
+          'likes',
+          'likes.userId = :currentUserId',
+          {
+            currentUserId,
+          },
+        );
+        // 필드명을 review_isLiked로 변경 (TypeORM에서 실제 값을 가져오는 방식에 맞게)
+        queryBuilder.addSelect(
+          'CASE WHEN likes.id IS NOT NULL THEN true ELSE false END',
+          'review_isLiked',
+        );
+      } else {
+        queryBuilder.addSelect('false', 'review_isLiked');
+      }
+
+      // 쿼리 실행
+      const [reviews, total] = await queryBuilder.getManyAndCount();
+
+      // 로그 추가 - 리뷰의 isLiked 필드 확인
+      if (reviews.length > 0) {
+        const rawObject = {};
+        // 객체의 모든 키를 확인
+        for (const key in reviews[0]) {
+          if (typeof key === 'string') {
+            rawObject[key] = reviews[0][key];
+          }
+        }
+
+        this.logger.log(
+          `첫 번째 리뷰의 필드 확인: ${JSON.stringify({
+            review_id: reviews[0].id,
+            review_type: reviews[0].type,
+            raw_isLiked: reviews[0]['isLiked'],
+            raw_review_isLiked: reviews[0]['review_isLiked'],
+          })}`,
+        );
+
+        // 좋아요 상태 집계
+        if (currentUserId) {
+          const likedReviews = reviews.filter(
+            (r) => r['review_isLiked'] === true,
+          );
+          this.logger.log(
+            `유저 리뷰 목록 isLiked 상태: 총 ${reviews.length}개 중 좋아요된 리뷰 ${likedReviews.length}개`,
+          );
+        }
+      }
+
+      // 리뷰에 연결된 책들의 ID 수집
+      const bookIds = new Set<number>();
+      reviews.forEach((review) => {
+        if (review.books && review.books.length > 0) {
+          review.books.forEach((reviewBook) => {
+            if (reviewBook.book && reviewBook.book.id) {
+              bookIds.add(reviewBook.book.id);
+            }
+          });
+        }
+      });
+
+      // 책 정보를 미리 로드 (N+1 문제 방지)
+      const bookDetailsMap = new Map();
+      if (bookIds.size > 0) {
+        const books = await this.bookService.findByIds(Array.from(bookIds));
+        for (const book of books) {
+          const enrichedBook = await this.bookService.enrichBookWithUserData(
+            book,
+            currentUserId,
+          );
+          bookDetailsMap.set(book.id, enrichedBook);
+        }
+      }
+
+      // Map reviews data with book information
+      const mapReviewsData = async (review: Review) => {
+        const images = review.images
+          ? review.images.map((img) => ({
+              id: img.id,
+              url: this.ensureFullImageUrl(img.url),
+            }))
+          : [];
+
+        const books = review.books
+          ? review.books.map((reviewBook) => {
+              const bookId = reviewBook.book.id;
+              const enrichedBook = bookDetailsMap.get(bookId);
+
+              if (enrichedBook) {
+                return {
+                  id: enrichedBook.id,
+                  title: enrichedBook.title,
+                  author: enrichedBook.author,
+                  coverImage: enrichedBook.coverImage,
+                  publisher: enrichedBook.publisher,
+                  isbn: enrichedBook.isbn,
+                  isbn13: enrichedBook.isbn13,
+                  publishDate: enrichedBook.publishDate,
+                  description:
+                    enrichedBook.description?.substring(0, 100) + '...',
+                  rating: enrichedBook.rating,
+                  reviews: enrichedBook.reviews,
+                  totalRatings: enrichedBook.totalRatings,
+                  readingStats: enrichedBook.readingStats,
+                  userRating: enrichedBook.userRating,
+                  userReadingStatus: enrichedBook.userReadingStatus,
+                };
+              }
+
+              return {
+                id: reviewBook.book.id,
+                title: reviewBook.book.title,
+                author: reviewBook.book.author,
+                coverImage: reviewBook.book.coverImage,
+                publisher: reviewBook.book.publisher,
+                isbn: reviewBook.book.isbn,
+                isbn13: reviewBook.book.isbn13,
+              };
+            })
+          : [];
+
+        // 리뷰와 관련된 첫 번째 책에 대한 사용자 평점 정보 추출
+        let userRating = null;
+        if (books.length > 0 && books[0].userRating) {
+          userRating = {
+            bookId: books[0].id,
+            rating: books[0].userRating.rating,
+            comment: books[0].userRating.comment,
+          };
+        }
+
+        // 좋아요 상태 확인 및 로깅 (review 타입인 경우에만)
+        let isLiked = review['review_isLiked'] === true;
+
+        // review_isLiked가 undefined인 경우 직접 체크
+        if (currentUserId && review['review_isLiked'] === undefined) {
+          isLiked = await this.isReviewLikedByUser(review.id, currentUserId);
+          this.logger.debug(
+            `리뷰 ID=${review.id}, 타입=${review.type} isLiked 직접 체크: ${isLiked}`,
+          );
+        } else if (currentUserId) {
+          this.logger.debug(
+            `리뷰 ID=${review.id}, 타입=${review.type} isLiked 설정: ${isLiked}, raw_value=${review['review_isLiked']}`,
+          );
+        }
+
+        return {
+          id: review.id,
+          content: review.content,
+          type: review.type,
+          createdAt: review.createdAt,
+          updatedAt: review.updatedAt,
+          author: {
+            id: review.author.id,
+            username: review.author.username,
+            email: review.author.email,
+            profileImage: this.ensureFullImageUrl(review.author.profileImage),
+          },
+          images,
+          books,
+          userRating,
+          likeCount: review.likeCount || 0,
+          commentCount: review.commentCount || 0,
+          isLiked,
+        } as ReviewResponseDto;
+      };
+
+      // 매핑 작업 수행
+      const mappedReviews = [];
+      for (const review of reviews) {
+        mappedReviews.push(await mapReviewsData(review));
+      }
+
+      return {
+        reviews: mappedReviews,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      this.logger.error(`사용자 리뷰 조회 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // 사용자의 읽기 상태별 책 수 조회
+  async getUserReadingStatusCounts(userId: number): Promise<{
+    [ReadingStatusType.WANT_TO_READ]: number;
+    [ReadingStatusType.READING]: number;
+    [ReadingStatusType.READ]: number;
+    total: number;
+  }> {
+    try {
+      // 사용자 존재 여부 확인
+      await this.findOne(userId);
+
+      // ReadingStatus 테이블 접근
+      const readingStatusRepo =
+        this.userRepository.manager.getRepository(ReadingStatus);
+
+      // 상태별 카운트 조회
+      const [wantToReadCount, readingCount, readCount, totalCount] =
+        await Promise.all([
+          readingStatusRepo.count({
+            where: {
+              userId,
+              status: ReadingStatusType.WANT_TO_READ,
+            },
+          }),
+          readingStatusRepo.count({
+            where: {
+              userId,
+              status: ReadingStatusType.READING,
+            },
+          }),
+          readingStatusRepo.count({
+            where: {
+              userId,
+              status: ReadingStatusType.READ,
+            },
+          }),
+          readingStatusRepo.count({
+            where: { userId },
+          }),
+        ]);
+
+      return {
+        [ReadingStatusType.WANT_TO_READ]: wantToReadCount,
+        [ReadingStatusType.READING]: readingCount,
+        [ReadingStatusType.READ]: readCount,
+        total: totalCount,
+      };
+    } catch (error) {
+      this.logger.error(
+        `사용자 읽기 상태별 책 수 조회 중 오류: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  // 사용자의 리뷰 타입별 수 조회
+  async getUserReviewTypeCounts(userId: number): Promise<{
+    [key: string]: number;
+    general: number;
+    discussion: number;
+    review: number;
+    question: number;
+    meetup: number;
+    total: number;
+  }> {
+    try {
+      // 사용자 존재 여부 확인
+      await this.findOne(userId);
+
+      // 전체 리뷰 개수
+      const totalCount = await this.reviewRepository.count({
+        where: { authorId: userId },
+      });
+
+      // 각 타입별 개수 조회
+      const [
+        generalCount,
+        discussionCount,
+        reviewCount,
+        questionCount,
+        meetupCount,
+      ] = await Promise.all([
+        this.reviewRepository.count({
+          where: { authorId: userId, type: this.REVIEW_TYPES.GENERAL },
+        }),
+        this.reviewRepository.count({
+          where: { authorId: userId, type: this.REVIEW_TYPES.DISCUSSION },
+        }),
+        this.reviewRepository.count({
+          where: { authorId: userId, type: this.REVIEW_TYPES.REVIEW },
+        }),
+        this.reviewRepository.count({
+          where: { authorId: userId, type: this.REVIEW_TYPES.QUESTION },
+        }),
+        this.reviewRepository.count({
+          where: { authorId: userId, type: this.REVIEW_TYPES.MEETUP },
+        }),
+      ]);
+
+      return {
+        [this.REVIEW_TYPES.GENERAL]: generalCount,
+        [this.REVIEW_TYPES.DISCUSSION]: discussionCount,
+        [this.REVIEW_TYPES.REVIEW]: reviewCount,
+        [this.REVIEW_TYPES.QUESTION]: questionCount,
+        [this.REVIEW_TYPES.MEETUP]: meetupCount,
+        total: totalCount,
+      };
+    } catch (error) {
+      this.logger.error(`사용자 리뷰 타입별 수 조회 중 오류: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // 별점만 매긴 것들의 개수 조회 (리뷰가 있는 책의 평점 제외)
+  private async getRatingCount(
+    userId: number,
+    currentUserId?: number,
+  ): Promise<number> {
+    try {
+      // 리뷰 조회 - 리뷰 타입의 리뷰만 가져오기
+      const reviewsResult = await this.getUserReviews(
+        userId,
+        1,
+        1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
+        ['review'], // review 타입만 필터링
+        'recent',
+        currentUserId, // 좋아요 여부 확인을 위해 currentUserId 전달
+      );
+
+      // 리뷰에 포함된 책의 ID 목록 생성
+      const reviewBookIds = new Set<number>();
+      reviewsResult.reviews.forEach((review) => {
+        if (review.books && review.books.length > 0) {
+          review.books.forEach((book) => {
+            reviewBookIds.add(book.id);
+          });
+        }
+      });
+
+      // 모든 평점 가져오기
+      const allRatings =
+        await this.ratingService.findAllByUserWithBookInfo(userId);
+
+      // 리뷰가 있는 책에 대한 평점 필터링
+      const filteredRatings = allRatings.filter((rating) => {
+        return !reviewBookIds.has(rating.book?.id);
+      });
+
+      // 필터링된 평점 개수 반환
+      return filteredRatings.length;
+    } catch (error) {
+      this.logger.error(
+        `사용자 ID ${userId}의 평점 개수 조회 중 오류: ${error.message}`,
+      );
+      return 0;
+    }
+  }
+
+  async getUserRatings(
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+    currentUserId?: number,
+  ): Promise<{
+    ratings: RatingWithBookInfoDto[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    try {
+      // 사용자 존재 여부 확인
+      const user = await this.findOne(userId);
+
+      // 리뷰 조회 - 리뷰 타입의 리뷰만 가져오기
+      const reviewsResult = await this.getUserReviews(
+        userId,
+        1,
+        1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
+        ['review'], // review 타입만 필터링
+        'recent',
+        currentUserId,
+      );
+
+      // 리뷰에 포함된 책의 ID 목록 생성
+      const reviewBookIds = new Set<number>();
+      reviewsResult.reviews.forEach((review) => {
+        if (review.books && review.books.length > 0) {
+          review.books.forEach((book) => {
+            reviewBookIds.add(book.id);
+          });
+        }
+      });
+
+      // 모든 평점 가져오기
+      const allRatings =
+        await this.ratingService.findAllByUserWithBookInfo(userId);
+
+      // 리뷰가 있는 책에 대한 평점 필터링
+      const filteredRatings = allRatings.filter((rating) => {
+        return !reviewBookIds.has(rating.book?.id);
+      });
+
+      // 총 평점 수 계산 (필터링 후)
+      const total = filteredRatings.length;
+
+      // 페이지네이션을 위한 skip 계산
+      const skip = (page - 1) * limit;
+
+      // 페이지네이션 적용
+      const ratings = filteredRatings.slice(skip, skip + limit);
+
+      // 책 ID 목록 수집
+      const bookIds = ratings
+        .filter((rating) => rating.book?.id)
+        .map((rating) => rating.book.id);
+
+      // 책 정보를 미리 로드 (N+1 문제 방지)
+      const bookDetailsMap = new Map();
+      if (bookIds.length > 0) {
+        const books = await this.bookService.findByIds(bookIds);
+        for (const book of books) {
+          const enrichedBook = await this.bookService.enrichBookWithUserData(
+            book,
+            currentUserId,
+          );
+          bookDetailsMap.set(book.id, enrichedBook);
+        }
+      }
+
+      // 사용자 정보와 책 정보를 포함한 평점 데이터 반환
+      const ratingsWithUserInfo = await Promise.all(
+        ratings.map(async (rating) => {
+          const profileImageUrl = this.ensureFullImageUrl(user.profileImage);
+
+          // 향상된 책 정보 가져오기
+          let bookInfo = null;
+          if (rating.book) {
+            const enrichedBook = bookDetailsMap.get(rating.book.id);
+            if (enrichedBook) {
+              bookInfo = {
+                id: enrichedBook.id,
+                title: enrichedBook.title,
+                author: enrichedBook.author,
+                coverImage: enrichedBook.coverImage,
+                publisher: enrichedBook.publisher,
+                isbn: enrichedBook.isbn,
+                isbn13: enrichedBook.isbn13,
+                publishDate: enrichedBook.publishDate,
+                description:
+                  enrichedBook.description?.substring(0, 100) + '...',
+                rating: enrichedBook.rating,
+                reviews: enrichedBook.reviews,
+                totalRatings: enrichedBook.totalRatings,
+                readingStats: enrichedBook.readingStats,
+                userRating: enrichedBook.userRating,
+                userReadingStatus: enrichedBook.userReadingStatus,
+              };
+            } else {
+              // 기본 책 정보만 있는 경우 (enrichedBook을 가져오지 못한 경우)
+              bookInfo = {
+                id: rating.book.id,
+                title: rating.book.title,
+                author: rating.book.author,
+                coverImage: rating.book.coverImage,
+                isbn: rating.book.isbn,
+                publisher: rating.book.publisher,
+              };
+            }
+          }
+
+          return {
+            ...rating,
+            user: {
+              id: user.id,
+              username: user.username || '사용자',
+              profileImage: profileImageUrl,
+            },
+            book: bookInfo,
+          };
+        }),
+      );
+
+      return {
+        ratings: ratingsWithUserInfo,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      this.logger.error(
+        `사용자 ID ${userId}의 평점 조회 중 오류: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  async getUserRatingsByScore(userId: number) {
+    try {
+      const ratings =
+        await this.ratingService.findAllByUserWithBookInfo(userId);
+
+      // 각 평점 점수별 개수 초기화
+      const ratingCounts = {
+        1: 0,
+        2: 0,
+        3: 0,
+        4: 0,
+        5: 0,
+        total: 0,
+      };
+
+      // 평점 점수별로 개수 세기
+      ratings.forEach((rating) => {
+        if (rating.rating >= 1 && rating.rating <= 5) {
+          ratingCounts[rating.rating]++;
+          ratingCounts.total++;
+        }
+      });
+
+      return ratingCounts;
+    } catch (error) {
+      this.logger.error(
+        `Failed to get ratings by score for user ${userId}`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  private async isReviewLikedByUser(
+    reviewId: number,
+    userId?: number,
+  ): Promise<boolean> {
+    if (!userId) return false;
+
+    const like = await this.userRepository.manager
+      .getRepository(ReviewLike)
+      .findOne({
+        where: { reviewId, userId },
+      });
+
+    return !!like;
+  }
+
+  async getUserActivity(
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+    filter: 'popular' | 'recent' = 'recent',
+    currentUserId?: number,
+  ): Promise<{
+    activities: UserActivityItem[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    try {
+      this.logger.log(
+        `getUserActivity 호출: userId=${userId}, currentUserId=${currentUserId}, filter=${filter}`,
+      );
+
+      // 리뷰 타입이 'review'인 항목만 가져옵니다
+      const reviewsResult = await this.getUserReviews(
+        userId,
+        1,
+        1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
+        ['review'], // 'review' 타입만 포함
+        filter,
+        currentUserId,
+      );
+
+      // 평점 조회
+      const ratingsResult = await this.getUserRatings(
+        userId,
+        1,
+        1000, // 충분히 큰 숫자로 모든 평점 가져오기
+        currentUserId,
+      );
+
+      // 리뷰와 평점을 합치고 타입 필드 추가
+      const reviewsWithType = reviewsResult.reviews.map((review) => ({
+        ...review,
+        activityType: 'review',
+      }));
+
+      // 디버그 로그 - 리뷰 결과
+      if (reviewsWithType.length > 0) {
+        // 리뷰의 isLiked 상태 로깅
+        const likedCount = reviewsWithType.filter((r) => r.isLiked).length;
+
+        this.logger.log(
+          `Activity - 'review' 타입 리뷰 조회 결과: 총 ${reviewsWithType.length}개, 좋아요 표시된 리뷰: ${likedCount}개`,
+        );
+
+        this.logger.log(
+          `Activity - 첫 번째 리뷰 isLiked 확인: ${JSON.stringify({
+            review_id: reviewsWithType[0].id,
+            type: reviewsWithType[0].type,
+            isLiked: reviewsWithType[0].isLiked,
+            activity_type: reviewsWithType[0].activityType,
+          })}`,
+        );
+      }
+
+      // 이 부분은 필요한 경우에만 실행합니다 (getUserReviews 메서드에서 이미 isLiked 설정 시도함)
+      if (reviewsWithType.length > 0 && currentUserId) {
+        // 모든 리뷰의 isLiked 상태를 확인하기 위해 누락된 값이 있는지 검사
+        const hasAnyUndefinedIsLiked = reviewsWithType.some(
+          (review) => review.isLiked === undefined || review.isLiked === null,
+        );
+
+        if (hasAnyUndefinedIsLiked) {
+          this.logger.log(
+            `Activity - 리뷰 타입 활동 중 isLiked가 undefined인 항목이 있어 좋아요 상태 재확인 시작`,
+          );
+
+          // 모든 리뷰에 대한 좋아요 데이터를 한 번에 가져오기
+          const reviewIds = reviewsWithType.map((review) => review.id);
+          const likes = await this.userRepository.manager
+            .getRepository(ReviewLike)
+            .find({
+              where: {
+                reviewId: In(reviewIds),
+                userId: currentUserId,
+              },
+            });
+
+          this.logger.log(
+            `Activity - 좋아요 데이터 조회 결과: ${likes.length}개`,
+          );
+
+          // 좋아요 데이터를 Map으로 변환하여 빠르게 접근할 수 있도록 함
+          const likeMap = new Map();
+          likes.forEach((like) => {
+            likeMap.set(like.reviewId, true);
+          });
+
+          // 각 리뷰의 isLiked 값을 설정
+          for (const review of reviewsWithType) {
+            // isLiked 값을 명시적으로 설정 (기존 값이 있으면 유지)
+            if (review.isLiked === undefined || review.isLiked === null) {
+              review.isLiked = likeMap.has(review.id);
+
+              // 복구된 좋아요 여부 로깅
+              if (likeMap.has(review.id)) {
+                this.logger.log(
+                  `Activity - isLiked 직접 설정: 리뷰 ID=${review.id}, 타입=${review.type}, isLiked=true`,
+                );
+              }
+            }
+          }
+        } else {
+          this.logger.log(
+            `Activity - 모든 리뷰에 이미 isLiked 값이 설정되어 있습니다.`,
+          );
+        }
+      }
+
+      // 리뷰에 포함된 책의 ID 목록 생성
+      const reviewBookIds = new Set<number>();
+      reviewsWithType.forEach((review) => {
+        if (review.books && review.books.length > 0) {
+          review.books.forEach((book) => {
+            reviewBookIds.add(book.id);
+          });
+        }
+      });
+
+      // 평점에 타입 추가
+      const ratingsWithType = ratingsResult.ratings.map((rating) => ({
+        ...rating,
+        activityType: 'rating',
+      }));
+
+      // 리뷰에 포함된 책에 대한 별점 필터링
+      const filteredRatings = ratingsWithType.filter((rating) => {
+        // 리뷰에 포함된 책에 대한 별점이 아닌 경우만 포함
+        return !reviewBookIds.has(rating.book?.id);
+      });
+
+      // 활동들을 합치고 정렬
+      let allActivities = [...reviewsWithType, ...filteredRatings];
+
+      // 필터에 따라 정렬
+      if (filter === 'recent') {
+        allActivities.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+      } else if (filter === 'popular') {
+        allActivities.sort((a, b) => {
+          let aPopularity = 0;
+          let bPopularity = 0;
+
+          if (isReviewActivity(a)) {
+            aPopularity = a.likeCount;
+          } else if (isRatingActivity(a)) {
+            aPopularity = a.rating;
+          }
+
+          if (isReviewActivity(b)) {
+            bPopularity = b.likeCount;
+          } else if (isRatingActivity(b)) {
+            bPopularity = b.rating;
+          }
+
+          return bPopularity - aPopularity;
+        });
+      }
+
+      // 최종 확인 로그
+      if (allActivities.length > 0 && isReviewActivity(allActivities[0])) {
+        this.logger.log(
+          `Activity - 정렬 후 첫 번째 활동 isLiked 확인: ${JSON.stringify({
+            activity_type: allActivities[0].activityType,
+            review_id: allActivities[0].id,
+            isLiked: allActivities[0].isLiked,
+          })}`,
+        );
+      }
+
+      // 페이지네이션 적용
+      const total = allActivities.length;
+      const skip = (page - 1) * limit;
+      const activities = allActivities.slice(skip, skip + limit);
+
+      return {
+        activities,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      this.logger.error(
+        `사용자 ID ${userId}의 활동 조회 중 오류: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  // 중복 제거된 리뷰와 평점 수 계산
+  private async getReviewAndRatingCount(
+    userId: number,
+    currentUserId?: number,
+  ): Promise<number> {
+    try {
+      // 리뷰 조회 - 리뷰 타입의 리뷰만 가져오기
+      const reviewsResult = await this.getUserReviews(
+        userId,
+        1,
+        1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
+        ['review'], // review 타입만 필터링
+        'recent',
+        currentUserId,
+      );
+
+      // 평점 조회
+      const ratingsResult = await this.getUserRatings(
+        userId,
+        1,
+        1000, // 충분히 큰 숫자로 모든 평점 가져오기
+        currentUserId,
+      );
+
+      // 리뷰와 평점을 합치고 타입 필드 추가
+      const reviews = reviewsResult.reviews.map((review) => ({
+        ...review,
+        activityType: 'review',
+      }));
+
+      const ratings = ratingsResult.ratings.map((rating) => ({
+        ...rating,
+        activityType: 'rating',
+      }));
+
+      // 리뷰에 포함된 책의 ID 목록 생성
+      const reviewBookIds = new Set<number>();
+      reviews.forEach((review) => {
+        if (review.books && review.books.length > 0) {
+          review.books.forEach((book) => {
+            reviewBookIds.add(book.id);
+          });
+        }
+      });
+
+      // 리뷰에 포함된 책에 대한 별점 필터링
+      const filteredRatings = ratings.filter((rating) => {
+        // 리뷰에 포함된 책에 대한 별점이 아닌 경우만 포함
+        return !reviewBookIds.has(rating.book?.id);
+      });
+
+      // 총 활동 수 (총 리뷰 수 + 필터링된 평점 수)
+      return reviews.length + filteredRatings.length;
+    } catch (error) {
+      this.logger.error(
+        `사용자 ID ${userId}의 리뷰 및 평점 수 계산 중 오류: ${error.message}`,
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * 사용자가 구독한 서재 목록을 페이지네이션과 함께 반환합니다.
+   * @param userId 사용자 ID
+   * @param page 페이지 번호
+   * @param limit 페이지당 항목 수
+   * @param sortOption 정렬 옵션
+   * @returns 구독한 서재 목록과 페이지네이션 정보
+   */
+  async getUserSubscribedLibraries(
+    userId: number,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{
+    libraries: LibraryListResponseDto[];
+    total: number;
+    currentPage: number;
+    totalPages: number;
+  }> {
+    const skip = (page - 1) * limit;
+
+    // 공개 서재 또는 자신이 소유한 서재만 표시하도록 수정
+    const queryBuilder = this.librarySubscriptionRepository
+      .createQueryBuilder('subscription')
+      .leftJoinAndSelect('subscription.library', 'library')
+      .leftJoinAndSelect('library.owner', 'owner')
+      .leftJoinAndSelect('library.libraryTagMappings', 'libraryTagMappings')
+      .leftJoinAndSelect('libraryTagMappings.libraryTag', 'libraryTag')
+      .where('subscription.subscriberId = :userId', { userId })
+      .andWhere(
+        '(library.isPublic = :isPublic OR library.ownerId = :ownerId)',
+        {
+          isPublic: true,
+          ownerId: userId,
+        },
+      );
+
+    const [libraries, total] = await queryBuilder
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    const totalPages = Math.ceil(total / limit);
+
+    const libraryListResponseDtos = libraries.map((subscription) => {
+      const library = subscription.library;
+      return {
+        id: library.id,
+        name: library.name,
+        description: library.description,
+        isPublic: library.isPublic,
+        subscriberCount: library.subscriberCount,
+        owner: {
+          id: library.owner.id,
+          username: library.owner.username,
+          email: library.owner.email,
+        },
+        createdAt: library.createdAt,
+        updatedAt: library.updatedAt,
+        bookCount: library.libraryBooks?.length || 0,
+        previewBooks:
+          library.libraryBooks?.slice(0, 3).map((lb) => ({
+            id: lb.book.id,
+            title: lb.book.title,
+            author: lb.book.author,
+            coverImage: lb.book.coverImage,
+            isbn: lb.book.isbn,
+            publisher: lb.book.publisher,
+          })) || [],
+        tags:
+          library.libraryTagMappings?.map((mapping) => ({
+            id: mapping.id,
+            tagId: mapping.libraryTag.id,
+            tagName: mapping.libraryTag.name,
+            description: mapping.libraryTag.description,
+            usageCount: mapping.libraryTag.usageCount,
+            libraryId: library.id,
+            note: mapping.note,
+            createdAt: mapping.createdAt,
+            updatedAt: mapping.updatedAt,
+          })) || [],
+        isSubscribed: true,
+      };
+    });
+
+    return {
+      libraries: libraryListResponseDtos,
+      total,
+      currentPage: page,
+      totalPages,
     };
   }
 }

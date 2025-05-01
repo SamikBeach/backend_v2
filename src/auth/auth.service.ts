@@ -420,7 +420,7 @@ export class AuthService {
   }
 
   // 액세스 토큰과 리프레시 토큰 생성
-  private async generateTokens(user: any) {
+  private async generateTokens(user: User) {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,

@@ -369,12 +369,25 @@ export class CommentService {
         ? await this.isCommentLikedByUser(comment.id, userId)
         : false;
 
+      // BASE_URL 환경변수 가져오기
+      const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+
+      // 프로필 이미지 URL 생성
+      let profileImageUrl = null;
+      if (author.profileImage) {
+        // 이미 완전한 URL인 경우 그대로 사용, 아닌 경우 baseUrl 추가
+        profileImageUrl = author.profileImage.startsWith('http')
+          ? author.profileImage
+          : `${baseUrl}${author.profileImage}`;
+      }
+
       return {
         id: comment.id,
         content: comment.content,
         author: {
           id: author.id,
           username: author.username || '사용자',
+          profileImage: profileImageUrl,
         },
         likeCount: comment.likeCount,
         isLiked,
@@ -390,6 +403,7 @@ export class CommentService {
         author: {
           id: comment.authorId,
           username: '사용자',
+          profileImage: null,
         },
         likeCount: comment.likeCount,
         isLiked: false,

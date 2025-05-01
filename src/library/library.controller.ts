@@ -18,7 +18,10 @@ import { AddTagToLibraryDto } from './dto/add-tag-to-library.dto';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
-import { LibrarySortOption } from './dto/library-response.dto';
+import {
+  LibrarySortOption,
+  PopularLibraryResponseDto,
+} from './dto/library-response.dto';
 
 @Controller('library')
 export class LibraryController {
@@ -94,14 +97,6 @@ export class LibraryController {
       isbn,
       sort,
     );
-  }
-
-  @Get('subscribed')
-  findSubscribedLibraries(
-    @GetUser() user: User,
-    @Query('sort') sort?: LibrarySortOption,
-  ) {
-    return this.libraryService.findSubscribedLibraries(user.id, sort);
   }
 
   @Get(':id')
@@ -213,7 +208,7 @@ export class LibraryController {
   @IsPublic()
   async findPopularLibrariesForHome(
     @Query('limit') limit?: number,
-  ): Promise<any> {
+  ): Promise<PopularLibraryResponseDto[]> {
     return this.libraryService.findPopularLibrariesForHome(limit || 3);
   }
 }

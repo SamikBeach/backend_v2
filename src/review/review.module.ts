@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MulterModule } from '@nestjs/platform-express';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -68,10 +68,10 @@ import { RatingModule } from '../rating/rating.module';
       },
     }),
     CommonModule,
-    BookModule,
-    UserModule,
+    forwardRef(() => BookModule),
+    forwardRef(() => UserModule),
     NotificationModule,
-    RatingModule,
+    forwardRef(() => RatingModule),
   ],
   controllers: [ReviewController],
   providers: [ReviewService, CommentService, FileService],
