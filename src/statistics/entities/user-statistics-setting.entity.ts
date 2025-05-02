@@ -53,7 +53,7 @@ export class UserStatisticsSetting {
   isFollowerStatsPublic: boolean;
 
   @Column({ default: true })
-  isCommentActivityPublic: boolean;
+  isCommunityActivityPublic: boolean;
 
   @Column({ default: true })
   isReviewInfluencePublic: boolean;
@@ -68,16 +68,7 @@ export class UserStatisticsSetting {
   @Column({ default: true })
   isLibraryUpdatePatternPublic: boolean;
 
-  @Column({ default: true })
-  isLibraryDiversityPublic: boolean;
-
   // 기타 통계 공개 설정
   @Column({ default: true })
-  isAmountStatsPublic: boolean;
-
-  @Column({ default: true })
   isSearchActivityPublic: boolean;
-
-  @Column({ default: true })
-  isBookMetadataStatsPublic: boolean;
 }

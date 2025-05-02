@@ -455,19 +455,19 @@ export class UserController {
     return this.statisticsService.getFollowerStats(id, requestUserId);
   }
 
-  // 댓글 활동 통계
-  @Get(':id/statistics/comment-activity')
-  @ApiOperation({ summary: '댓글 활동 통계 조회' })
+  // 커뮤니티 활동 통계
+  @Get(':id/statistics/community-activity')
+  @ApiOperation({ summary: '커뮤니티 활동 통계 조회' })
   @ApiResponse({
     status: 200,
-    description: '댓글 활동 통계',
+    description: '리뷰 타입별 기간별 통계',
   })
-  async getCommentActivity(
+  async getCommunityActivity(
     @Param('id', ParseIntPipe) id: number,
     @GetUser() currentUser?: User,
   ) {
     const requestUserId = currentUser?.id;
-    return this.statisticsService.getCommentActivity(id, requestUserId);
+    return this.statisticsService.getCommunityActivity(id, requestUserId);
   }
 
   // 리뷰 영향력 통계
@@ -530,36 +530,6 @@ export class UserController {
     return this.statisticsService.getLibraryUpdatePattern(id, requestUserId);
   }
 
-  // 서재 다양성 통계
-  @Get(':id/statistics/library-diversity')
-  @ApiOperation({ summary: '서재 다양성 통계 조회' })
-  @ApiResponse({
-    status: 200,
-    description: '서재 다양성 통계',
-  })
-  async getLibraryDiversity(
-    @Param('id', ParseIntPipe) id: number,
-    @GetUser() currentUser?: User,
-  ) {
-    const requestUserId = currentUser?.id;
-    return this.statisticsService.getLibraryDiversity(id, requestUserId);
-  }
-
-  // 금액 통계
-  @Get(':id/statistics/amount')
-  @ApiOperation({ summary: '금액 통계 조회' })
-  @ApiResponse({
-    status: 200,
-    description: '금액 통계',
-  })
-  async getAmountStats(
-    @Param('id', ParseIntPipe) id: number,
-    @GetUser() currentUser?: User,
-  ) {
-    const requestUserId = currentUser?.id;
-    return this.statisticsService.getAmountStats(id, requestUserId);
-  }
-
   // 검색 활동 통계
   @Get(':id/statistics/search-activity')
   @ApiOperation({ summary: '검색 활동 통계 조회' })
@@ -573,22 +543,6 @@ export class UserController {
   ) {
     const requestUserId = currentUser?.id;
     return this.statisticsService.getSearchActivity(id, requestUserId);
-  }
-
-  // 도서 메타데이터 통계
-  @Get(':id/statistics/book-metadata')
-  @IsPublic()
-  @ApiOperation({ summary: '도서 메타데이터 통계 조회' })
-  @ApiResponse({
-    status: 200,
-    description: '도서 메타데이터 통계',
-  })
-  async getBookMetadataStats(
-    @Param('id', ParseIntPipe) id: number,
-    @GetUser() currentUser?: User,
-  ) {
-    const requestUserId = currentUser?.id;
-    return this.statisticsService.getBookMetadataStats(id, requestUserId);
   }
 
   // 기간별 독서 상태 통계

@@ -90,6 +90,30 @@ export class ReviewStatsResponseDto {
   @ApiProperty({ description: '리뷰당 평균 글자 수' })
   averageReviewLength: number;
 
+  @ApiProperty({ description: '연도별 리뷰 통계', type: [Object] })
+  yearly: {
+    year: string;
+    count: number;
+  }[];
+
+  @ApiProperty({ description: '월별 리뷰 통계 (최근 12개월)', type: [Object] })
+  monthly: {
+    month: string;
+    count: number;
+  }[];
+
+  @ApiProperty({ description: '주간별 리뷰 통계', type: [Object] })
+  weekly: {
+    week: string;
+    count: number;
+  }[];
+
+  @ApiProperty({ description: '일별 리뷰 통계 (최근 30일)', type: [Object] })
+  daily: {
+    date: string;
+    count: number;
+  }[];
+
   @ApiProperty({ description: '공개 여부' })
   isPublic: boolean;
 }
@@ -153,8 +177,62 @@ export class UserInteractionResponseDto {
   @ApiProperty({ description: '받은 댓글 총계' })
   totalCommentsReceived: number;
 
+  @ApiProperty({ description: '작성한 댓글 총계' })
+  totalCommentsCreated: number;
+
+  @ApiProperty({ description: '준 좋아요 총계' })
+  totalLikesGiven: number;
+
   @ApiProperty({ description: '인게이지먼트 비율 (%)' })
   engagementRate: number;
+
+  @ApiProperty({ description: '연도별 받은 좋아요 수', type: [Object] })
+  yearlyLikesReceived: { year: string; count: number }[];
+
+  @ApiProperty({ description: '월별 받은 좋아요 수', type: [Object] })
+  monthlyLikesReceived: { month: string; count: number }[];
+
+  @ApiProperty({ description: '주별 받은 좋아요 수', type: [Object] })
+  weeklyLikesReceived: { week: string; count: number }[];
+
+  @ApiProperty({ description: '일별 받은 좋아요 수', type: [Object] })
+  dailyLikesReceived: { date: string; count: number }[];
+
+  @ApiProperty({ description: '연도별 받은 댓글 수', type: [Object] })
+  yearlyCommentsReceived: { year: string; count: number }[];
+
+  @ApiProperty({ description: '월별 받은 댓글 수', type: [Object] })
+  monthlyCommentsReceived: { month: string; count: number }[];
+
+  @ApiProperty({ description: '주별 받은 댓글 수', type: [Object] })
+  weeklyCommentsReceived: { week: string; count: number }[];
+
+  @ApiProperty({ description: '일별 받은 댓글 수', type: [Object] })
+  dailyCommentsReceived: { date: string; count: number }[];
+
+  @ApiProperty({ description: '연도별 작성한 댓글 수', type: [Object] })
+  yearlyCommentsCreated: { year: string; count: number }[];
+
+  @ApiProperty({ description: '월별 작성한 댓글 수', type: [Object] })
+  monthlyCommentsCreated: { month: string; count: number }[];
+
+  @ApiProperty({ description: '주별 작성한 댓글 수', type: [Object] })
+  weeklyCommentsCreated: { week: string; count: number }[];
+
+  @ApiProperty({ description: '일별 작성한 댓글 수', type: [Object] })
+  dailyCommentsCreated: { date: string; count: number }[];
+
+  @ApiProperty({ description: '연도별 준 좋아요 수', type: [Object] })
+  yearlyLikesGiven: { year: string; count: number }[];
+
+  @ApiProperty({ description: '월별 준 좋아요 수', type: [Object] })
+  monthlyLikesGiven: { month: string; count: number }[];
+
+  @ApiProperty({ description: '주별 준 좋아요 수', type: [Object] })
+  weeklyLikesGiven: { week: string; count: number }[];
+
+  @ApiProperty({ description: '일별 준 좋아요 수', type: [Object] })
+  dailyLikesGiven: { date: string; count: number }[];
 
   @ApiProperty({ description: '월별 받은 좋아요 수', type: [Object] })
   monthlyLikes: { month: string; count: number }[];
@@ -174,20 +252,83 @@ export class FollowerStatsResponseDto {
   @ApiProperty({ description: '팔로워 증가 추이', type: [Object] })
   followerGrowth: { date: string; count: number }[];
 
+  @ApiProperty({ description: '연도별 팔로워 추이', type: [Object] })
+  yearly: {
+    year: string;
+    count: number;
+  }[];
+
+  @ApiProperty({
+    description: '월별 팔로워 추이 (최근 12개월)',
+    type: [Object],
+  })
+  monthly: {
+    month: string;
+    count: number;
+  }[];
+
+  @ApiProperty({ description: '주별 팔로워 추이', type: [Object] })
+  weekly: {
+    week: string;
+    count: number;
+  }[];
+
+  @ApiProperty({ description: '일별 팔로워 추이 (최근 30일)', type: [Object] })
+  daily: {
+    date: string;
+    count: number;
+  }[];
+
   @ApiProperty({ description: '공개 여부' })
   isPublic: boolean;
 }
 
-// 댓글 활동 통계 응답 DTO
-export class CommentActivityResponseDto {
-  @ApiProperty({ description: '작성한 댓글 수' })
-  totalComments: number;
+// 커뮤니티 활동 통계 응답 DTO
+export class CommunityActivityResponseDto {
+  @ApiProperty({ description: '작성한 총 리뷰 수' })
+  totalReviews: number;
 
-  @ApiProperty({ description: '댓글 작성 빈도 (주당)' })
-  commentsPerWeek: number;
+  @ApiProperty({ description: '연도별 리뷰 타입별 통계', type: [Object] })
+  yearly: {
+    year: string;
+    general: number;
+    discussion: number;
+    question: number;
+    meetup: number;
+  }[];
 
-  @ApiProperty({ description: '리뷰별 댓글 수 분포', type: [Object] })
-  commentsPerReview: { range: string; count: number }[];
+  @ApiProperty({
+    description: '월별 리뷰 타입별 통계 (최근 12개월)',
+    type: [Object],
+  })
+  monthly: {
+    month: string;
+    general: number;
+    discussion: number;
+    question: number;
+    meetup: number;
+  }[];
+
+  @ApiProperty({ description: '주별 리뷰 타입별 통계', type: [Object] })
+  weekly: {
+    week: string;
+    general: number;
+    discussion: number;
+    question: number;
+    meetup: number;
+  }[];
+
+  @ApiProperty({
+    description: '일별 리뷰 타입별 통계 (최근 30일)',
+    type: [Object],
+  })
+  daily: {
+    date: string;
+    general: number;
+    discussion: number;
+    question: number;
+    meetup: number;
+  }[];
 
   @ApiProperty({ description: '공개 여부' })
   isPublic: boolean;
@@ -240,6 +381,42 @@ export class LibraryPopularityResponseDto {
     trend: { date: string; subscribers: number }[];
   }[];
 
+  @ApiProperty({
+    description: '연도별 상위 5개 서재의 구독자 추세',
+    type: [Object],
+  })
+  yearly: {
+    year: string;
+    libraries: { library: string; subscribers: number }[];
+  }[];
+
+  @ApiProperty({
+    description: '월별 상위 5개 서재의 구독자 추세 (최근 5개월)',
+    type: [Object],
+  })
+  monthly: {
+    month: string;
+    libraries: { library: string; subscribers: number }[];
+  }[];
+
+  @ApiProperty({
+    description: '주별 상위 5개 서재의 구독자 추세 (최근 5주)',
+    type: [Object],
+  })
+  weekly: {
+    week: string;
+    libraries: { library: string; subscribers: number }[];
+  }[];
+
+  @ApiProperty({
+    description: '일별 상위 5개 서재의 구독자 추세 (최근 5일)',
+    type: [Object],
+  })
+  daily: {
+    date: string;
+    libraries: { library: string; subscribers: number }[];
+  }[];
+
   @ApiProperty({ description: '공개 여부' })
   isPublic: boolean;
 }
@@ -259,36 +436,6 @@ export class LibraryUpdatePatternResponseDto {
   isPublic: boolean;
 }
 
-// 서재 다양성 통계 응답 DTO
-export class LibraryDiversityResponseDto {
-  @ApiProperty({ description: '서재별 장르 다양성 지수', type: [Object] })
-  genreDiversityIndex: { library: string; index: number }[];
-
-  @ApiProperty({ description: '가장 특화된 서재' })
-  mostSpecializedLibrary: string;
-
-  @ApiProperty({ description: '가장 다양한 서재' })
-  mostDiverseLibrary: string;
-
-  @ApiProperty({ description: '공개 여부' })
-  isPublic: boolean;
-}
-
-// 금액 통계 응답 DTO
-export class AmountStatsResponseDto {
-  @ApiProperty({ description: '도서 구매 총액 추정' })
-  estimatedTotalSpent: number;
-
-  @ApiProperty({ description: '월별 도서 구매 금액', type: [Object] })
-  monthlySpending: { month: string; amount: number }[];
-
-  @ApiProperty({ description: '카테고리별 평균 도서 가격', type: [Object] })
-  categoryPriceAverage: { category: string; averagePrice: number }[];
-
-  @ApiProperty({ description: '공개 여부' })
-  isPublic: boolean;
-}
-
 // 검색 활동 통계 응답 DTO
 export class SearchActivityResponseDto {
   @ApiProperty({ description: '검색 횟수' })
@@ -297,23 +444,23 @@ export class SearchActivityResponseDto {
   @ApiProperty({ description: '가장 많이 검색한 키워드', type: [Object] })
   topSearchTerms: { term: string; count: number }[];
 
+  @ApiProperty({ description: '자주 검색하는 키워드 TOP 10', type: [Object] })
+  frequentlySearchedTerms: { term: string; count: number }[];
+
   @ApiProperty({ description: '검색 패턴 분석' })
   searchPattern: string;
 
-  @ApiProperty({ description: '공개 여부' })
-  isPublic: boolean;
-}
+  @ApiProperty({ description: '연도별 검색 통계', type: [Object] })
+  yearly: { year: string; count: number }[];
 
-// 도서 메타데이터 통계 응답 DTO
-export class BookMetadataStatsResponseDto {
-  @ApiProperty({ description: '평균 도서 출간일로부터 경과 기간 (년)' })
-  averageBookAge: number;
+  @ApiProperty({ description: '월별 검색 통계 (최근 12개월)', type: [Object] })
+  monthly: { month: string; count: number }[];
 
-  @ApiProperty({ description: '번역서 vs 국내서 독서 비율 (%)' })
-  translationRatio: number;
+  @ApiProperty({ description: '주별 검색 통계', type: [Object] })
+  weekly: { week: string; count: number }[];
 
-  @ApiProperty({ description: '출간 연도별 도서 분포', type: [Object] })
-  publicationYearDistribution: { year: string; count: number }[];
+  @ApiProperty({ description: '일별 검색 통계 (최근 30일)', type: [Object] })
+  daily: { date: string; count: number }[];
 
   @ApiProperty({ description: '공개 여부' })
   isPublic: boolean;

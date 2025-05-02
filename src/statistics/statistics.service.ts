@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThan, LessThan, Raw } from 'typeorm';
+import { Repository, Between, MoreThan, LessThan, Raw, Not } from 'typeorm';
 import { UserStatisticsSetting } from './entities/user-statistics-setting.entity';
 import {
   ReadingStatus,
@@ -25,10 +25,8 @@ import {
 } from '../search/search.entity';
 import { Category } from '../category/entities/category.entity';
 import { SubCategory } from '../category/entities/subcategory.entity';
-import {
-  UpdateStatisticsSettingDto,
-  StatisticsSettingResponseDto,
-} from './dto/statistics-setting.dto';
+import { StatisticsSettingResponseDto } from './dto/statistics-setting.dto';
+import { UpdateStatisticsSettingDto } from './dto/statistics-setting.dto';
 import {
   ReadingStatusStatsResponseDto,
   GenreAnalysisResponseDto,
@@ -39,17 +37,14 @@ import {
   RatingHabitsResponseDto,
   UserInteractionResponseDto,
   FollowerStatsResponseDto,
-  CommentActivityResponseDto,
   ReviewInfluenceResponseDto,
   LibraryCompositionResponseDto,
   LibraryPopularityResponseDto,
   LibraryUpdatePatternResponseDto,
-  LibraryDiversityResponseDto,
-  AmountStatsResponseDto,
   SearchActivityResponseDto,
-  BookMetadataStatsResponseDto,
   RecentPopularSearchDto,
   ReadingStatusByPeriodResponseDto,
+  CommunityActivityResponseDto,
 } from './dto/statistics-response.dto';
 
 @Injectable()
@@ -163,15 +158,12 @@ export class StatisticsService {
       isRatingHabitsPublic: setting.isRatingHabitsPublic,
       isUserInteractionPublic: setting.isUserInteractionPublic,
       isFollowerStatsPublic: setting.isFollowerStatsPublic,
-      isCommentActivityPublic: setting.isCommentActivityPublic,
+      isCommunityActivityPublic: setting.isCommunityActivityPublic,
       isReviewInfluencePublic: setting.isReviewInfluencePublic,
       isLibraryCompositionPublic: setting.isLibraryCompositionPublic,
       isLibraryPopularityPublic: setting.isLibraryPopularityPublic,
       isLibraryUpdatePatternPublic: setting.isLibraryUpdatePatternPublic,
-      isLibraryDiversityPublic: setting.isLibraryDiversityPublic,
-      isAmountStatsPublic: setting.isAmountStatsPublic,
       isSearchActivityPublic: setting.isSearchActivityPublic,
-      isBookMetadataStatsPublic: setting.isBookMetadataStatsPublic,
     };
   }
 
@@ -875,6 +867,115 @@ export class StatisticsService {
     }
   }
 
+  // 리뷰 빈 연도별 데이터 생성 헬퍼 메소드
+  private generateEmptyYearlyReviewData(count = 5): {
+    year: string;
+    count: number;
+  }[] {
+    const result = [];
+    const currentYear = new Date().getFullYear();
+
+    for (let i = 0; i < count; i++) {
+      result.push({
+        year: (currentYear - i).toString(),
+        count: 0,
+      });
+    }
+
+    return result.reverse();
+  }
+
+  // 리뷰 빈 월별 데이터 생성 헬퍼 메소드
+  private generateEmptyMonthlyReviewData(count = 5): {
+    month: string;
+    count: number;
+  }[] {
+    const result = [];
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    for (let i = 0; i < count; i++) {
+      const monthIndex = currentMonth - i;
+      let year = currentYear;
+      let month = monthIndex;
+
+      if (monthIndex < 0) {
+        month = 12 + monthIndex;
+        year = currentYear - 1;
+      }
+
+      // 월 포맷팅 (2자리 숫자로)
+      const formattedMonth = (month + 1).toString().padStart(2, '0');
+      result.push({
+        month: `${year}-${formattedMonth}`,
+        count: 0,
+      });
+    }
+
+    return result.reverse();
+  }
+
+  // 리뷰 빈 주별 데이터 생성 헬퍼 메소드
+  private generateEmptyWeeklyReviewData(): {
+    week: string;
+    count: number;
+  }[] {
+    const result = [];
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // 자바스크립트는 0-indexed month
+
+    // 현재 주차 계산
+    const currentDate = now.getDate();
+    const currentWeek = Math.ceil(currentDate / 7);
+
+    for (let i = 0; i < 5; i++) {
+      let weekNum = currentWeek - i;
+      let month = currentMonth;
+
+      if (weekNum <= 0) {
+        weekNum = 4 + weekNum; // 이전 달의 주차로 계산
+        month = month - 1;
+        if (month <= 0) {
+          month = 12; // 작년 12월
+        }
+      }
+
+      result.push({
+        week: `${month}월 ${weekNum}째주`,
+        count: 0,
+      });
+    }
+
+    return result.reverse();
+  }
+
+  // 리뷰 빈 일별 데이터 생성 헬퍼 메소드
+  private generateEmptyDailyReviewData(): {
+    date: string;
+    count: number;
+  }[] {
+    const result = [];
+    const now = new Date();
+
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+
+      // YYYY-MM-DD 형식으로 포맷팅
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+
+      result.push({
+        date: `${year}-${month}-${day}`,
+        count: 0,
+      });
+    }
+
+    return result.reverse();
+  }
+
   async getReviewStats(
     userId: number,
     requestUserId?: number,
@@ -889,14 +990,24 @@ export class StatisticsService {
             monthlyReviewCounts: [],
             reviewTypeDistribution: [],
             averageReviewLength: 0,
+            yearly: [],
+            monthly: [],
+            weekly: [],
+            daily: [],
             isPublic: false,
           };
         }
       }
 
-      // 사용자의 총 리뷰 수
+      // 'review' 타입의 리뷰만 필터링
+      const reviewType = 'review';
+
+      // 사용자의 총 리뷰 수 (review 타입만)
       const totalReviews = await this.reviewRepository.count({
-        where: { authorId: userId },
+        where: {
+          authorId: userId,
+          type: reviewType,
+        },
       });
 
       // 월별 리뷰 작성 수 (최근 12개월)
@@ -908,6 +1019,7 @@ export class StatisticsService {
         .select("DATE_FORMAT(review.createdAt, '%Y-%m')", 'month')
         .addSelect('COUNT(review.id)', 'count')
         .where('review.authorId = :userId', { userId })
+        .andWhere('review.type = :reviewType', { reviewType })
         .andWhere('review.createdAt >= :oneYearAgo', { oneYearAgo })
         .groupBy('month')
         .orderBy('month', 'ASC')
@@ -918,11 +1030,11 @@ export class StatisticsService {
         count: parseInt(item.count, 10),
       }));
 
-      // 리뷰 유형별 작성 비율
-      // 리뷰 길이에 따라 분류 (짧은 리뷰, 중간 리뷰, 긴 리뷰)
+      // 리뷰 유형별 작성 비율 (리뷰 길이에 따라 분류)
       const shortReviewsCount = await this.reviewRepository.count({
         where: {
           authorId: userId,
+          type: reviewType,
           content: Raw((alias) => `LENGTH(${alias}) <= 200`),
         },
       });
@@ -930,6 +1042,7 @@ export class StatisticsService {
       const mediumReviewsCount = await this.reviewRepository.count({
         where: {
           authorId: userId,
+          type: reviewType,
           content: Raw(
             (alias) => `LENGTH(${alias}) > 200 AND LENGTH(${alias}) <= 1000`,
           ),
@@ -939,6 +1052,7 @@ export class StatisticsService {
       const longReviewsCount = await this.reviewRepository.count({
         where: {
           authorId: userId,
+          type: reviewType,
           content: Raw((alias) => `LENGTH(${alias}) > 1000`),
         },
       });
@@ -967,6 +1081,7 @@ export class StatisticsService {
           .createQueryBuilder('review')
           .select('AVG(LENGTH(review.content))', 'average')
           .where('review.authorId = :userId', { userId })
+          .andWhere('review.type = :reviewType', { reviewType })
           .getRawOne();
 
         averageReviewLength = lengthData
@@ -974,17 +1089,181 @@ export class StatisticsService {
           : 0;
       }
 
+      // 빈 데이터 생성
+      const emptyYearlyData = this.generateEmptyYearlyReviewData();
+      const emptyMonthlyData = this.generateEmptyMonthlyReviewData();
+      const emptyWeeklyData = this.generateEmptyWeeklyReviewData();
+      const emptyDailyData = this.generateEmptyDailyReviewData();
+
+      // 연도별 리뷰 통계 (최대 5년)
+      const yearlyReviewData = await this.reviewRepository
+        .createQueryBuilder('review')
+        .select("DATE_FORMAT(review.createdAt, '%Y')", 'year')
+        .addSelect('COUNT(review.id)', 'count')
+        .where('review.authorId = :userId', { userId })
+        .andWhere('review.type = :reviewType', { reviewType })
+        .groupBy('year')
+        .orderBy('year', 'DESC')
+        .limit(5)
+        .getRawMany();
+
+      const yearlyData = yearlyReviewData.map((item) => ({
+        year: item.year,
+        count: parseInt(item.count, 10),
+      }));
+
+      // 빈 데이터와 실제 데이터 병합
+      const yearly = this.mergeAndSortData(
+        emptyYearlyData,
+        yearlyData,
+        'year',
+        5,
+      );
+
+      // 월별 리뷰 통계 (최근 5개월)
+      const monthlyReviewData = await this.reviewRepository
+        .createQueryBuilder('review')
+        .select("DATE_FORMAT(review.createdAt, '%Y-%m')", 'month')
+        .addSelect('COUNT(review.id)', 'count')
+        .where('review.authorId = :userId', { userId })
+        .andWhere('review.type = :reviewType', { reviewType })
+        .groupBy('month')
+        .orderBy('month', 'DESC')
+        .limit(5)
+        .getRawMany();
+
+      const monthlyData = monthlyReviewData.map((item) => ({
+        month: item.month,
+        count: parseInt(item.count, 10),
+      }));
+
+      // 빈 데이터와 실제 데이터 병합
+      const monthly = this.mergeAndSortData(
+        emptyMonthlyData,
+        monthlyData,
+        'month',
+        5,
+      );
+
+      // 주별 리뷰 통계 (최근 5주)
+      const startOfWeek = new Date();
+      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // 이번 주 일요일
+      startOfWeek.setHours(0, 0, 0, 0);
+
+      const fiveWeeksAgo = new Date(startOfWeek);
+      fiveWeeksAgo.setDate(fiveWeeksAgo.getDate() - 35); // 5주 전
+
+      const weeklyReviewData = await this.reviewRepository
+        .createQueryBuilder('review')
+        .select("DATE_FORMAT(review.createdAt, '%Y-%u')", 'yearWeek')
+        .addSelect(
+          "CONCAT(MONTH(review.createdAt), '월 ', FLOOR((DAY(review.createdAt) - 1) / 7) + 1, '째주')",
+          'week',
+        )
+        .addSelect('COUNT(review.id)', 'count')
+        .where('review.authorId = :userId', { userId })
+        .andWhere('review.type = :reviewType', { reviewType })
+        .andWhere('review.createdAt >= :fiveWeeksAgo', { fiveWeeksAgo })
+        .groupBy('yearWeek, week')
+        .orderBy('yearWeek', 'DESC')
+        .limit(5)
+        .getRawMany();
+
+      const weeklyData = weeklyReviewData.map((item) => ({
+        week: item.week,
+        count: parseInt(item.count, 10),
+      }));
+
+      // 빈 데이터와 실제 데이터 병합 (주 데이터는 특수한 형식으로 처리 필요)
+      const weekly = this.mergeWeeklyData(emptyWeeklyData, weeklyData, 5);
+
+      // 일별 리뷰 통계 (최근 5일)
+      const fiveDaysAgo = new Date();
+      fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+      fiveDaysAgo.setHours(0, 0, 0, 0);
+
+      const dailyReviewData = await this.reviewRepository
+        .createQueryBuilder('review')
+        .select("DATE_FORMAT(review.createdAt, '%Y-%m-%d')", 'date')
+        .addSelect('COUNT(review.id)', 'count')
+        .where('review.authorId = :userId', { userId })
+        .andWhere('review.type = :reviewType', { reviewType })
+        .andWhere('review.createdAt >= :fiveDaysAgo', { fiveDaysAgo })
+        .groupBy('date')
+        .orderBy('date', 'DESC')
+        .limit(5)
+        .getRawMany();
+
+      const dailyData = dailyReviewData.map((item) => ({
+        date: item.date,
+        count: parseInt(item.count, 10),
+      }));
+
+      // 빈 데이터와 실제 데이터 병합
+      const daily = this.mergeAndSortData(emptyDailyData, dailyData, 'date', 5);
+
       return {
         totalReviews,
         monthlyReviewCounts,
         reviewTypeDistribution,
         averageReviewLength,
+        yearly,
+        monthly,
+        weekly,
+        daily,
         isPublic: true,
       };
     } catch (error) {
       this.logger.error(`리뷰 통계 조회 중 오류: ${error.message}`);
       throw error;
     }
+  }
+
+  // 주간 데이터 특별 병합 (특수한 형식의 주 정보 때문에)
+  private mergeWeeklyData(
+    emptyData: { week: string; count: number }[],
+    actualData: { week: string; count: number }[],
+    limit: number,
+  ): { week: string; count: number }[] {
+    // 실제 데이터가 비어있으면 빈 데이터 반환
+    if (actualData.length === 0) {
+      return emptyData;
+    }
+
+    // 각 주차별 데이터를 객체로 변환
+    const dataMap = new Map();
+
+    // 빈 데이터 먼저 맵에 등록
+    emptyData.forEach((item) => {
+      dataMap.set(item.week, item.count);
+    });
+
+    // 실제 데이터로 업데이트
+    actualData.forEach((item) => {
+      dataMap.set(item.week, item.count);
+    });
+
+    // 맵을 배열로 변환하여 반환
+    const result = Array.from(dataMap).map(([week, count]) => ({
+      week,
+      count,
+    }));
+
+    // 주차 정보로 정렬 (최신 주 데이터가 먼저 오도록 역순 정렬)
+    result.sort((a, b) => {
+      const aMonth = parseInt(a.week.split('월')[0]);
+      const bMonth = parseInt(b.week.split('월')[0]);
+
+      if (aMonth !== bMonth) return bMonth - aMonth; // 월이 큰 것이 먼저 오도록
+
+      const aWeek = parseInt(a.week.split('째주')[0].split('월 ')[1]);
+      const bWeek = parseInt(b.week.split('째주')[0].split('월 ')[1]);
+
+      return bWeek - aWeek; // 주차가 큰 것이 먼저 오도록
+    });
+
+    // 최대 limit 개수만 반환
+    return result.slice(0, limit);
   }
 
   async getRatingStats(
@@ -1327,7 +1606,25 @@ export class StatisticsService {
           return {
             totalLikesReceived: 0,
             totalCommentsReceived: 0,
+            totalCommentsCreated: 0,
+            totalLikesGiven: 0,
             engagementRate: 0,
+            yearlyLikesReceived: [],
+            monthlyLikesReceived: [],
+            weeklyLikesReceived: [],
+            dailyLikesReceived: [],
+            yearlyCommentsReceived: [],
+            monthlyCommentsReceived: [],
+            weeklyCommentsReceived: [],
+            dailyCommentsReceived: [],
+            yearlyCommentsCreated: [],
+            monthlyCommentsCreated: [],
+            weeklyCommentsCreated: [],
+            dailyCommentsCreated: [],
+            yearlyLikesGiven: [],
+            monthlyLikesGiven: [],
+            weeklyLikesGiven: [],
+            dailyLikesGiven: [],
             monthlyLikes: [],
             isPublic: false,
           };
@@ -1335,6 +1632,12 @@ export class StatisticsService {
       }
 
       try {
+        // 빈 데이터 생성
+        const emptyYearlyData = this.generateEmptyYearlyInteractionData();
+        const emptyMonthlyData = this.generateEmptyMonthlyInteractionData();
+        const emptyWeeklyData = this.generateEmptyWeeklyInteractionData();
+        const emptyDailyData = this.generateEmptyDailyInteractionData();
+
         // 받은 좋아요 총계
         const totalLikesReceived = await this.reviewLikeRepository
           .createQueryBuilder('like')
@@ -1349,6 +1652,16 @@ export class StatisticsService {
           .where('review.authorId = :userId', { userId })
           .getCount();
 
+        // 작성한 댓글 총계
+        const totalCommentsCreated = await this.commentRepository.count({
+          where: { authorId: userId },
+        });
+
+        // 준 좋아요 총계
+        const totalLikesGiven = await this.reviewLikeRepository.count({
+          where: { userId },
+        });
+
         // 인게이지먼트 비율 계산
         // (받은 좋아요 + 받은 댓글) / 작성한 리뷰 수 * 100
         const totalReviews = await this.reviewRepository.count({
@@ -1361,7 +1674,428 @@ export class StatisticsService {
             ((totalLikesReceived + totalCommentsReceived) / totalReviews) * 100;
         }
 
-        // 월별 받은 좋아요 수 (최근 12개월)
+        // 연도별 받은 좋아요 통계
+        const yearlyLikesReceivedData = await this.reviewLikeRepository
+          .createQueryBuilder('like')
+          .leftJoin('like.review', 'review')
+          .select("DATE_FORMAT(like.createdAt, '%Y')", 'year')
+          .addSelect('COUNT(like.id)', 'count')
+          .where('review.authorId = :userId', { userId })
+          .groupBy('year')
+          .orderBy('year', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const yearlyLikesReceivedRaw = yearlyLikesReceivedData.map((item) => ({
+          year: item.year,
+          count: parseInt(item.count, 10),
+        }));
+
+        const yearlyLikesReceived = this.mergeAndSortData(
+          emptyYearlyData,
+          yearlyLikesReceivedRaw,
+          'year',
+          5,
+        );
+
+        // 월별 받은 좋아요 통계
+        const monthlyLikesReceivedData = await this.reviewLikeRepository
+          .createQueryBuilder('like')
+          .leftJoin('like.review', 'review')
+          .select("DATE_FORMAT(like.createdAt, '%Y-%m')", 'month')
+          .addSelect('COUNT(like.id)', 'count')
+          .where('review.authorId = :userId', { userId })
+          .groupBy('month')
+          .orderBy('month', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const monthlyLikesReceivedRaw = monthlyLikesReceivedData.map(
+          (item) => ({
+            month: item.month,
+            count: parseInt(item.count, 10),
+          }),
+        );
+
+        const monthlyLikesReceived = this.mergeAndSortData(
+          emptyMonthlyData,
+          monthlyLikesReceivedRaw,
+          'month',
+          5,
+        );
+
+        // 주별 받은 좋아요 통계
+        const fiveWeeksAgo = new Date();
+        fiveWeeksAgo.setDate(fiveWeeksAgo.getDate() - 35); // 5주 전
+
+        const weeklyLikesReceivedData = await this.reviewLikeRepository
+          .createQueryBuilder('like')
+          .leftJoin('like.review', 'review')
+          .select("DATE_FORMAT(like.createdAt, '%Y-%u')", 'yearWeek')
+          .addSelect(
+            "CONCAT(MONTH(like.createdAt), '월 ', FLOOR((DAY(like.createdAt) - 1) / 7) + 1, '째주')",
+            'week',
+          )
+          .addSelect('COUNT(like.id)', 'count')
+          .where('review.authorId = :userId', { userId })
+          .andWhere('like.createdAt >= :fiveWeeksAgo', { fiveWeeksAgo })
+          .groupBy('yearWeek, week')
+          .orderBy('yearWeek', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const weeklyLikesReceivedRaw = weeklyLikesReceivedData.map((item) => ({
+          week: item.week,
+          count: parseInt(item.count, 10),
+        }));
+
+        const weeklyLikesReceived = this.mergeWeeklyData(
+          emptyWeeklyData,
+          weeklyLikesReceivedRaw,
+          5,
+        );
+
+        // 일별 받은 좋아요 통계
+        const fiveDaysAgo = new Date();
+        fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+        fiveDaysAgo.setHours(0, 0, 0, 0);
+
+        const dailyLikesReceivedData = await this.reviewLikeRepository
+          .createQueryBuilder('like')
+          .leftJoin('like.review', 'review')
+          .select("DATE_FORMAT(like.createdAt, '%Y-%m-%d')", 'date')
+          .addSelect('COUNT(like.id)', 'count')
+          .where('review.authorId = :userId', { userId })
+          .andWhere('like.createdAt >= :fiveDaysAgo', { fiveDaysAgo })
+          .groupBy('date')
+          .orderBy('date', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const dailyLikesReceivedRaw = dailyLikesReceivedData.map((item) => ({
+          date: item.date,
+          count: parseInt(item.count, 10),
+        }));
+
+        const dailyLikesReceived = this.mergeAndSortData(
+          emptyDailyData,
+          dailyLikesReceivedRaw,
+          'date',
+          5,
+        );
+
+        // 연도별 받은 댓글 통계
+        const yearlyCommentsReceivedData = await this.commentRepository
+          .createQueryBuilder('comment')
+          .leftJoin('comment.review', 'review')
+          .select("DATE_FORMAT(comment.createdAt, '%Y')", 'year')
+          .addSelect('COUNT(comment.id)', 'count')
+          .where('review.authorId = :userId', { userId })
+          .groupBy('year')
+          .orderBy('year', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const yearlyCommentsReceivedRaw = yearlyCommentsReceivedData.map(
+          (item) => ({
+            year: item.year,
+            count: parseInt(item.count, 10),
+          }),
+        );
+
+        const yearlyCommentsReceived = this.mergeAndSortData(
+          emptyYearlyData,
+          yearlyCommentsReceivedRaw,
+          'year',
+          5,
+        );
+
+        // 월별 받은 댓글 통계
+        const monthlyCommentsReceivedData = await this.commentRepository
+          .createQueryBuilder('comment')
+          .leftJoin('comment.review', 'review')
+          .select("DATE_FORMAT(comment.createdAt, '%Y-%m')", 'month')
+          .addSelect('COUNT(comment.id)', 'count')
+          .where('review.authorId = :userId', { userId })
+          .groupBy('month')
+          .orderBy('month', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const monthlyCommentsReceivedRaw = monthlyCommentsReceivedData.map(
+          (item) => ({
+            month: item.month,
+            count: parseInt(item.count, 10),
+          }),
+        );
+
+        const monthlyCommentsReceived = this.mergeAndSortData(
+          emptyMonthlyData,
+          monthlyCommentsReceivedRaw,
+          'month',
+          5,
+        );
+
+        // 주별 받은 댓글 통계
+        const weeklyCommentsReceivedData = await this.commentRepository
+          .createQueryBuilder('comment')
+          .leftJoin('comment.review', 'review')
+          .select("DATE_FORMAT(comment.createdAt, '%Y-%u')", 'yearWeek')
+          .addSelect(
+            "CONCAT(MONTH(comment.createdAt), '월 ', FLOOR((DAY(comment.createdAt) - 1) / 7) + 1, '째주')",
+            'week',
+          )
+          .addSelect('COUNT(comment.id)', 'count')
+          .where('review.authorId = :userId', { userId })
+          .andWhere('comment.createdAt >= :fiveWeeksAgo', { fiveWeeksAgo })
+          .groupBy('yearWeek, week')
+          .orderBy('yearWeek', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const weeklyCommentsReceivedRaw = weeklyCommentsReceivedData.map(
+          (item) => ({
+            week: item.week,
+            count: parseInt(item.count, 10),
+          }),
+        );
+
+        const weeklyCommentsReceived = this.mergeWeeklyData(
+          emptyWeeklyData,
+          weeklyCommentsReceivedRaw,
+          5,
+        );
+
+        // 일별 받은 댓글 통계
+        const dailyCommentsReceivedData = await this.commentRepository
+          .createQueryBuilder('comment')
+          .leftJoin('comment.review', 'review')
+          .select("DATE_FORMAT(comment.createdAt, '%Y-%m-%d')", 'date')
+          .addSelect('COUNT(comment.id)', 'count')
+          .where('review.authorId = :userId', { userId })
+          .andWhere('comment.createdAt >= :fiveDaysAgo', { fiveDaysAgo })
+          .groupBy('date')
+          .orderBy('date', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const dailyCommentsReceivedRaw = dailyCommentsReceivedData.map(
+          (item) => ({
+            date: item.date,
+            count: parseInt(item.count, 10),
+          }),
+        );
+
+        const dailyCommentsReceived = this.mergeAndSortData(
+          emptyDailyData,
+          dailyCommentsReceivedRaw,
+          'date',
+          5,
+        );
+
+        // 연도별 작성한 댓글 통계
+        const yearlyCommentsCreatedData = await this.commentRepository
+          .createQueryBuilder('comment')
+          .select("DATE_FORMAT(comment.createdAt, '%Y')", 'year')
+          .addSelect('COUNT(comment.id)', 'count')
+          .where('comment.authorId = :userId', { userId })
+          .groupBy('year')
+          .orderBy('year', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const yearlyCommentsCreatedRaw = yearlyCommentsCreatedData.map(
+          (item) => ({
+            year: item.year,
+            count: parseInt(item.count, 10),
+          }),
+        );
+
+        const yearlyCommentsCreated = this.mergeAndSortData(
+          emptyYearlyData,
+          yearlyCommentsCreatedRaw,
+          'year',
+          5,
+        );
+
+        // 월별 작성한 댓글 통계
+        const monthlyCommentsCreatedData = await this.commentRepository
+          .createQueryBuilder('comment')
+          .select("DATE_FORMAT(comment.createdAt, '%Y-%m')", 'month')
+          .addSelect('COUNT(comment.id)', 'count')
+          .where('comment.authorId = :userId', { userId })
+          .groupBy('month')
+          .orderBy('month', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const monthlyCommentsCreatedRaw = monthlyCommentsCreatedData.map(
+          (item) => ({
+            month: item.month,
+            count: parseInt(item.count, 10),
+          }),
+        );
+
+        const monthlyCommentsCreated = this.mergeAndSortData(
+          emptyMonthlyData,
+          monthlyCommentsCreatedRaw,
+          'month',
+          5,
+        );
+
+        // 주별 작성한 댓글 통계
+        const weeklyCommentsCreatedData = await this.commentRepository
+          .createQueryBuilder('comment')
+          .select("DATE_FORMAT(comment.createdAt, '%Y-%u')", 'yearWeek')
+          .addSelect(
+            "CONCAT(MONTH(comment.createdAt), '월 ', FLOOR((DAY(comment.createdAt) - 1) / 7) + 1, '째주')",
+            'week',
+          )
+          .addSelect('COUNT(comment.id)', 'count')
+          .where('comment.authorId = :userId', { userId })
+          .andWhere('comment.createdAt >= :fiveWeeksAgo', { fiveWeeksAgo })
+          .groupBy('yearWeek, week')
+          .orderBy('yearWeek', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const weeklyCommentsCreatedRaw = weeklyCommentsCreatedData.map(
+          (item) => ({
+            week: item.week,
+            count: parseInt(item.count, 10),
+          }),
+        );
+
+        const weeklyCommentsCreated = this.mergeWeeklyData(
+          emptyWeeklyData,
+          weeklyCommentsCreatedRaw,
+          5,
+        );
+
+        // 일별 작성한 댓글 통계
+        const dailyCommentsCreatedData = await this.commentRepository
+          .createQueryBuilder('comment')
+          .select("DATE_FORMAT(comment.createdAt, '%Y-%m-%d')", 'date')
+          .addSelect('COUNT(comment.id)', 'count')
+          .where('comment.authorId = :userId', { userId })
+          .andWhere('comment.createdAt >= :fiveDaysAgo', { fiveDaysAgo })
+          .groupBy('date')
+          .orderBy('date', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const dailyCommentsCreatedRaw = dailyCommentsCreatedData.map(
+          (item) => ({
+            date: item.date,
+            count: parseInt(item.count, 10),
+          }),
+        );
+
+        const dailyCommentsCreated = this.mergeAndSortData(
+          emptyDailyData,
+          dailyCommentsCreatedRaw,
+          'date',
+          5,
+        );
+
+        // 연도별 준 좋아요 통계
+        const yearlyLikesGivenData = await this.reviewLikeRepository
+          .createQueryBuilder('like')
+          .select("DATE_FORMAT(like.createdAt, '%Y')", 'year')
+          .addSelect('COUNT(like.id)', 'count')
+          .where('like.userId = :userId', { userId })
+          .groupBy('year')
+          .orderBy('year', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const yearlyLikesGivenRaw = yearlyLikesGivenData.map((item) => ({
+          year: item.year,
+          count: parseInt(item.count, 10),
+        }));
+
+        const yearlyLikesGiven = this.mergeAndSortData(
+          emptyYearlyData,
+          yearlyLikesGivenRaw,
+          'year',
+          5,
+        );
+
+        // 월별 준 좋아요 통계
+        const monthlyLikesGivenData = await this.reviewLikeRepository
+          .createQueryBuilder('like')
+          .select("DATE_FORMAT(like.createdAt, '%Y-%m')", 'month')
+          .addSelect('COUNT(like.id)', 'count')
+          .where('like.userId = :userId', { userId })
+          .groupBy('month')
+          .orderBy('month', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const monthlyLikesGivenRaw = monthlyLikesGivenData.map((item) => ({
+          month: item.month,
+          count: parseInt(item.count, 10),
+        }));
+
+        const monthlyLikesGiven = this.mergeAndSortData(
+          emptyMonthlyData,
+          monthlyLikesGivenRaw,
+          'month',
+          5,
+        );
+
+        // 주별 준 좋아요 통계
+        const weeklyLikesGivenData = await this.reviewLikeRepository
+          .createQueryBuilder('like')
+          .select("DATE_FORMAT(like.createdAt, '%Y-%u')", 'yearWeek')
+          .addSelect(
+            "CONCAT(MONTH(like.createdAt), '월 ', FLOOR((DAY(like.createdAt) - 1) / 7) + 1, '째주')",
+            'week',
+          )
+          .addSelect('COUNT(like.id)', 'count')
+          .where('like.userId = :userId', { userId })
+          .andWhere('like.createdAt >= :fiveWeeksAgo', { fiveWeeksAgo })
+          .groupBy('yearWeek, week')
+          .orderBy('yearWeek', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const weeklyLikesGivenRaw = weeklyLikesGivenData.map((item) => ({
+          week: item.week,
+          count: parseInt(item.count, 10),
+        }));
+
+        const weeklyLikesGiven = this.mergeWeeklyData(
+          emptyWeeklyData,
+          weeklyLikesGivenRaw,
+          5,
+        );
+
+        // 일별 준 좋아요 통계
+        const dailyLikesGivenData = await this.reviewLikeRepository
+          .createQueryBuilder('like')
+          .select("DATE_FORMAT(like.createdAt, '%Y-%m-%d')", 'date')
+          .addSelect('COUNT(like.id)', 'count')
+          .where('like.userId = :userId', { userId })
+          .andWhere('like.createdAt >= :fiveDaysAgo', { fiveDaysAgo })
+          .groupBy('date')
+          .orderBy('date', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        const dailyLikesGivenRaw = dailyLikesGivenData.map((item) => ({
+          date: item.date,
+          count: parseInt(item.count, 10),
+        }));
+
+        const dailyLikesGiven = this.mergeAndSortData(
+          emptyDailyData,
+          dailyLikesGivenRaw,
+          'date',
+          5,
+        );
+
+        // 월별 받은 좋아요 수 (최근 12개월) - 기존 코드와 호환성 유지
         const oneYearAgo = new Date();
         oneYearAgo.setMonth(oneYearAgo.getMonth() - 12);
 
@@ -1384,7 +2118,25 @@ export class StatisticsService {
         return {
           totalLikesReceived,
           totalCommentsReceived,
+          totalCommentsCreated,
+          totalLikesGiven,
           engagementRate,
+          yearlyLikesReceived,
+          monthlyLikesReceived,
+          weeklyLikesReceived,
+          dailyLikesReceived,
+          yearlyCommentsReceived,
+          monthlyCommentsReceived,
+          weeklyCommentsReceived,
+          dailyCommentsReceived,
+          yearlyCommentsCreated,
+          monthlyCommentsCreated,
+          weeklyCommentsCreated,
+          dailyCommentsCreated,
+          yearlyLikesGiven,
+          monthlyLikesGiven,
+          weeklyLikesGiven,
+          dailyLikesGiven,
           monthlyLikes,
           isPublic: true,
         };
@@ -1395,7 +2147,25 @@ export class StatisticsService {
         return {
           totalLikesReceived: 0,
           totalCommentsReceived: 0,
+          totalCommentsCreated: 0,
+          totalLikesGiven: 0,
           engagementRate: 0,
+          yearlyLikesReceived: [],
+          monthlyLikesReceived: [],
+          weeklyLikesReceived: [],
+          dailyLikesReceived: [],
+          yearlyCommentsReceived: [],
+          monthlyCommentsReceived: [],
+          weeklyCommentsReceived: [],
+          dailyCommentsReceived: [],
+          yearlyCommentsCreated: [],
+          monthlyCommentsCreated: [],
+          weeklyCommentsCreated: [],
+          dailyCommentsCreated: [],
+          yearlyLikesGiven: [],
+          monthlyLikesGiven: [],
+          weeklyLikesGiven: [],
+          dailyLikesGiven: [],
           monthlyLikes: [],
           isPublic: true,
         };
@@ -1405,7 +2175,25 @@ export class StatisticsService {
       return {
         totalLikesReceived: 0,
         totalCommentsReceived: 0,
+        totalCommentsCreated: 0,
+        totalLikesGiven: 0,
         engagementRate: 0,
+        yearlyLikesReceived: [],
+        monthlyLikesReceived: [],
+        weeklyLikesReceived: [],
+        dailyLikesReceived: [],
+        yearlyCommentsReceived: [],
+        monthlyCommentsReceived: [],
+        weeklyCommentsReceived: [],
+        dailyCommentsReceived: [],
+        yearlyCommentsCreated: [],
+        monthlyCommentsCreated: [],
+        weeklyCommentsCreated: [],
+        dailyCommentsCreated: [],
+        yearlyLikesGiven: [],
+        monthlyLikesGiven: [],
+        weeklyLikesGiven: [],
+        dailyLikesGiven: [],
         monthlyLikes: [],
         isPublic: true,
       };
@@ -1417,148 +2205,249 @@ export class StatisticsService {
     requestUserId?: number,
   ): Promise<FollowerStatsResponseDto> {
     try {
+      this.logger.log(
+        `팔로워 통계 조회 시작: userId=${userId}, requestUserId=${requestUserId}`,
+      );
+
       // 설정 확인 - 다른 사용자가 요청한 경우 공개 설정 확인
       if (requestUserId !== userId) {
         const setting = await this.getOrCreateUserStatisticsSetting(userId);
         if (!setting.isFollowerStatsPublic) {
+          // 비공개인 경우 생성된 빈 데이터 반환
           return {
             followersCount: 0,
             followingCount: 0,
-            followerGrowth: [],
+            followerGrowth: this.generateEmptyMonthlyInteractionData(5).map(
+              (item) => ({
+                date: item.month,
+                count: 0,
+              }),
+            ),
+            yearly: this.generateEmptyYearlyInteractionData(5),
+            monthly: this.generateEmptyMonthlyInteractionData(5),
+            weekly: this.generateEmptyWeeklyInteractionData(),
+            daily: this.generateEmptyDailyInteractionData().slice(0, 5),
             isPublic: false,
           };
         }
       }
 
-      // 현재 팔로워 수 조회
-      const followersCount = await this.userFollowerRepository.count({
+      // 1. 빈 데이터 준비
+      const emptyYearlyData = this.generateEmptyYearlyInteractionData(5);
+      const emptyMonthlyData = this.generateEmptyMonthlyInteractionData(5);
+      const emptyWeeklyData = this.generateEmptyWeeklyInteractionData();
+      const emptyDailyData = this.generateEmptyDailyInteractionData().slice(
+        0,
+        5,
+      );
+
+      // 2. 현재 팔로워/팔로잉 수 조회
+      const followers = await this.userFollowerRepository.find({
         where: { following_id: userId },
       });
+      const followersCount = followers.length;
+      this.logger.log(`팔로워 수: ${followersCount}`);
 
-      // 현재 팔로잉 수 조회
-      const followingCount = await this.userFollowerRepository.count({
+      const following = await this.userFollowerRepository.find({
         where: { follower_id: userId },
       });
+      const followingCount = following.length;
+      this.logger.log(`팔로잉 수: ${followingCount}`);
 
-      // 월별 팔로워 증가 추이 (최근 12개월)
+      // 3. 기간 설정
+      const fiveYearsAgo = new Date();
+      fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+
       const oneYearAgo = new Date();
       oneYearAgo.setMonth(oneYearAgo.getMonth() - 12);
 
-      // 월별 팔로워 추가 수 조회
-      const followerGrowthData = await this.userFollowerRepository
-        .createQueryBuilder('follower')
-        .select("DATE_FORMAT(follower.created_at, '%Y-%m')", 'month')
-        .addSelect('COUNT(follower.id)', 'count')
-        .where('follower.following_id = :userId', { userId })
-        .andWhere('follower.created_at >= :oneYearAgo', { oneYearAgo })
-        .groupBy('month')
-        .orderBy('month', 'ASC')
-        .getRawMany();
+      const fiveWeeksAgo = new Date();
+      fiveWeeksAgo.setDate(fiveWeeksAgo.getDate() - 35); // 5주 = 35일
 
-      const followerGrowth = followerGrowthData.map((item) => ({
-        date: item.month,
-        count: parseInt(item.count, 10),
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      // 4. 연도별 팔로워 데이터 (최근 5년) 조회
+      const yearlyDataQuery = `
+        SELECT 
+          DATE_FORMAT(created_at, '%Y') as year, 
+          COUNT(id) as count 
+        FROM 
+          user_follower 
+        WHERE 
+          following_id = ? 
+          AND created_at >= ? 
+        GROUP BY 
+          year 
+        ORDER BY 
+          year DESC
+        LIMIT 5
+      `;
+
+      const yearlyData = await this.userFollowerRepository.query(
+        yearlyDataQuery,
+        [userId, fiveYearsAgo],
+      );
+
+      this.logger.log(
+        `연도별 팔로워 데이터 결과: ${JSON.stringify(yearlyData)}`,
+      );
+
+      // 5. 월별 팔로워 데이터 (최근 5개월) 조회
+      const monthlyDataQuery = `
+        SELECT 
+          DATE_FORMAT(created_at, '%Y-%m') as month, 
+          COUNT(id) as count 
+        FROM 
+          user_follower 
+        WHERE 
+          following_id = ? 
+          AND created_at >= ? 
+        GROUP BY 
+          month 
+        ORDER BY 
+          month DESC
+        LIMIT 5
+      `;
+
+      const monthlyData = await this.userFollowerRepository.query(
+        monthlyDataQuery,
+        [userId, oneYearAgo],
+      );
+
+      this.logger.log(
+        `월별 팔로워 데이터 결과: ${JSON.stringify(monthlyData)}`,
+      );
+
+      // 6. 주별 팔로워 데이터 (최근 5주) 조회
+      const weeklyDataQuery = `
+        SELECT 
+          CONCAT(YEAR(created_at), '-', WEEK(created_at)) as yearWeek,
+          CONCAT(MONTH(created_at), '월 ', FLOOR((DAY(created_at) - 1) / 7) + 1, '째주') as week,
+          COUNT(id) as count 
+        FROM 
+          user_follower 
+        WHERE 
+          following_id = ? 
+          AND created_at >= ? 
+        GROUP BY 
+          yearWeek, week
+        ORDER BY 
+          yearWeek DESC
+        LIMIT 5
+      `;
+
+      const weeklyData = await this.userFollowerRepository.query(
+        weeklyDataQuery,
+        [userId, fiveWeeksAgo],
+      );
+
+      this.logger.log(`주별 팔로워 데이터 결과: ${JSON.stringify(weeklyData)}`);
+
+      // 7. 일별 팔로워 데이터 (최근 5일) 조회
+      const dailyDataQuery = `
+        SELECT 
+          DATE_FORMAT(created_at, '%Y-%m-%d') as date, 
+          COUNT(id) as count 
+        FROM 
+          user_follower 
+        WHERE 
+          following_id = ? 
+          AND created_at >= ? 
+        GROUP BY 
+          date 
+        ORDER BY 
+          date DESC
+        LIMIT 5
+      `;
+
+      const dailyData = await this.userFollowerRepository.query(
+        dailyDataQuery,
+        [userId, thirtyDaysAgo],
+      );
+
+      this.logger.log(`일별 팔로워 데이터 결과: ${JSON.stringify(dailyData)}`);
+
+      // 8. 실제 데이터 형식 변환
+      const formattedYearlyData = yearlyData.map((item) => ({
+        year: item.year,
+        count: parseInt(item.count, 10) || 0,
       }));
+
+      const formattedMonthlyData = monthlyData.map((item) => ({
+        month: item.month,
+        count: parseInt(item.count, 10) || 0,
+      }));
+
+      const formattedWeeklyData = weeklyData.map((item) => ({
+        week: item.week,
+        count: parseInt(item.count, 10) || 0,
+      }));
+
+      const formattedDailyData = dailyData.map((item) => ({
+        date: item.date,
+        count: parseInt(item.count, 10) || 0,
+      }));
+
+      // 9. 빈 데이터와 실제 데이터 병합
+      // 연도별 데이터
+      let yearly = this.mergeAndSortData(
+        emptyYearlyData,
+        formattedYearlyData,
+        'year',
+        5,
+      );
+
+      // 월별 데이터
+      let monthly = this.mergeAndSortData(
+        emptyMonthlyData,
+        formattedMonthlyData,
+        'month',
+        5,
+      );
+
+      // 주별 데이터
+      let weekly = this.mergeWeeklyData(
+        emptyWeeklyData,
+        formattedWeeklyData,
+        5,
+      );
+
+      // 일별 데이터
+      let daily = this.mergeAndSortData(
+        emptyDailyData,
+        formattedDailyData,
+        'date',
+        5,
+      );
+
+      // 최신 데이터부터 정렬
+      yearly = yearly.reverse();
+      monthly = monthly.reverse();
+      daily = daily.reverse();
+
+      // 10. followerGrowth 필드 생성 (월별 데이터 기반)
+      const followerGrowth = monthly.map((item) => ({
+        date: item.month,
+        count: item.count,
+      }));
+
+      this.logger.log(`팔로워 통계 조회 완료: 
+        followersCount=${followersCount}, 
+        followingCount=${followingCount}`);
 
       return {
         followersCount,
         followingCount,
         followerGrowth,
+        yearly,
+        monthly,
+        weekly,
+        daily,
         isPublic: true,
       };
     } catch (error) {
-      this.logger.error(`팔로워/팔로잉 통계 조회 중 오류: ${error.message}`);
-      throw error;
-    }
-  }
-
-  async getCommentActivity(
-    userId: number,
-    requestUserId?: number,
-  ): Promise<CommentActivityResponseDto> {
-    try {
-      // 설정 확인 - 다른 사용자가 요청한 경우 공개 설정 확인
-      if (requestUserId !== userId) {
-        const setting = await this.getOrCreateUserStatisticsSetting(userId);
-        if (!setting.isCommentActivityPublic) {
-          return {
-            totalComments: 0,
-            commentsPerWeek: 0,
-            commentsPerReview: [],
-            isPublic: false,
-          };
-        }
-      }
-
-      // 작성한 댓글 수
-      const totalComments = await this.commentRepository.count({
-        where: { authorId: userId },
-      });
-
-      // 주당 댓글 작성 빈도
-      let commentsPerWeek = 0;
-
-      if (totalComments > 0) {
-        // 최초 댓글 작성일
-        const firstCommentDate = await this.commentRepository
-          .createQueryBuilder('comment')
-          .select('MIN(comment.createdAt)', 'firstDate')
-          .where('comment.authorId = :userId', { userId })
-          .getRawOne();
-
-        if (firstCommentDate && firstCommentDate.firstDate) {
-          const firstDate = new Date(firstCommentDate.firstDate);
-          const now = new Date();
-          const totalWeeks = Math.max(
-            1,
-            Math.ceil(
-              (now.getTime() - firstDate.getTime()) / (7 * 24 * 60 * 60 * 1000),
-            ),
-          );
-          commentsPerWeek = totalComments / totalWeeks;
-        }
-      }
-
-      // 리뷰별 댓글 수 분포
-      const commentsPerReviewData = [
-        { range: '0', count: 0 },
-        { range: '1-5', count: 0 },
-        { range: '6-10', count: 0 },
-        { range: '10+', count: 0 },
-      ];
-
-      // 사용자가 작성한 각 리뷰별 댓글 수를 계산
-      const reviewCommentCountsData = await this.reviewRepository
-        .createQueryBuilder('review')
-        .leftJoin('review.comments', 'comment')
-        .select('review.id', 'reviewId')
-        .addSelect('COUNT(comment.id)', 'commentCount')
-        .where('review.authorId = :userId', { userId })
-        .groupBy('review.id')
-        .getRawMany();
-
-      // 각 구간별로 리뷰 수 계산
-      reviewCommentCountsData.forEach((item) => {
-        const count = parseInt(item.commentCount, 10);
-        if (count === 0) {
-          commentsPerReviewData[0].count++;
-        } else if (count >= 1 && count <= 5) {
-          commentsPerReviewData[1].count++;
-        } else if (count >= 6 && count <= 10) {
-          commentsPerReviewData[2].count++;
-        } else {
-          commentsPerReviewData[3].count++;
-        }
-      });
-
-      return {
-        totalComments,
-        commentsPerWeek,
-        commentsPerReview: commentsPerReviewData,
-        isPublic: true,
-      };
-    } catch (error) {
-      this.logger.error(`댓글 활동 통계 조회 중 오류: ${error.message}`);
+      this.logger.error(`팔로워 통계 조회 중 오류: ${error.message}`);
       throw error;
     }
   }
@@ -1582,24 +2471,26 @@ export class StatisticsService {
       }
 
       try {
-        // 리뷰당 평균 좋아요 수
+        // 리뷰당 평균 좋아요 수 ('review' 타입 제외)
         const likesData = await this.reviewRepository
           .createQueryBuilder('review')
           .select('AVG(review.likeCount)', 'average')
           .where('review.authorId = :userId', { userId })
+          .andWhere('review.type != :reviewType', { reviewType: 'review' })
           .getRawOne();
 
         const averageLikesPerReview = likesData
           ? parseFloat(likesData.average) || 0
           : 0;
 
-        // 가장 인기 있는 리뷰 TOP 5
+        // 가장 인기 있는 리뷰 TOP 5 ('review' 타입 제외)
         const popularReviewsData = await this.reviewRepository
           .createQueryBuilder('review')
           .select('review.id', 'id')
           .addSelect('SUBSTRING(review.content, 1, 100)', 'content')
           .addSelect('review.likeCount', 'likes')
           .where('review.authorId = :userId', { userId })
+          .andWhere('review.type != :reviewType', { reviewType: 'review' })
           .orderBy('review.likeCount', 'DESC')
           .limit(5)
           .getRawMany();
@@ -1612,21 +2503,26 @@ export class StatisticsService {
           likes: parseInt(item.likes, 10) || 0,
         }));
 
-        // 커뮤니티 기여도 점수 (리뷰 수 + 받은 좋아요 수 + 받은 댓글 수)
+        // 커뮤니티 기여도 점수 (리뷰 수 + 받은 좋아요 수 + 받은 댓글 수) ('review' 타입 제외)
         const totalReviews = await this.reviewRepository.count({
-          where: { authorId: userId },
+          where: {
+            authorId: userId,
+            type: Not('review'),
+          },
         });
 
         const totalLikes = await this.reviewLikeRepository
           .createQueryBuilder('like')
           .leftJoin('like.review', 'review')
           .where('review.authorId = :userId', { userId })
+          .andWhere('review.type != :reviewType', { reviewType: 'review' })
           .getCount();
 
         const totalComments = await this.commentRepository
           .createQueryBuilder('comment')
           .leftJoin('comment.review', 'review')
           .where('review.authorId = :userId', { userId })
+          .andWhere('review.type != :reviewType', { reviewType: 'review' })
           .getCount();
 
         const communityContributionScore =
@@ -1765,6 +2661,10 @@ export class StatisticsService {
             subscribersPerLibrary: [],
             mostPopularLibrary: '',
             popularityTrend: [],
+            yearly: [],
+            monthly: [],
+            weekly: [],
+            daily: [],
             isPublic: false,
           };
         }
@@ -1783,6 +2683,10 @@ export class StatisticsService {
         library: item.library,
         subscribers: parseInt(item.subscribers, 10),
       }));
+
+      this.logger.debug(
+        `서재별 구독자 수: ${JSON.stringify(subscribersPerLibrary)}`,
+      );
 
       // 가장 인기 있는 서재
       let mostPopularLibrary = '없음';
@@ -1806,6 +2710,10 @@ export class StatisticsService {
         .orderBy('library.name', 'ASC')
         .addOrderBy('date', 'ASC')
         .getRawMany();
+
+      this.logger.debug(
+        `서재 인기도 추이 데이터: ${JSON.stringify(librariesPopularityData)}`,
+      );
 
       // 결과를 서재별로 그룹화
       interface TrendItem {
@@ -1836,15 +2744,278 @@ export class StatisticsService {
 
       const popularityTrend: LibraryTrend[] = Object.values(popularityTrendMap);
 
+      // 기간별 구독자 추세 데이터 조회
+      // 1. 빈 데이터 준비
+      const emptyYearlyData = this.generateEmptyYearlySubscriptionData(5);
+      const emptyMonthlyData = this.generateEmptyMonthlySubscriptionData(5);
+      const emptyWeeklyData = this.generateEmptyWeeklySubscriptionData();
+      const emptyDailyData = this.generateEmptySubscriptionData(5);
+
+      this.logger.debug(`빈 데이터 템플릿:
+        연도별: ${JSON.stringify(emptyYearlyData)},
+        월별: ${JSON.stringify(emptyMonthlyData)},
+        주별: ${JSON.stringify(emptyWeeklyData)},
+        일별: ${JSON.stringify(emptyDailyData)}
+      `);
+
+      // 3. 사용자의 서재 목록 가져오기
+      const userLibraries = await this.libraryRepository.find({
+        where: { ownerId: userId },
+        select: ['id', 'name'],
+      });
+
+      const libraryIds = userLibraries.map((lib) => lib.id);
+      const libraryNameMap = {};
+      userLibraries.forEach((lib) => {
+        libraryNameMap[lib.id] = lib.name;
+      });
+
+      this.logger.debug(`사용자 서재 목록: ${JSON.stringify(userLibraries)}`);
+
+      // 최근 구독 데이터만 가져오기 - 시간 제약 없이
+      const subscriptionData = await this.librarySubscriptionRepository
+        .createQueryBuilder('subscription')
+        .innerJoin('subscription.library', 'library')
+        .select('library.id', 'libraryId')
+        .addSelect('library.name', 'libraryName')
+        .addSelect('subscription.createdAt', 'createdAt')
+        .where('library.ownerId = :userId', { userId })
+        .orderBy('subscription.createdAt', 'DESC')
+        .getRawMany();
+
+      this.logger.debug(`구독 데이터: ${JSON.stringify(subscriptionData)}`);
+
+      // Top 구독자 서재 목록 (최대 5개)
+      const topLibraries = subscribersPerLibrary
+        .filter((lib) => lib.subscribers > 0)
+        .slice(0, 5)
+        .map((lib) => ({
+          library: lib.library,
+          subscribers: lib.subscribers,
+        }));
+
+      if (topLibraries.length === 0 && subscribersPerLibrary.length > 0) {
+        // 구독자가 0이어도 최소 몇 개는 표시
+        topLibraries.push(
+          ...subscribersPerLibrary.slice(0, 5).map((lib) => ({
+            library: lib.library,
+            subscribers: lib.subscribers,
+          })),
+        );
+      }
+
+      this.logger.debug(`상위 서재 목록: ${JSON.stringify(topLibraries)}`);
+
+      // 3. 연도별 구독자 데이터 조회 - 데이터가 있는 행만
+      const yearlyData = await this.librarySubscriptionRepository
+        .createQueryBuilder('subscription')
+        .innerJoin('subscription.library', 'library')
+        .select("DATE_FORMAT(subscription.createdAt, '%Y')", 'year')
+        .addSelect('library.id', 'libraryId')
+        .addSelect('COUNT(subscription.id)', 'subscribers')
+        .where('library.ownerId = :userId', { userId })
+        .groupBy('year')
+        .addGroupBy('library.id')
+        .orderBy('year', 'ASC')
+        .getRawMany();
+
+      // 연도별 데이터 처리
+      interface YearData {
+        year: string;
+        libraryStats: Array<{
+          libraryId: number;
+          library: string;
+          subscribers: number;
+        }>;
+        libraries: Array<{
+          library: string;
+          subscribers: number;
+        }>;
+      }
+
+      const yearlyMap = new Map<string, YearData>();
+
+      // 먼저 모든 빈 연도에 대해 맵 초기화
+      emptyYearlyData.forEach((emptyItem) => {
+        yearlyMap.set(emptyItem.year, {
+          year: emptyItem.year,
+          libraryStats: [],
+          libraries: [],
+        });
+      });
+
+      // 실제 데이터로 채우기
+      yearlyData.forEach((item) => {
+        const year = item.year;
+        const libraryId = item.libraryId;
+        const subscribers = parseInt(item.subscribers, 10) || 0;
+
+        if (!yearlyMap.has(year)) {
+          yearlyMap.set(year, {
+            year,
+            libraryStats: [],
+            libraries: [],
+          });
+        }
+
+        const yearData = yearlyMap.get(year);
+        yearData.libraryStats.push({
+          libraryId,
+          library: libraryNameMap[libraryId] || `서재 ${libraryId}`,
+          subscribers,
+        });
+      });
+
+      // 각 연도별 상위 5개 서재 선택
+      for (const [year, data] of yearlyMap.entries()) {
+        if (data.libraryStats.length > 0) {
+          data.libraryStats.sort((a, b) => b.subscribers - a.subscribers);
+          data.libraries = data.libraryStats.slice(0, 5).map((stat) => ({
+            library: stat.library,
+            subscribers: stat.subscribers,
+          }));
+        } else {
+          // 데이터가 없으면 가장 인기 있는 서재 데이터 사용
+          data.libraries = [...topLibraries];
+        }
+      }
+
+      // 연도별 결과 생성
+      const yearlyResult = Array.from(yearlyMap.values()).sort((a, b) => {
+        return parseInt(a.year) - parseInt(b.year); // 오름차순 정렬
+      });
+
+      // 4. 월별 구독자 데이터 조회
+      const monthlyData = await this.librarySubscriptionRepository
+        .createQueryBuilder('subscription')
+        .innerJoin('subscription.library', 'library')
+        .select("DATE_FORMAT(subscription.createdAt, '%Y-%m')", 'month')
+        .addSelect('library.id', 'libraryId')
+        .addSelect('COUNT(subscription.id)', 'subscribers')
+        .where('library.ownerId = :userId', { userId })
+        .groupBy('month')
+        .addGroupBy('library.id')
+        .orderBy('month', 'ASC')
+        .getRawMany();
+
+      // 월별 데이터 처리
+      interface MonthData {
+        month: string;
+        libraryStats: Array<{
+          libraryId: number;
+          library: string;
+          subscribers: number;
+        }>;
+        libraries: Array<{
+          library: string;
+          subscribers: number;
+        }>;
+      }
+
+      const monthlyMap = new Map<string, MonthData>();
+
+      // 먼저 모든 빈 월에 대해 맵 초기화
+      emptyMonthlyData.forEach((emptyItem) => {
+        monthlyMap.set(emptyItem.month, {
+          month: emptyItem.month,
+          libraryStats: [],
+          libraries: [],
+        });
+      });
+
+      // 실제 데이터로 채우기
+      monthlyData.forEach((item) => {
+        const month = item.month;
+        const libraryId = item.libraryId;
+        const subscribers = parseInt(item.subscribers, 10) || 0;
+
+        if (!monthlyMap.has(month)) {
+          monthlyMap.set(month, {
+            month,
+            libraryStats: [],
+            libraries: [],
+          });
+        }
+
+        const monthData = monthlyMap.get(month);
+        monthData.libraryStats.push({
+          libraryId,
+          library: libraryNameMap[libraryId] || `서재 ${libraryId}`,
+          subscribers,
+        });
+      });
+
+      // 각 월별 상위 5개 서재 선택
+      for (const [month, data] of monthlyMap.entries()) {
+        if (data.libraryStats.length > 0) {
+          data.libraryStats.sort((a, b) => b.subscribers - a.subscribers);
+          data.libraries = data.libraryStats.slice(0, 5).map((stat) => ({
+            library: stat.library,
+            subscribers: stat.subscribers,
+          }));
+        } else {
+          // 데이터가 없으면 가장 인기 있는 서재 데이터 사용
+          data.libraries = [...topLibraries];
+        }
+      }
+
+      // 월별 결과 생성
+      const monthlyResult = Array.from(monthlyMap.values()).sort((a, b) => {
+        return a.month.localeCompare(b.month); // 오름차순 정렬
+      });
+
+      // 주간별 데이터 처리
+      const weeklyResult = emptyWeeklyData.map((item) => {
+        return {
+          week: item.week,
+          libraries:
+            item.libraries.length > 0 ? item.libraries : [...topLibraries],
+        };
+      });
+
+      // 일별 데이터 처리
+      const dailyResult = emptyDailyData.map((item) => {
+        return {
+          date: item.date,
+          libraries:
+            item.libraries.length > 0 ? item.libraries : [...topLibraries],
+        };
+      });
+
+      // 최종 결과 로그
+      this.logger.debug(`최종 결과:
+        연도별: ${JSON.stringify(yearlyResult)},
+        월별: ${JSON.stringify(monthlyResult)},
+        주별: ${JSON.stringify(weeklyResult)},
+        일별: ${JSON.stringify(dailyResult)}
+      `);
+
+      // 최종 결과 반환
       return {
         subscribersPerLibrary,
         mostPopularLibrary,
         popularityTrend,
+        yearly: yearlyResult,
+        monthly: monthlyResult,
+        weekly: weeklyResult,
+        daily: dailyResult,
         isPublic: true,
       };
     } catch (error) {
       this.logger.error(`서재 인기도 통계 조회 중 오류: ${error.message}`);
-      throw error;
+      this.logger.error(error.stack);
+
+      // 오류 발생 시 기본값 반환
+      return {
+        subscribersPerLibrary: [],
+        mostPopularLibrary: '',
+        popularityTrend: [],
+        yearly: this.generateEmptyYearlySubscriptionData(5),
+        monthly: this.generateEmptyMonthlySubscriptionData(5),
+        weekly: this.generateEmptyWeeklySubscriptionData(),
+        daily: this.generateEmptySubscriptionData(5),
+        isPublic: true,
+      };
     }
   }
 
@@ -1935,245 +3106,6 @@ export class StatisticsService {
     }
   }
 
-  async getLibraryDiversity(
-    userId: number,
-    requestUserId?: number,
-  ): Promise<LibraryDiversityResponseDto> {
-    try {
-      // 설정 확인 - 다른 사용자가 요청한 경우 공개 설정 확인
-      if (requestUserId !== userId) {
-        const setting = await this.getOrCreateUserStatisticsSetting(userId);
-        if (!setting.isLibraryDiversityPublic) {
-          return {
-            genreDiversityIndex: [],
-            mostSpecializedLibrary: '',
-            mostDiverseLibrary: '',
-            isPublic: false,
-          };
-        }
-      }
-
-      // 서재별 장르 다양성 계산을 위한 데이터 가져오기
-      try {
-        const librariesData = await this.libraryRepository.find({
-          where: { ownerId: userId },
-          relations: [
-            'libraryBooks',
-            'libraryBooks.book',
-            'libraryBooks.book.category',
-          ],
-        });
-
-        const genreDiversityIndex = [];
-        let mostSpecializedLibrary = '없음';
-        let mostDiverseLibrary = '없음';
-
-        // 가장 낮은 다양성 지수(가장 특화된 서재)와 가장 높은 다양성 지수(가장 다양한 서재)를 추적
-        let lowestDiversityIndex = Infinity;
-        let highestDiversityIndex = -1;
-
-        // 각 서재별로 장르 다양성 계산
-        for (const library of librariesData) {
-          // 최소 5권 이상 있는 서재만 계산
-          if (library.libraryBooks && library.libraryBooks.length >= 5) {
-            const categoryCount = {};
-            let totalBooks = 0;
-
-            // 각 카테고리별 도서 수 계산
-            library.libraryBooks.forEach((libraryBook) => {
-              if (libraryBook.book && libraryBook.book.category) {
-                const categoryName = libraryBook.book.category.name || '미분류';
-                categoryCount[categoryName] =
-                  (categoryCount[categoryName] || 0) + 1;
-                totalBooks++;
-              }
-            });
-
-            // 다양성 지수 계산 (심슨 다양성 지수)
-            // 값이 0에 가까울수록 다양성이 높고, 1에 가까울수록 다양성이 낮음
-            let sumSquaredProportions = 0;
-
-            if (totalBooks > 0) {
-              Object.values(categoryCount).forEach((count) => {
-                const proportion = (count as number) / totalBooks;
-                sumSquaredProportions += proportion * proportion;
-              });
-            }
-
-            // 심슨 다양성 지수 계산 (1 - 합)
-            // 여러 카테고리가 균등하게 분포할수록 1에 가까워짐
-            const diversityIndex = 1 - sumSquaredProportions;
-
-            // 결과에 추가
-            genreDiversityIndex.push({
-              library: library.name,
-              index: diversityIndex,
-            });
-
-            // 최소/최대 다양성 지수 업데이트
-            if (diversityIndex < lowestDiversityIndex) {
-              lowestDiversityIndex = diversityIndex;
-              mostSpecializedLibrary = library.name;
-            }
-
-            if (diversityIndex > highestDiversityIndex) {
-              highestDiversityIndex = diversityIndex;
-              mostDiverseLibrary = library.name;
-            }
-          }
-        }
-
-        // 다양성 지수 내림차순 정렬
-        genreDiversityIndex.sort((a, b) => b.index - a.index);
-
-        return {
-          genreDiversityIndex,
-          mostSpecializedLibrary,
-          mostDiverseLibrary,
-          isPublic: true,
-        };
-      } catch (error) {
-        this.logger.error(
-          `서재 다양성 통계 조회 중 데이터 오류: ${error.message}`,
-        );
-        // 오류 발생시 기본값 반환
-        return {
-          genreDiversityIndex: [],
-          mostSpecializedLibrary: '없음',
-          mostDiverseLibrary: '없음',
-          isPublic: true,
-        };
-      }
-    } catch (error) {
-      this.logger.error(`서재 다양성 통계 조회 중 오류: ${error.message}`);
-      // 오류 발생시 기본값 반환
-      return {
-        genreDiversityIndex: [],
-        mostSpecializedLibrary: '없음',
-        mostDiverseLibrary: '없음',
-        isPublic: true,
-      };
-    }
-  }
-
-  async getAmountStats(
-    userId: number,
-    requestUserId?: number,
-  ): Promise<AmountStatsResponseDto> {
-    try {
-      // 설정 확인 - 다른 사용자가 요청한 경우 공개 설정 확인
-      if (requestUserId !== userId) {
-        const setting = await this.getOrCreateUserStatisticsSetting(userId);
-        if (!setting.isAmountStatsPublic) {
-          return {
-            estimatedTotalSpent: 0,
-            monthlySpending: [],
-            categoryPriceAverage: [],
-            isPublic: false,
-          };
-        }
-      }
-
-      // 읽은 도서 목록 가져오기
-      const readBooks = await this.readingStatusRepository
-        .createQueryBuilder('status')
-        .innerJoinAndSelect('status.book', 'book')
-        .leftJoinAndSelect('book.category', 'category')
-        .where('status.userId = :userId', { userId })
-        .andWhere('status.status = :status', { status: ReadingStatusType.READ })
-        .getMany();
-
-      // 추정 총 지출액 계산
-      let estimatedTotalSpent = 0;
-      readBooks.forEach((status) => {
-        // 판매가격이 있으면 판매가격 사용, 없으면 정가 사용
-        if (status.book.priceSales) {
-          estimatedTotalSpent += status.book.priceSales;
-        } else if (status.book.priceStandard) {
-          estimatedTotalSpent += status.book.priceStandard;
-        }
-      });
-
-      // 월별 지출 계산 (최근 12개월)
-      const oneYearAgo = new Date();
-      oneYearAgo.setMonth(oneYearAgo.getMonth() - 12);
-
-      const monthlySpendingData = {};
-
-      // 최근 12개월 동안의 각 월 이름 생성
-      for (let i = 0; i < 12; i++) {
-        const date = new Date();
-        date.setMonth(date.getMonth() - i);
-        const yearMonth = date.toISOString().slice(0, 7); // YYYY-MM 형식
-        monthlySpendingData[yearMonth] = 0;
-      }
-
-      // 도서별로 완독일 기반 월별 지출 계산
-      readBooks.forEach((status) => {
-        if (status.finishDate) {
-          const bookPrice =
-            status.book.priceSales || status.book.priceStandard || 0;
-          if (bookPrice > 0) {
-            const finishDate = new Date(status.finishDate);
-            if (finishDate >= oneYearAgo) {
-              const yearMonth = finishDate.toISOString().slice(0, 7);
-              if (monthlySpendingData[yearMonth] !== undefined) {
-                monthlySpendingData[yearMonth] += bookPrice;
-              }
-            }
-          }
-        }
-      });
-
-      // 월별 지출 데이터를 배열로 변환
-      const monthlySpending = Object.entries(monthlySpendingData)
-        .map(([month, amount]) => ({
-          month,
-          amount: amount as number,
-        }))
-        .sort((a, b) => a.month.localeCompare(b.month));
-
-      // 카테고리별 평균 도서 가격 계산
-      const categoryPriceData = {};
-      const categoryCounts = {};
-
-      readBooks.forEach((status) => {
-        const bookPrice =
-          status.book.priceSales || status.book.priceStandard || 0;
-        if (bookPrice > 0 && status.book.category) {
-          const categoryName = status.book.category.name || '미분류';
-
-          if (!categoryPriceData[categoryName]) {
-            categoryPriceData[categoryName] = 0;
-            categoryCounts[categoryName] = 0;
-          }
-
-          categoryPriceData[categoryName] += bookPrice;
-          categoryCounts[categoryName]++;
-        }
-      });
-
-      // 카테고리별 평균 가격 계산
-      const categoryPriceAverage = Object.entries(categoryPriceData)
-        .map(([category, totalPrice]) => ({
-          category,
-          averagePrice:
-            (totalPrice as number) / (categoryCounts[category] || 1),
-        }))
-        .sort((a, b) => b.averagePrice - a.averagePrice);
-
-      return {
-        estimatedTotalSpent,
-        monthlySpending,
-        categoryPriceAverage,
-        isPublic: true,
-      };
-    } catch (error) {
-      this.logger.error(`금액 통계 조회 중 오류: ${error.message}`);
-      throw error;
-    }
-  }
-
   async getSearchActivity(
     userId: number,
     requestUserId?: number,
@@ -2186,7 +3118,12 @@ export class StatisticsService {
           return {
             searchCount: 0,
             topSearchTerms: [],
+            frequentlySearchedTerms: [],
             searchPattern: '',
+            yearly: [],
+            monthly: [],
+            weekly: [],
+            daily: [],
             isPublic: false,
           };
         }
@@ -2212,6 +3149,170 @@ export class StatisticsService {
         term: item.term,
         count: parseInt(item.count),
       }));
+
+      // 자주 검색하는 키워드 조회 (최대 10개)
+      const frequentlySearchedTermsResult = await this.searchLogRepository
+        .createQueryBuilder('searchLog')
+        .select('searchLog.term')
+        .addSelect('COUNT(searchLog.id)', 'count')
+        .where('searchLog.userId = :userId', { userId })
+        .groupBy('searchLog.term')
+        .orderBy('count', 'DESC')
+        .limit(10)
+        .getRawMany();
+
+      // 디버깅용 로그 추가
+      this.logger.debug(
+        `frequentlySearchedTermsResult: ${JSON.stringify(frequentlySearchedTermsResult)}`,
+      );
+
+      const frequentlySearchedTerms = frequentlySearchedTermsResult.map(
+        (item) => ({
+          term: item.searchLog_term, // term 필드 이름 수정 (RawMany 결과값에 맞게)
+          count: parseInt(item.count),
+        }),
+      );
+
+      // 디버깅용 로그 추가
+      this.logger.debug(
+        `frequentlySearchedTerms: ${JSON.stringify(frequentlySearchedTerms)}`,
+      );
+
+      // 기간 설정
+      const fiveYearsAgo = new Date();
+      fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+
+      const oneYearAgo = new Date();
+      oneYearAgo.setMonth(oneYearAgo.getMonth() - 12);
+
+      const fiveWeeksAgo = new Date();
+      fiveWeeksAgo.setDate(fiveWeeksAgo.getDate() - 35); // 5주 전
+
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+
+      // 1. 연도별 검색 통계
+      const yearlyData = await this.searchLogRepository
+        .createQueryBuilder('searchLog')
+        .select("DATE_FORMAT(searchLog.createdAt, '%Y')", 'year')
+        .addSelect('COUNT(searchLog.id)', 'count')
+        .where('searchLog.userId = :userId', { userId })
+        .andWhere('searchLog.createdAt >= :fiveYearsAgo', { fiveYearsAgo })
+        .groupBy('year')
+        .orderBy('year', 'ASC')
+        .getRawMany();
+
+      const yearlyResult = this.mergeAndSortData(
+        this.generateEmptyYearlySearchData(),
+        yearlyData.map((item) => ({
+          year: item.year,
+          count: parseInt(item.count),
+        })),
+        'year',
+        5,
+      );
+
+      // 2. 월별 검색 통계
+      const monthlyData = await this.searchLogRepository
+        .createQueryBuilder('searchLog')
+        .select("DATE_FORMAT(searchLog.createdAt, '%Y-%m')", 'month')
+        .addSelect('COUNT(searchLog.id)', 'count')
+        .where('searchLog.userId = :userId', { userId })
+        .andWhere('searchLog.createdAt >= :oneYearAgo', { oneYearAgo })
+        .groupBy('month')
+        .orderBy('month', 'ASC')
+        .getRawMany();
+
+      const monthlyResult = this.mergeAndSortData(
+        this.generateEmptyMonthlySearchData(),
+        monthlyData.map((item) => ({
+          month: item.month,
+          count: parseInt(item.count),
+        })),
+        'month',
+        12,
+      );
+
+      // 3. 주별 검색 통계
+      const weeklyEmptyData = this.generateEmptyWeeklySearchData();
+
+      // 최근 5주의 시작일과 끝일 계산
+      const weekRanges = [];
+      const now = new Date();
+
+      for (let i = 0; i < 5; i++) {
+        const endDate = new Date(now);
+        endDate.setDate(now.getDate() - i * 7);
+        const startDate = new Date(endDate);
+        startDate.setDate(endDate.getDate() - 6);
+
+        weekRanges.push({
+          start: startDate,
+          end: endDate,
+          key: i,
+        });
+      }
+
+      const weeklyData = await this.searchLogRepository
+        .createQueryBuilder('searchLog')
+        .select("DATE_FORMAT(searchLog.createdAt, '%Y-%m-%d')", 'date')
+        .addSelect('COUNT(searchLog.id)', 'count')
+        .where('searchLog.userId = :userId', { userId })
+        .andWhere('searchLog.createdAt >= :fiveWeeksAgo', { fiveWeeksAgo })
+        .groupBy('date')
+        .orderBy('date', 'ASC')
+        .getRawMany();
+
+      const weeklyDataMap = new Map();
+      // weeklyEmptyData 초기화
+      weeklyEmptyData.forEach((week, index) => {
+        weeklyDataMap.set(week.week, { week: week.week, count: 0 });
+      });
+
+      // 날짜별 데이터를 주차에 할당
+      weeklyData.forEach((item) => {
+        const itemDate = new Date(item.date);
+
+        // 어떤 주차 범위에 속하는지 확인
+        for (let i = 0; i < weekRanges.length; i++) {
+          const range = weekRanges[i];
+          if (itemDate >= range.start && itemDate <= range.end) {
+            const count = parseInt(item.count) || 0;
+            const reversedIndex = 4 - i; // 인덱스를 반대로 처리
+            const week = weeklyEmptyData[reversedIndex].week;
+
+            const current = weeklyDataMap.get(week);
+            if (current) {
+              current.count += count;
+              weeklyDataMap.set(week, current);
+            }
+            break;
+          }
+        }
+      });
+
+      const weeklyResult = Array.from(weeklyDataMap.values());
+
+      // 4. 일별 검색 통계
+      const dailyData = await this.searchLogRepository
+        .createQueryBuilder('searchLog')
+        .select("DATE_FORMAT(searchLog.createdAt, '%Y-%m-%d')", 'date')
+        .addSelect('COUNT(searchLog.id)', 'count')
+        .where('searchLog.userId = :userId', { userId })
+        .andWhere('searchLog.createdAt >= :oneMonthAgo', { oneMonthAgo })
+        .groupBy('date')
+        .orderBy('date', 'ASC')
+        .getRawMany();
+
+      const dailyResult = this.mergeAndSortData(
+        this.generateEmptyDailySearchData(),
+        dailyData.map((item) => ({
+          date: item.date,
+          count: parseInt(item.count),
+        })),
+        'date',
+        30,
+      );
 
       // 월별 검색 패턴 분석
       const sixMonthsAgo = new Date();
@@ -2254,7 +3355,12 @@ export class StatisticsService {
       return {
         searchCount,
         topSearchTerms,
+        frequentlySearchedTerms,
         searchPattern,
+        yearly: yearlyResult,
+        monthly: monthlyResult,
+        weekly: weeklyResult,
+        daily: dailyResult,
         isPublic: true,
       };
     } catch (error) {
@@ -2269,111 +3375,6 @@ export class StatisticsService {
 
     // 간단한 기울기 계산 (마지막 값 - 첫 값) / 개수
     return (values[values.length - 1] - values[0]) / values.length;
-  }
-
-  async getBookMetadataStats(
-    userId: number,
-    requestUserId?: number,
-  ): Promise<BookMetadataStatsResponseDto> {
-    try {
-      // 설정 확인 - 다른 사용자가 요청한 경우 공개 설정 확인
-      if (requestUserId !== userId) {
-        const setting = await this.getOrCreateUserStatisticsSetting(userId);
-        if (!setting.isBookMetadataStatsPublic) {
-          return {
-            averageBookAge: 0,
-            translationRatio: 0,
-            publicationYearDistribution: [],
-            isPublic: false,
-          };
-        }
-      }
-
-      // 읽은 도서 목록 가져오기
-      const readBooksQuery = this.readingStatusRepository
-        .createQueryBuilder('status')
-        .leftJoinAndSelect('status.book', 'book')
-        .where('status.userId = :userId', { userId })
-        .andWhere('status.status = :status', {
-          status: ReadingStatusType.READ,
-        });
-
-      const readBooks = await readBooksQuery.getMany();
-
-      // 평균 도서 출간일로부터 경과 기간 (년)
-      let totalAgeInYears = 0;
-      let booksWithValidPubDate = 0;
-      const currentYear = new Date().getFullYear();
-
-      // 연도별 출판 분포 추적
-      const publicationYearCount = {};
-
-      // 번역서 vs 국내서 카운트
-      let translatedBooks = 0;
-      let totalBooksWithTranslatorInfo = 0;
-
-      readBooks.forEach((status) => {
-        const book = status.book;
-        if (!book) return;
-
-        // 출판 연도 분석
-        if (book.publishDate) {
-          const pubDate = new Date(book.publishDate);
-          const pubYear = pubDate.getFullYear();
-
-          // 출판 연도 분포 추가
-          publicationYearCount[pubYear] =
-            (publicationYearCount[pubYear] || 0) + 1;
-
-          // 도서 나이 계산
-          const ageInYears = currentYear - pubYear;
-          totalAgeInYears += ageInYears;
-          booksWithValidPubDate++;
-        }
-
-        // 번역서 여부 확인
-        if (book.translator !== undefined) {
-          totalBooksWithTranslatorInfo++;
-          if (book.translator && book.translator.trim() !== '') {
-            translatedBooks++;
-          }
-        }
-      });
-
-      // 평균 도서 나이 계산
-      const averageBookAge =
-        booksWithValidPubDate > 0 ? totalAgeInYears / booksWithValidPubDate : 0;
-
-      // 번역서 비율 계산
-      const translationRatio =
-        totalBooksWithTranslatorInfo > 0
-          ? (translatedBooks / totalBooksWithTranslatorInfo) * 100
-          : 0;
-
-      // 출판 연도별 분포를 배열로 변환
-      const publicationYearDistribution = Object.entries(publicationYearCount)
-        .map(([year, count]) => ({
-          year,
-          count: count as number,
-        }))
-        .sort((a, b) => parseInt(a.year) - parseInt(b.year));
-
-      return {
-        averageBookAge,
-        translationRatio,
-        publicationYearDistribution,
-        isPublic: true,
-      };
-    } catch (error) {
-      this.logger.error(`도서 메타데이터 통계 조회 중 오류: ${error.message}`);
-      // 오류 발생시 기본값 반환
-      return {
-        averageBookAge: 0,
-        translationRatio: 0,
-        publicationYearDistribution: [],
-        isPublic: true,
-      };
-    }
   }
 
   async getRecentPopularSearches(
@@ -2697,42 +3698,25 @@ export class StatisticsService {
     key: string,
     limit: number,
   ): T[] {
-    if (actualData.length === 0) {
-      return emptyData;
-    }
-
-    // key별로 데이터 매핑
-    const dataMap = new Map<string, T>();
-
-    // 빈 데이터 먼저 맵에 추가
+    // 빈 데이터와 실제 데이터 맵 생성
+    const dataMap: Record<string, T> = {};
     emptyData.forEach((item) => {
-      dataMap.set(item[key] as string, item);
+      dataMap[item[key]] = { ...item };
     });
 
-    // 실제 데이터로 매핑 덮어쓰기 (더 최신 데이터이므로)
+    // 실제 데이터 병합
     actualData.forEach((item) => {
-      dataMap.set(item[key] as string, item);
+      if (dataMap[item[key]]) {
+        dataMap[item[key]] = { ...dataMap[item[key]], ...item };
+      } else {
+        dataMap[item[key]] = { ...item };
+      }
     });
 
-    // 맵의 값을 배열로 변환하고 정렬
-    const result = Array.from(dataMap.values()).sort((a, b) => {
-      const aKey = a[key] as string;
-      const bKey = b[key] as string;
-      return aKey.localeCompare(bKey);
-    });
-
-    // 디버깅 로그 추가
-    this.logger.debug(
-      `mergeAndSortData - key: ${key}, emptyData: ${JSON.stringify(emptyData.map((item) => item[key]))}, actualData: ${JSON.stringify(actualData.map((item) => item[key]))}, result: ${JSON.stringify(result.map((item) => item[key]))}`,
-    );
-
-    // 데이터가 limit보다 적은 경우 모든 데이터 반환
-    if (result.length <= limit) {
-      return result;
-    }
-
-    // 최근 limit 개수만 반환
-    return result.slice(-limit);
+    // 키 기준 정렬하고 최근 limit개만 반환
+    return Object.values(dataMap)
+      .sort((a, b) => (a[key] < b[key] ? -1 : 1))
+      .slice(-limit);
   }
 
   // 날짜 포맷 헬퍼 (YYYY-MM-DD)
@@ -2965,6 +3949,835 @@ export class StatisticsService {
     }
 
     // 항상 5개 반환
+    return result;
+  }
+
+  // 사용자 상호작용 빈 연도별 데이터 생성 헬퍼 메소드
+  private generateEmptyYearlyInteractionData(count = 5): {
+    year: string;
+    count: number;
+  }[] {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+
+    for (let i = 0; i < count; i++) {
+      const year = (currentYear - count + 1 + i).toString();
+      years.push({
+        year,
+        count: 0,
+      });
+    }
+
+    return years;
+  }
+
+  private generateEmptyMonthlyInteractionData(count = 12): {
+    month: string;
+    count: number;
+  }[] {
+    const today = new Date();
+    const result = [];
+
+    for (let i = 0; i < count; i++) {
+      const date = new Date(today);
+      date.setMonth(date.getMonth() - count + 1 + i);
+      const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+      result.push({
+        month,
+        count: 0,
+      });
+    }
+
+    return result;
+  }
+
+  private generateEmptyWeeklyInteractionData(): {
+    week: string;
+    count: number;
+  }[] {
+    const today = new Date();
+    const result = [];
+
+    // 가장 최근 5주 데이터 생성
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(today);
+      // 최근 주부터 역순으로 계산 (0주 전, 1주 전, ...)
+      date.setDate(date.getDate() - i * 7);
+
+      const month = date.getMonth() + 1;
+      const weekOfMonth = Math.ceil(date.getDate() / 7);
+
+      result.push({
+        week: `${month}월 ${weekOfMonth}째주`,
+        count: 0,
+      });
+    }
+
+    // 가장 최근 주부터 보여주기 위해 역순 정렬
+    return result.reverse();
+  }
+
+  private generateEmptyDailyInteractionData(): {
+    date: string;
+    count: number;
+  }[] {
+    const today = new Date();
+    const result = [];
+
+    // 30일 전부터 현재까지
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - 29 + i);
+
+      result.push({
+        date: this.formatDate(date),
+        count: 0,
+      });
+    }
+
+    return result;
+  }
+
+  async getCommunityActivity(
+    userId: number,
+    requestUserId?: number,
+  ): Promise<CommunityActivityResponseDto> {
+    try {
+      this.logger.log(
+        `커뮤니티 활동 통계 조회 시작: userId=${userId}, requestUserId=${requestUserId}`,
+      );
+
+      // 설정 확인 - 다른 사용자가 요청한 경우 공개 설정 확인
+      if (requestUserId !== userId) {
+        const setting = await this.getOrCreateUserStatisticsSetting(userId);
+        if (!setting.isCommunityActivityPublic) {
+          return {
+            totalReviews: 0,
+            yearly: [],
+            monthly: [],
+            weekly: [],
+            daily: [],
+            isPublic: false,
+          };
+        }
+      }
+
+      // 작성한 총 리뷰 수
+      const totalReviews = await this.reviewRepository.count({
+        where: { authorId: userId },
+      });
+
+      this.logger.log(`총 리뷰 개수: ${totalReviews}`);
+
+      // 연도별 리뷰 타입별 데이터 (최근 5년)
+      const yearlyData = await this.reviewRepository
+        .createQueryBuilder('review')
+        .select("DATE_FORMAT(review.createdAt, '%Y')", 'year')
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'general' THEN 1 ELSE 0 END)",
+          'general',
+        )
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'discussion' THEN 1 ELSE 0 END)",
+          'discussion',
+        )
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'question' THEN 1 ELSE 0 END)",
+          'question',
+        )
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'meetup' THEN 1 ELSE 0 END)",
+          'meetup',
+        )
+        .where('review.authorId = :userId', { userId })
+        .groupBy('year')
+        .orderBy('year', 'DESC')
+        .limit(5)
+        .getRawMany();
+
+      this.logger.log(`연도별 리뷰 데이터: ${JSON.stringify(yearlyData)}`);
+
+      // 월별 리뷰 타입별 데이터 (최근 12개월)
+      const oneYearAgo = new Date();
+      oneYearAgo.setMonth(oneYearAgo.getMonth() - 12);
+
+      const monthlyData = await this.reviewRepository
+        .createQueryBuilder('review')
+        .select("DATE_FORMAT(review.createdAt, '%Y-%m')", 'month')
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'general' THEN 1 ELSE 0 END)",
+          'general',
+        )
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'discussion' THEN 1 ELSE 0 END)",
+          'discussion',
+        )
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'question' THEN 1 ELSE 0 END)",
+          'question',
+        )
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'meetup' THEN 1 ELSE 0 END)",
+          'meetup',
+        )
+        .where('review.authorId = :userId', { userId })
+        .andWhere('review.createdAt >= :oneYearAgo', { oneYearAgo })
+        .groupBy('month')
+        .orderBy('month', 'DESC')
+        .limit(5)
+        .getRawMany();
+
+      this.logger.log(`월별 리뷰 데이터: ${JSON.stringify(monthlyData)}`);
+
+      // 주별 리뷰 타입별 데이터 (최근 5주)
+      const fiveWeeksAgo = new Date();
+      fiveWeeksAgo.setDate(fiveWeeksAgo.getDate() - 35); // 5주 = 35일
+
+      const weeklyData = await this.reviewRepository
+        .createQueryBuilder('review')
+        .select(
+          "CONCAT(YEAR(review.createdAt), '-', WEEK(review.createdAt))",
+          'yearWeek',
+        )
+        .addSelect(
+          "CONCAT(MONTH(review.createdAt), '월 ', FLOOR((DAY(review.createdAt) - 1) / 7) + 1, '째주')",
+          'week',
+        )
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'general' THEN 1 ELSE 0 END)",
+          'general',
+        )
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'discussion' THEN 1 ELSE 0 END)",
+          'discussion',
+        )
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'question' THEN 1 ELSE 0 END)",
+          'question',
+        )
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'meetup' THEN 1 ELSE 0 END)",
+          'meetup',
+        )
+        .where('review.authorId = :userId', { userId })
+        .andWhere('review.createdAt >= :fiveWeeksAgo', { fiveWeeksAgo })
+        .groupBy('yearWeek, week')
+        .orderBy('yearWeek', 'DESC')
+        .limit(5)
+        .getRawMany();
+
+      this.logger.log(`주별 리뷰 데이터: ${JSON.stringify(weeklyData)}`);
+
+      // 일별 리뷰 타입별 데이터 (최근 5일)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const dailyData = await this.reviewRepository
+        .createQueryBuilder('review')
+        .select("DATE_FORMAT(review.createdAt, '%Y-%m-%d')", 'date')
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'general' THEN 1 ELSE 0 END)",
+          'general',
+        )
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'discussion' THEN 1 ELSE 0 END)",
+          'discussion',
+        )
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'question' THEN 1 ELSE 0 END)",
+          'question',
+        )
+        .addSelect(
+          "SUM(CASE WHEN review.type = 'meetup' THEN 1 ELSE 0 END)",
+          'meetup',
+        )
+        .where('review.authorId = :userId', { userId })
+        .andWhere('review.createdAt >= :sevenDaysAgo', { sevenDaysAgo })
+        .groupBy('date')
+        .orderBy('date', 'DESC')
+        .limit(5)
+        .getRawMany();
+
+      this.logger.log(`일별 리뷰 데이터: ${JSON.stringify(dailyData)}`);
+
+      // 빈 데이터 생성
+      const emptyYearlyData = this.generateEmptyYearlyCommunityData(5);
+      const emptyMonthlyData = this.generateEmptyMonthlyCommunityData(5);
+      const emptyWeeklyData = this.generateEmptyWeeklyCommunityData().slice(
+        0,
+        5,
+      );
+      const emptyDailyData = this.generateEmptyDailyCommunityData().slice(0, 5);
+
+      // 데이터가 전혀 없는 경우 빈 배열 넣기
+      if (totalReviews === 0) {
+        return {
+          totalReviews: 0,
+          yearly: emptyYearlyData.slice(0, 5),
+          monthly: emptyMonthlyData.slice(0, 5),
+          weekly: emptyWeeklyData.slice(0, 5),
+          daily: emptyDailyData.slice(0, 5),
+          isPublic: true,
+        };
+      }
+
+      // 실제 데이터 형식 변환 및 숫자로 변환
+      const formattedYearlyData = yearlyData.map((item) => ({
+        year: item.year,
+        general: parseInt(item.general, 10) || 0,
+        discussion: parseInt(item.discussion, 10) || 0,
+        question: parseInt(item.question, 10) || 0,
+        meetup: parseInt(item.meetup, 10) || 0,
+      }));
+
+      const formattedMonthlyData = monthlyData.map((item) => ({
+        month: item.month,
+        general: parseInt(item.general, 10) || 0,
+        discussion: parseInt(item.discussion, 10) || 0,
+        question: parseInt(item.question, 10) || 0,
+        meetup: parseInt(item.meetup, 10) || 0,
+      }));
+
+      const formattedWeeklyData = weeklyData.map((item) => ({
+        week: item.week,
+        general: parseInt(item.general, 10) || 0,
+        discussion: parseInt(item.discussion, 10) || 0,
+        question: parseInt(item.question, 10) || 0,
+        meetup: parseInt(item.meetup, 10) || 0,
+      }));
+
+      const formattedDailyData = dailyData.map((item) => ({
+        date: item.date,
+        general: parseInt(item.general, 10) || 0,
+        discussion: parseInt(item.discussion, 10) || 0,
+        question: parseInt(item.question, 10) || 0,
+        meetup: parseInt(item.meetup, 10) || 0,
+      }));
+
+      // 실제 데이터가 있는지 확인
+      this.logger.log(`정리된 데이터: 
+        연도별: ${JSON.stringify(formattedYearlyData)}, 
+        월별: ${JSON.stringify(formattedMonthlyData)}, 
+        주별: ${JSON.stringify(formattedWeeklyData)}, 
+        일별: ${JSON.stringify(formattedDailyData)}`);
+
+      // 빈 데이터와 실제 데이터 병합 (커스텀 병합 함수 필요)
+      let yearly = this.mergeAndSortCommunityData(
+        emptyYearlyData,
+        formattedYearlyData,
+        'year',
+        5,
+      );
+
+      let monthly = this.mergeAndSortCommunityData(
+        emptyMonthlyData,
+        formattedMonthlyData,
+        'month',
+        5,
+      );
+
+      let weekly = this.mergeWeeklyCommunityData(
+        emptyWeeklyData,
+        formattedWeeklyData,
+        5,
+      );
+
+      let daily = this.mergeAndSortCommunityData(
+        emptyDailyData,
+        formattedDailyData,
+        'date',
+        5,
+      );
+
+      // 최신 데이터부터 나오도록 역순 정렬
+      yearly = yearly.reverse();
+      monthly = monthly.reverse();
+      daily = daily.reverse();
+
+      // 데이터 개수 제한
+      yearly = yearly.slice(0, 5);
+      monthly = monthly.slice(0, 5);
+      weekly = weekly.slice(0, 5);
+      daily = daily.slice(0, 5);
+
+      // 병합 결과 로깅
+      this.logger.log(`병합된 데이터:
+        연도별: ${JSON.stringify(yearly)},
+        월별: ${JSON.stringify(monthly)},
+        주별: ${JSON.stringify(weekly)},
+        일별: ${JSON.stringify(daily)}`);
+
+      return {
+        totalReviews,
+        yearly,
+        monthly,
+        weekly,
+        daily,
+        isPublic: true,
+      };
+    } catch (error) {
+      this.logger.error(`커뮤니티 활동 통계 조회 중 오류: ${error.message}`);
+      this.logger.error(error.stack);
+
+      // 오류 발생 시 기본값 반환 대신 빈 데이터 생성해서 반환
+      const emptyYearlyData = this.generateEmptyYearlyCommunityData(5);
+      const emptyMonthlyData = this.generateEmptyMonthlyCommunityData(5).slice(
+        0,
+        5,
+      );
+      const emptyWeeklyData = this.generateEmptyWeeklyCommunityData().slice(
+        0,
+        5,
+      );
+      const emptyDailyData = this.generateEmptyDailyCommunityData().slice(0, 5);
+
+      return {
+        totalReviews: 0,
+        yearly: emptyYearlyData,
+        monthly: emptyMonthlyData,
+        weekly: emptyWeeklyData,
+        daily: emptyDailyData,
+        isPublic: true,
+      };
+    }
+  }
+
+  private generateEmptyYearlyCommunityData(count = 5): {
+    year: string;
+    general: number;
+    discussion: number;
+    question: number;
+    meetup: number;
+  }[] {
+    const result = [];
+    const currentYear = new Date().getFullYear();
+
+    for (let i = 0; i < count; i++) {
+      result.push({
+        year: String(currentYear - i),
+        general: 0,
+        discussion: 0,
+        question: 0,
+        meetup: 0,
+      });
+    }
+
+    return result;
+  }
+
+  private generateEmptyMonthlyCommunityData(count = 5): {
+    month: string;
+    general: number;
+    discussion: number;
+    question: number;
+    meetup: number;
+  }[] {
+    const result = [];
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 0-based를 1-based로 변환
+
+    for (let i = 0; i < count; i++) {
+      let year = currentYear;
+      let month = currentMonth - i;
+
+      // 이전 년도로 넘어가는 경우
+      while (month <= 0) {
+        year--;
+        month += 12;
+      }
+
+      // 월 포맷 (YY-MM)
+      const monthStr = month < 10 ? `0${month}` : `${month}`;
+      result.push({
+        month: `${year}-${monthStr}`,
+        general: 0,
+        discussion: 0,
+        question: 0,
+        meetup: 0,
+      });
+    }
+
+    return result;
+  }
+
+  private generateEmptyWeeklyCommunityData(): {
+    week: string;
+    general: number;
+    discussion: number;
+    question: number;
+    meetup: number;
+  }[] {
+    const result = [];
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // 0-based to 1-based
+
+    // 현재 날짜 기준으로 이번 주가 몇 번째 주인지 계산
+    const currentWeekOfMonth = Math.ceil(now.getDate() / 7);
+
+    // 지난 5주의 '월 n째주' 형식 데이터 생성
+    for (let i = 0; i < 5; i++) {
+      let month = currentMonth;
+      let weekOfMonth = currentWeekOfMonth - i;
+
+      // 전월로 넘어가는 경우
+      while (weekOfMonth <= 0) {
+        month = month - 1;
+        if (month <= 0) {
+          month = 12;
+        }
+        // 한 달에 대략 4주로 가정
+        weekOfMonth = 4 + weekOfMonth;
+      }
+
+      result.push({
+        week: `${month}월 ${weekOfMonth}째주`,
+        general: 0,
+        discussion: 0,
+        question: 0,
+        meetup: 0,
+      });
+    }
+
+    return result;
+  }
+
+  private generateEmptyDailyCommunityData(): {
+    date: string;
+    general: number;
+    discussion: number;
+    question: number;
+    meetup: number;
+  }[] {
+    const result = [];
+    const today = new Date();
+
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+
+      const monthStr = month < 10 ? `0${month}` : `${month}`;
+      const dayStr = day < 10 ? `0${day}` : `${day}`;
+
+      result.push({
+        date: `${year}-${monthStr}-${dayStr}`,
+        general: 0,
+        discussion: 0,
+        question: 0,
+        meetup: 0,
+      });
+    }
+
+    return result;
+  }
+
+  private mergeAndSortCommunityData(
+    emptyData: any[],
+    actualData: any[],
+    keyField: string,
+    limit: number,
+  ): any[] {
+    // 실제 데이터가 없으면 빈 데이터 반환
+    if (actualData.length === 0) {
+      return emptyData.slice(0, limit);
+    }
+
+    // keyField 값을 기준으로 데이터 맵 생성
+    const dataMap = new Map();
+
+    // 빈 데이터를 먼저 맵에 추가
+    emptyData.forEach((item) => {
+      dataMap.set(item[keyField], { ...item });
+    });
+
+    // 실제 데이터로 업데이트
+    actualData.forEach((item) => {
+      if (dataMap.has(item[keyField])) {
+        const existingItem = dataMap.get(item[keyField]);
+        dataMap.set(item[keyField], {
+          ...existingItem,
+          general: item.general,
+          discussion: item.discussion,
+          question: item.question,
+          meetup: item.meetup,
+        });
+      } else {
+        dataMap.set(item[keyField], { ...item });
+      }
+    });
+
+    // 맵을 배열로 변환
+    const result = Array.from(dataMap.values());
+
+    // keyField 값으로 정렬 (내림차순: 최신 데이터가 먼저)
+    result.sort((a, b) => {
+      if (a[keyField] > b[keyField]) return -1;
+      if (a[keyField] < b[keyField]) return 1;
+      return 0;
+    });
+
+    // 데이터 개수 제한
+    return result.slice(0, limit);
+  }
+
+  private mergeWeeklyCommunityData(
+    emptyData: {
+      week: string;
+      general: number;
+      discussion: number;
+      question: number;
+      meetup: number;
+    }[],
+    actualData: {
+      week: string;
+      general: number;
+      discussion: number;
+      question: number;
+      meetup: number;
+    }[],
+    limit: number,
+  ): {
+    week: string;
+    general: number;
+    discussion: number;
+    question: number;
+    meetup: number;
+  }[] {
+    // 빈 데이터와 실제 데이터 맵 생성
+    const dataMap: Record<string, any> = {};
+    emptyData.forEach((item) => {
+      dataMap[item.week] = { ...item };
+    });
+
+    // 실제 데이터 병합
+    actualData.forEach((item) => {
+      if (dataMap[item.week]) {
+        dataMap[item.week] = {
+          ...dataMap[item.week],
+          general: item.general,
+          discussion: item.discussion,
+          question: item.question,
+          meetup: item.meetup,
+        };
+      } else {
+        dataMap[item.week] = { ...item };
+      }
+    });
+
+    // 맵을 배열로 변환
+    const result = Object.values(dataMap);
+
+    // 주차 정보로 정렬 (최신 주 데이터가 먼저 오도록 역순 정렬)
+    result.sort((a, b) => {
+      const aMonth = parseInt(a.week.split('월')[0]);
+      const bMonth = parseInt(b.week.split('월')[0]);
+
+      // 월이 다르면 월로 정렬
+      if (aMonth !== bMonth) {
+        return bMonth - aMonth; // 내림차순 (최신 월이 먼저)
+      }
+
+      // 월이 같으면 주차로 정렬
+      const aWeek = parseInt(a.week.split('째주')[0].split('월 ')[1]);
+      const bWeek = parseInt(b.week.split('째주')[0].split('월 ')[1]);
+      return bWeek - aWeek; // 내림차순 (최신 주차가 먼저)
+    });
+
+    // 데이터 개수 제한
+    return result.slice(0, limit);
+  }
+
+  private generateEmptySubscriptionData(count = 5): {
+    date: string;
+    libraries: { library: string; subscribers: number }[];
+  }[] {
+    const result = [];
+    const today = new Date();
+
+    for (let i = 0; i < count; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+
+      result.push({
+        date: this.formatDate(date),
+        libraries: [],
+      });
+    }
+
+    return result.reverse();
+  }
+
+  private generateEmptyYearlySubscriptionData(count = 5): {
+    year: string;
+    libraries: { library: string; subscribers: number }[];
+  }[] {
+    const result = [];
+    const currentYear = new Date().getFullYear();
+
+    for (let i = 0; i < count; i++) {
+      result.push({
+        year: String(currentYear - i),
+        libraries: [],
+      });
+    }
+
+    return result.reverse();
+  }
+
+  private generateEmptyMonthlySubscriptionData(count = 5): {
+    month: string;
+    libraries: { library: string; subscribers: number }[];
+  }[] {
+    const result = [];
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 0-based를 1-based로 변환
+
+    for (let i = 0; i < count; i++) {
+      let year = currentYear;
+      let month = currentMonth - i;
+
+      // 이전 년도로 넘어가는 경우
+      while (month <= 0) {
+        year--;
+        month += 12;
+      }
+
+      // 월 포맷 (YYYY-MM)
+      const monthStr = month < 10 ? `0${month}` : `${month}`;
+      result.push({
+        month: `${year}-${monthStr}`,
+        libraries: [],
+      });
+    }
+
+    return result.reverse();
+  }
+
+  private generateEmptyWeeklySubscriptionData(): {
+    week: string;
+    libraries: { library: string; subscribers: number }[];
+  }[] {
+    const result = [];
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1; // 0-based to 1-based
+
+    // 현재 날짜 기준으로 이번 주가 몇 번째 주인지 계산
+    const currentWeekOfMonth = Math.ceil(now.getDate() / 7);
+
+    // 지난 5주의 '월 n째주' 형식 데이터 생성
+    for (let i = 0; i < 5; i++) {
+      let month = currentMonth;
+      let weekOfMonth = currentWeekOfMonth - i;
+
+      // 전월로 넘어가는 경우
+      while (weekOfMonth <= 0) {
+        month = month - 1;
+        if (month <= 0) {
+          month = 12;
+        }
+        // 한 달에 대략 4주로 가정
+        weekOfMonth = 4 + weekOfMonth;
+      }
+
+      result.push({
+        week: `${month}월 ${weekOfMonth}째주`,
+        libraries: [],
+      });
+    }
+
+    return result.reverse();
+  }
+
+  // Empty search data helper methods
+  private generateEmptyYearlySearchData(count = 5): {
+    year: string;
+    count: number;
+  }[] {
+    const currentYear = new Date().getFullYear();
+    const result = [];
+
+    for (let i = 0; i < count; i++) {
+      const year = (currentYear - count + 1 + i).toString();
+      result.push({
+        year,
+        count: 0,
+      });
+    }
+
+    return result;
+  }
+
+  private generateEmptyMonthlySearchData(count = 12): {
+    month: string;
+    count: number;
+  }[] {
+    const today = new Date();
+    const result = [];
+
+    for (let i = 0; i < count; i++) {
+      const date = new Date(today);
+      date.setMonth(date.getMonth() - count + 1 + i);
+      const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+      result.push({
+        month,
+        count: 0,
+      });
+    }
+
+    return result;
+  }
+
+  private generateEmptyWeeklySearchData(): {
+    week: string;
+    count: number;
+  }[] {
+    const today = new Date();
+    const result = [];
+
+    // 가장 최근 5주 데이터 생성
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(today);
+      // 최근 주부터 역순으로 계산 (0주 전, 1주 전, ...)
+      date.setDate(date.getDate() - i * 7);
+
+      const month = date.getMonth() + 1;
+      const weekOfMonth = Math.ceil(date.getDate() / 7);
+
+      result.push({
+        week: `${month}월 ${weekOfMonth}째주`,
+        count: 0,
+      });
+    }
+
+    // 가장 최근 주부터 보여주기 위해 역순 정렬
+    return result.reverse();
+  }
+
+  private generateEmptyDailySearchData(): {
+    date: string;
+    count: number;
+  }[] {
+    const today = new Date();
+    const result = [];
+
+    // 30일 전부터 현재까지
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - 29 + i);
+
+      result.push({
+        date: this.formatDate(date),
+        count: 0,
+      });
+    }
+
     return result;
   }
 }
