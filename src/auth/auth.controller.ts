@@ -11,6 +11,8 @@ import {
 import { VerifyCodeDto } from './dto/verify-code.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { UpdateUserInfoDto } from './dto/update-user-info.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { UserService } from '../user/user.service';
 import { CheckEmailDto } from './dto/check-email.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -129,6 +131,22 @@ export class AuthController {
     @Body() updateUserInfoDto: UpdateUserInfoDto,
   ) {
     return this.authService.updateUserInfo(user.id, updateUserInfoDto);
+  }
+
+  @Post('change-password')
+  async changePassword(
+    @GetUser() user: User,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(user.id, changePasswordDto);
+  }
+
+  @Post('delete-account')
+  async deleteAccount(
+    @GetUser() user: User,
+    @Body() deleteAccountDto: DeleteAccountDto,
+  ) {
+    return this.authService.deleteAccount(user.id, deleteAccountDto);
   }
 
   @Get('google')

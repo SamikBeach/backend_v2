@@ -18,6 +18,8 @@ import { EmailService } from '../common/services/email.service';
 import { RegisterDto } from './dto/register.dto';
 import { CompleteRegistrationDto } from './dto/complete-registration.dto';
 import { UpdateUserInfoDto } from './dto/update-user-info.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 
 // OAuth 사용자 정보 인터페이스
@@ -609,5 +611,73 @@ export class AuthService {
       email: user.email,
       username: user.username,
     };
+  }
+
+  async changePassword(userId: number, changePasswordDto: ChangePasswordDto) {
+    const user = await this.userService.findOne(userId);
+
+    if (!user) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+
+    // 로컬 계정만 비밀번호 변경 가능
+    if (user.provider !== AuthProvider.LOCAL) {
+      throw new UnauthorizedException(
+        '로컬 계정만 비밀번호 변경이 가능합니다.',
+      );
+    }
+
+    // 현재 비밀번호 확인
+    const isPasswordValid = await bcrypt.compare(
+      changePasswordDto.currentPassword,
+      user.password,
+    );
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('현재 비밀번호가 일치하지 않습니다.');
+    }
+
+    // 새 비밀번호 설정
+    const hashedPassword = await bcrypt.hash(changePasswordDto.newPassword, 10);
+    await this.userService.updatePassword(userId, hashedPassword);
+
+    return {
+      message: '비밀번호가 성공적으로 변경되었습니다.',
+    };
+  }
+
+  async deleteAccount(userId: number, deleteAccountDto: DeleteAccountDto) {
+    const user = await this.userService.findOne(userId);
+
+    if (!user) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+
+    // 소셜 계정 확인
+    if (user.provider !== AuthProvider.LOCAL) {
+      // 소셜 계정은 비밀번호 검증 없이 삭제
+      await this.userService.deleteAccount(userId);
+      return { message: '계정이 성공적으로 삭제되었습니다.' };
+    }
+
+    // 로컬 계정은 비밀번호 검증 필요
+    if (!user.password) {
+      throw new UnauthorizedException('비밀번호가 설정되지 않은 계정입니다.');
+    }
+
+    // 비밀번호 검증
+    const isPasswordValid = await bcrypt.compare(
+      deleteAccountDto.password,
+      user.password,
+    );
+
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('비밀번호가 일치하지 않습니다.');
+    }
+
+    // 계정 삭제
+    await this.userService.deleteAccount(userId);
+
+    return { message: '계정이 성공적으로 삭제되었습니다.' };
   }
 }

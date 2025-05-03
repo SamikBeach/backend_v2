@@ -22,6 +22,13 @@ import {
 } from '../search/search.entity';
 import { Category } from '../category/entities/category.entity';
 import { SubCategory } from '../category/entities/subcategory.entity';
+import { ReadingStatusStatisticsService } from './services/reading-status-statistics.service';
+import { ReviewRatingStatisticsService } from './services/review-rating-statistics.service';
+import { CommunityActivityStatisticsService } from './services/community-activity-statistics.service';
+import { LibraryStatisticsService } from './services/library-statistics.service';
+import { MiscStatisticsService } from './services/misc-statistics.service';
+import { StatisticsSettingsService } from './services/statistics-settings.service';
+import { CommonStatisticsService } from './services/common-statistics.service';
 
 @Module({
   imports: [
@@ -47,7 +54,25 @@ import { SubCategory } from '../category/entities/subcategory.entity';
       SubCategory,
     ]),
   ],
-  providers: [StatisticsService],
-  exports: [StatisticsService],
+  providers: [
+    StatisticsService,
+    ReadingStatusStatisticsService,
+    ReviewRatingStatisticsService,
+    CommunityActivityStatisticsService,
+    LibraryStatisticsService,
+    MiscStatisticsService,
+    StatisticsSettingsService,
+    CommonStatisticsService,
+  ],
+  exports: [
+    StatisticsService,
+    ReadingStatusStatisticsService,
+    ReviewRatingStatisticsService,
+    CommunityActivityStatisticsService,
+    LibraryStatisticsService,
+    MiscStatisticsService,
+    StatisticsSettingsService,
+    CommonStatisticsService,
+  ],
 })
 export class StatisticsModule {}

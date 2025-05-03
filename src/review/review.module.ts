@@ -70,7 +70,7 @@ import { RatingModule } from '../rating/rating.module';
     CommonModule,
     forwardRef(() => BookModule),
     forwardRef(() => UserModule),
-    NotificationModule,
+    forwardRef(() => NotificationModule),
     forwardRef(() => RatingModule),
   ],
   controllers: [ReviewController],

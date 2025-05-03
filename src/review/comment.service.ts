@@ -92,6 +92,8 @@ export class CommentService {
           review.authorId,
           user.id,
           user.username || '사용자',
+          savedComment.id,
+          savedComment.content,
         );
       }
 
@@ -290,8 +292,9 @@ export class CommentService {
       if (comment.authorId !== userId) {
         const username =
           (await this.userService.findOne(userId)).username || '사용자';
-        await this.notificationService.createCommentNotification(
+        await this.notificationService.createCommentLikeNotification(
           comment.reviewId,
+          comment.id,
           comment.authorId,
           userId,
           username,

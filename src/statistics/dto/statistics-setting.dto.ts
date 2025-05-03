@@ -64,10 +64,10 @@ export class UpdateStatisticsSettingDto {
   @IsOptional()
   isFollowerStatsPublic?: boolean;
 
-  @ApiProperty({ description: '댓글 활동 통계 공개 여부', required: false })
+  @ApiProperty({ description: '커뮤니티 활동 통계 공개 여부', required: false })
   @IsBoolean()
   @IsOptional()
-  isCommentActivityPublic?: boolean;
+  isCommunityActivityPublic?: boolean;
 
   @ApiProperty({ description: '리뷰 영향력 통계 공개 여부', required: false })
   @IsBoolean()
@@ -92,28 +92,10 @@ export class UpdateStatisticsSettingDto {
   @IsOptional()
   isLibraryUpdatePatternPublic?: boolean;
 
-  @ApiProperty({ description: '서재 다양성 통계 공개 여부', required: false })
-  @IsBoolean()
-  @IsOptional()
-  isLibraryDiversityPublic?: boolean;
-
-  @ApiProperty({ description: '금액 통계 공개 여부', required: false })
-  @IsBoolean()
-  @IsOptional()
-  isAmountStatsPublic?: boolean;
-
   @ApiProperty({ description: '검색 활동 통계 공개 여부', required: false })
   @IsBoolean()
   @IsOptional()
   isSearchActivityPublic?: boolean;
-
-  @ApiProperty({
-    description: '도서 메타데이터 통계 공개 여부',
-    required: false,
-  })
-  @IsBoolean()
-  @IsOptional()
-  isBookMetadataStatsPublic?: boolean;
 }
 
 export class StatisticsSettingResponseDto {
@@ -147,8 +129,8 @@ export class StatisticsSettingResponseDto {
   @ApiProperty({ description: '팔로워/팔로잉 통계 공개 여부' })
   isFollowerStatsPublic: boolean;
 
-  @ApiProperty({ description: '댓글 활동 통계 공개 여부' })
-  isCommentActivityPublic: boolean;
+  @ApiProperty({ description: '커뮤니티 활동 통계 공개 여부' })
+  isCommunityActivityPublic: boolean;
 
   @ApiProperty({ description: '리뷰 영향력 통계 공개 여부' })
   isReviewInfluencePublic: boolean;
@@ -162,15 +144,6 @@ export class StatisticsSettingResponseDto {
   @ApiProperty({ description: '서재 업데이트 패턴 통계 공개 여부' })
   isLibraryUpdatePatternPublic: boolean;
 
-  @ApiProperty({ description: '서재 다양성 통계 공개 여부' })
-  isLibraryDiversityPublic: boolean;
-
-  @ApiProperty({ description: '금액 통계 공개 여부' })
-  isAmountStatsPublic: boolean;
-
   @ApiProperty({ description: '검색 활동 통계 공개 여부' })
   isSearchActivityPublic: boolean;
-
-  @ApiProperty({ description: '도서 메타데이터 통계 공개 여부' })
-  isBookMetadataStatsPublic: boolean;
 }
