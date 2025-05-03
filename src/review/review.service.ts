@@ -862,18 +862,19 @@ export class ReviewService {
         );
 
         try {
-          // ISBN으로 책 조회 (saveToDb=true로 설정하여 DB에 저장하도록 수정)
-          const book = await this.bookService.getBookDetailByIsbn(isbn, true);
+          // ISBN으로 책 조회 (saveToDb=false로 설정하여 DB에 저장하지 않음)
+          const book = await this.bookService.getBookDetailByIsbn(isbn, false);
           this.logger.log(`ISBN ${isbn}로 책을 찾았습니다. ID: ${book.id}`);
 
           // DB에 이미 존재하는 책인 경우에만 실제 bookId로 검색 진행
-          if (book.id > 0) {
+          if (book && book.id > 0) {
             bookId = book.id;
-            this.logger.log(`새로운 BookID로 검색 진행: ${bookId}`);
+            this.logger.log(`기존 책 ID로 검색 진행: ${bookId}`);
           } else {
-            // 책이 DB에 없는 경우 빈 결과 반환 (이 부분은 이제 발생하지 않아야 함)
-            this.logger.log(`책 ID가 아직 유효하지 않습니다: ${book.id}`);
+            // 책이 DB에 없는 경우 빈 결과 반환
+            this.logger.log(`책이 DB에 존재하지 않아 빈 결과 반환`);
             return {
+              book: book && book.id < 0 ? book : null,
               data: [],
               meta: {
                 total: 0,

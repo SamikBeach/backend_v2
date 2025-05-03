@@ -21,6 +21,7 @@ import {
   AladinSort,
   AladinSearchTarget,
   AladinCover,
+  AladinBook,
 } from '../common/services/aladin.service';
 import { CategoryService } from '../category/category.service';
 import { SubCategoryService } from '../category/subcategory.service';
@@ -29,6 +30,10 @@ import { SearchBookDto } from './dto/search-book.dto';
 import { SearchService } from '../search/search.service';
 import { RatingService } from '../rating/rating.service';
 import { ReadingStatusService } from '../reading-status/reading-status.service';
+import { CreateCategoryDto } from '../category/dto/create-category.dto';
+import { CreateSubCategoryDto } from '../category/dto/create-subcategory.dto';
+import { Category } from '../category/entities/category.entity';
+import { SubCategory } from '../category/entities/subcategory.entity';
 
 @Injectable()
 export class BookService {
@@ -976,19 +981,13 @@ export class BookService {
             // 새 책 정보 생성
             const bookData = this.aladinService.extractBookData(item);
 
-            // 카테고리 처리 (알라딘 카테고리 ID와 매핑 필요)
-            let categoryId = 1; // 기본 카테고리
-            let subcategoryId = null;
+            // 카테고리 및 서브카테고리 처리
+            const { category, subcategory } = await this.processBookCategories(
+              item,
+              false,
+            );
 
             try {
-              const category = await this.categoryService.findOne(categoryId);
-              let subcategory = null;
-
-              if (subcategoryId) {
-                subcategory =
-                  await this.subCategoryService.findOne(subcategoryId);
-              }
-
               // 검색 시에는 DB에 저장하지 않고 메모리 상의 Book 객체만 생성
               const bookObject = {
                 ...bookData,
@@ -1099,19 +1098,13 @@ export class BookService {
             // 새 책 정보 생성 및 저장
             const bookData = this.aladinService.extractBookData(item);
 
-            // 카테고리 처리
-            let categoryId = 1; // 기본 카테고리
-            let subcategoryId = null;
+            // 카테고리 및 서브카테고리 처리
+            const { category, subcategory } = await this.processBookCategories(
+              item,
+              false,
+            );
 
             try {
-              const category = await this.categoryService.findOne(categoryId);
-              let subcategory = null;
-
-              if (subcategoryId) {
-                subcategory =
-                  await this.subCategoryService.findOne(subcategoryId);
-              }
-
               // 검색 시에는 DB에 저장하지 않고 메모리 상의 Book 객체만 생성
               const bookObject = {
                 ...bookData,
@@ -1192,7 +1185,7 @@ export class BookService {
       // 알라딘 API 호출
       const result = await this.aladinService.getBookList(aladinParams);
 
-      // 결과 처리 (베스트셀러와 유사)
+      // 결과가 없으면 빈 배열 반환
       if (!result || !result.item || result.item.length === 0) {
         return {
           books: [],
@@ -1212,12 +1205,15 @@ export class BookService {
             const bookData = this.aladinService.extractBookData(item);
 
             try {
-              const category = await this.categoryService.findOne(1); // 기본 카테고리
+              // 카테고리 및 서브카테고리 처리
+              const { category, subcategory } =
+                await this.processBookCategories(item, false);
 
               // 검색 시에는 DB에 저장하지 않고 메모리 상의 Book 객체만 생성
               const bookObject = {
                 ...bookData,
                 category,
+                subcategory,
                 // ISBN 필드 명시적 포함
                 isbn: bookData.isbn || item.isbn,
                 isbn13: bookData.isbn13 || item.isbn13,
@@ -1277,35 +1273,21 @@ export class BookService {
   ): Promise<Book> {
     this.logger.log(`[getBookDetailByIsbn] 요청받은 ISBN: ${isbnParam}`);
 
-    // 이미 DB에 있는지 확인 (ISBN 또는 ISBN13으로 검색)
-    let book = await this.findByIsbn(isbnParam);
-
-    if (book) {
-      this.logger.log(
-        `[getBookDetailByIsbn] 기존 책 발견: ID ${book.id}, ISBN: ${book.isbn}, ISBN13: ${book.isbn13}`,
-      );
-      return book;
-    }
-
-    // ISBN13 형식이지만 하이픈이 있는 경우 하이픈 제거하고 다시 검색
-    if (isbnParam.includes('-')) {
-      const cleanIsbn = isbnParam.replace(/-/g, '');
-      this.logger.log(
-        `[getBookDetailByIsbn] 하이픈 제거 후 재검색: ${cleanIsbn}`,
-      );
-      book = await this.findByIsbn(cleanIsbn);
-
-      if (book) {
+    // 이미 DB에 있는지 확인
+    try {
+      const existingBook = await this.findByIsbn(isbnParam);
+      if (existingBook) {
         this.logger.log(
-          `[getBookDetailByIsbn] 하이픈 제거 후 책 발견: ID ${book.id}, ISBN: ${book.isbn}, ISBN13: ${book.isbn13}`,
+          `[getBookDetailByIsbn] 기존 DB 레코드 사용: ISBN ${isbnParam}`,
         );
-        return book;
+        return existingBook;
       }
+    } catch (error) {
+      this.logger.log(
+        `[getBookDetailByIsbn] 기존 DB에 ISBN ${isbnParam} 존재하지 않음: ${error.message}`,
+      );
+      // 기존 책이 없는 경우, 계속해서 API 호출
     }
-
-    this.logger.log(
-      `[getBookDetailByIsbn] DB에서 책을 찾을 수 없음, 알라딘 API 호출 시도`,
-    );
 
     try {
       // 알라딘 API로 도서 정보 가져오기
@@ -1343,22 +1325,17 @@ export class BookService {
         `[getBookDetailByIsbn] 알라딘에서 가져온 정보 - ISBN: ${bookData.isbn}, ISBN13: ${bookData.isbn13}`,
       );
 
-      // 카테고리 처리 (기본값 사용)
-      let category = null;
-      try {
-        category = await this.categoryService.findOne(1);
-      } catch (error) {
-        this.logger.warn(
-          `[getBookDetailByIsbn] 기본 카테고리(ID: 1)를 찾을 수 없습니다. 카테고리 없이 진행합니다.`,
-          error.message,
-        );
-        // 카테고리가 없어도 계속 진행
-      }
+      // 카테고리 및 서브카테고리 처리
+      const { category, subcategory } = await this.processBookCategories(
+        item,
+        saveToDb,
+      );
 
       // 책 데이터 객체 생성
       const bookObject = {
         ...bookData,
-        category, // 카테고리가 null이어도 진행
+        category,
+        subcategory,
         // ISBN과 ISBN13이 항상 포함되도록 명시
         isbn: bookData.isbn || isbnParam,
         isbn13:
@@ -1404,19 +1381,9 @@ export class BookService {
       }
     } catch (error) {
       this.logger.error(
-        `[getBookDetailByIsbn] 도서 상세 정보 조회 오류: ${error.message}`,
-        error.stack,
+        `[getBookDetailByIsbn] 도서 상세 정보 조회 오류 (ISBN: ${isbnParam}): ${error.message}`,
       );
-
-      if (error.response) {
-        this.logger.error(
-          `[getBookDetailByIsbn] API 응답 오류: ${JSON.stringify(error.response.data)}, 상태: ${error.response.status}`,
-        );
-      }
-
-      throw new NotFoundException(
-        `ISBN ${isbnParam}으로 도서를 찾을 수 없습니다.`,
-      );
+      throw error;
     }
   }
 
@@ -1514,10 +1481,17 @@ export class BookService {
         category = await this.categoryService.findOne(1);
       }
 
+      // 서브카테고리 참조 확인
+      let subcategory = book.subcategory;
+      if (!subcategory && book.subcategoryId) {
+        subcategory = await this.subCategoryService.findOne(book.subcategoryId);
+      }
+
       // 책 저장
       const savedBook = await this.bookRepository.save({
         ...bookData,
         category,
+        subcategory,
       });
 
       this.logger.log(
@@ -1619,5 +1593,134 @@ export class BookService {
       userRating: null,
       userReadingStatus: null,
     };
+  }
+
+  /**
+   * 알라딘 API의 카테고리 정보를 파싱하고 처리
+   * @param item 알라딘 API 응답의 책 정보
+   * @param saveToDb 책이 DB에 저장될 예정인지 여부
+   * @returns 카테고리와 서브카테고리 정보
+   */
+  async processBookCategories(
+    item: AladinBook,
+    saveToDb: boolean = false,
+  ): Promise<{
+    category: Category;
+    subcategory: SubCategory | null;
+  }> {
+    try {
+      let categoryName: string | null = null;
+      let subcategoryName: string | null = null;
+
+      // categoryName 필드에서 카테고리 정보 추출
+      if (item.categoryName) {
+        this.logger.log(`카테고리 정보 파싱: ${item.categoryName}`);
+        const categories = item.categoryName.split('>');
+
+        // "국내도서>에세이>한국에세이" 구조에서 "에세이"와 "한국에세이" 추출
+        if (categories.length >= 2) {
+          // 첫 번째 항목 "국내도서"는 무시하고 두 번째 항목을 카테고리로 설정
+          categoryName = categories[1].trim();
+
+          // 세 번째 항목이 존재하면 서브카테고리로 설정
+          if (categories.length >= 3) {
+            subcategoryName = categories[2].trim();
+          }
+        }
+      }
+
+      // 카테고리 정보가 없는 경우
+      if (!categoryName) {
+        // 알라딘에서 받은 정보에서 최소한의 정보로 임시 카테고리 생성
+        const tempCategoryName = item.categoryName
+          ? item.categoryName.split('>')[0].trim()
+          : '분류 없음';
+
+        const tempCategory = {
+          id: -1,
+          name: tempCategoryName,
+          subCategories: [],
+        } as Category;
+
+        return {
+          category: tempCategory,
+          subcategory: null,
+        };
+      }
+
+      // 카테고리 이름으로 검색
+      let category = await this.categoryService.findByName(categoryName);
+
+      // 카테고리 처리
+      if (!category) {
+        if (saveToDb) {
+          // 카테고리가 없고 책을 DB에 저장할 예정인 경우에만 새로 생성
+          this.logger.log(`새 카테고리 생성: ${categoryName}`);
+          const createCategoryDto: CreateCategoryDto = { name: categoryName };
+          category = await this.categoryService.create(createCategoryDto);
+        } else {
+          // 저장하지 않는 경우 알라딘에서 받은 정보로 임시 카테고리 생성
+          category = {
+            id: -1,
+            name: categoryName,
+            subCategories: [],
+          } as Category;
+        }
+      }
+
+      // 서브카테고리 처리
+      let subcategory: SubCategory | null = null;
+      if (subcategoryName && category) {
+        // 해당 카테고리에 속한 서브카테고리 이름으로 검색
+        subcategory = await this.categoryService.findSubCategoryByName(
+          subcategoryName,
+          category.id,
+        );
+
+        // 서브카테고리 처리
+        if (!subcategory) {
+          if (saveToDb) {
+            // 서브카테고리가 없고 책을 DB에 저장할 예정인 경우에만 새로 생성
+            this.logger.log(
+              `새 서브카테고리 생성: ${subcategoryName} (카테고리: ${categoryName})`,
+            );
+            const createSubCategoryDto: CreateSubCategoryDto = {
+              name: subcategoryName,
+            };
+            subcategory = await this.categoryService.createSubCategory(
+              category.id,
+              createSubCategoryDto,
+            );
+          } else {
+            // 저장하지 않는 경우 알라딘에서 받은 정보로 임시 서브카테고리 생성
+            subcategory = {
+              id: -1,
+              name: subcategoryName,
+              category: category,
+            } as SubCategory;
+          }
+        }
+      }
+
+      return { category, subcategory };
+    } catch (error) {
+      this.logger.error(`카테고리 처리 중 오류: ${error.message}`);
+
+      // 오류 발생 시 알라딘 데이터로 임시 카테고리 객체 반환
+      const tempCategoryName = item.categoryName
+        ? item.categoryName.split('>')[0].trim()
+        : '임시 카테고리';
+
+      const tempCategory = {
+        id: -1,
+        name: tempCategoryName,
+        subCategories: [],
+      } as Category;
+
+      return {
+        category: tempCategory,
+        subcategory: null,
+      };
+    }
   }
 }

@@ -83,7 +83,8 @@ export class BookController {
   ): Promise<BookResponse> {
     try {
       // getBookDetailByIsbn 메서드는 DB에 없으면 알라딘에서 가져와 동일한 Book 형식으로 반환합니다.
-      const book = await this.bookService.getBookDetailByIsbn(isbn);
+      // 명시적으로 saveToDb=false를 설정하여 검색 시에는 DB에 저장하지 않습니다.
+      const book = await this.bookService.getBookDetailByIsbn(isbn, false);
 
       // 서비스 메서드를 사용하여 책 정보를 사용자별 데이터와 통합
       return await this.bookService.enrichBookWithUserData(book, user?.id);

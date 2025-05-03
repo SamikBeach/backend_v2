@@ -103,4 +103,30 @@ export class CategoryService {
     Object.assign(category, updateCategoryDto);
     return await this.categoryRepository.save(category);
   }
+
+  /**
+   * 카테고리 이름으로 조회
+   */
+  async findByName(name: string): Promise<Category | null> {
+    return await this.categoryRepository.findOne({
+      where: { name },
+      relations: ['subCategories'],
+    });
+  }
+
+  /**
+   * 특정 카테고리에 속한 서브카테고리를 이름으로 조회
+   */
+  async findSubCategoryByName(
+    name: string,
+    categoryId: number,
+  ): Promise<SubCategory | null> {
+    return await this.subCategoryRepository.findOne({
+      where: {
+        name,
+        category: { id: categoryId },
+      },
+      relations: ['category'],
+    });
+  }
 }
