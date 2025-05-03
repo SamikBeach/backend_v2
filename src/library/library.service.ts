@@ -64,12 +64,17 @@ export class LibraryService {
     private readonly librarySubscriptionRepository: Repository<LibrarySubscription>,
     @InjectRepository(LibraryUpdateHistory)
     private readonly libraryUpdateHistoryRepository: Repository<LibraryUpdateHistory>,
+    @Inject(forwardRef(() => BookService))
     private readonly bookService: BookService,
+    @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
     @Inject(forwardRef(() => LibraryTagService))
     private readonly libraryTagService: LibraryTagService,
+    @Inject(forwardRef(() => NotificationService))
     private readonly notificationService: NotificationService,
+    @Inject(forwardRef(() => ReadingStatusService))
     private readonly readingStatusService: ReadingStatusService,
+    @Inject(forwardRef(() => RatingService))
     private readonly ratingService: RatingService,
   ) {}
 
@@ -1629,5 +1634,72 @@ export class LibraryService {
       createdAt: library.createdAt,
       updatedAt: library.updatedAt,
     };
+  }
+
+  /**
+   * 책 ID 배열을 받아 각 책별 서재에 담긴 수를 계산하여 반환
+   * @param bookIds 책 ID 배열
+   * @returns 책 ID와 서재에 담긴 수를 포함한 객체 배열
+   */
+  async getLibraryCountsByBooks(
+    bookIds: number[],
+  ): Promise<Array<{ bookId: number; libraryCount: number }>> {
+    if (!bookIds || bookIds.length === 0) {
+      return [];
+    }
+
+    try {
+      // 책 ID 목록에 대한 서재 담긴 수 집계 쿼리
+      const libraryCounts = await this.libraryBookRepository
+        .createQueryBuilder('libraryBook')
+        .select('libraryBook.bookId', 'bookId')
+        .addSelect('COUNT(DISTINCT libraryBook.libraryId)', 'libraryCount')
+        .where('libraryBook.bookId IN (:...bookIds)', { bookIds })
+        .groupBy('libraryBook.bookId')
+        .getRawMany();
+
+      this.logger.log(
+        `서재 담긴 수 집계 결과: ${libraryCounts.length}개 책에 대한 정보 조회됨`,
+      );
+
+      // 결과를 객체 배열로 변환
+      const countResult = libraryCounts.map((item) => ({
+        bookId: Number(item.bookId),
+        libraryCount: Number(item.libraryCount),
+      }));
+
+      // 결과에 없는 책 ID는 서재에 담긴 수 0으로 추가
+      const resultMap = new Map(countResult.map((item) => [item.bookId, item]));
+
+      for (const bookId of bookIds) {
+        if (!resultMap.has(bookId)) {
+          countResult.push({ bookId, libraryCount: 0 });
+        }
+      }
+
+      // 서재 담긴 수로 내림차순 정렬
+      countResult.sort((a, b) => {
+        if (b.libraryCount !== a.libraryCount) {
+          return b.libraryCount - a.libraryCount; // 서재 카운트 내림차순
+        }
+        return a.bookId - b.bookId; // 같은 경우 ID 오름차순
+      });
+
+      // 로깅: 상위 5개 항목 (있는 경우)
+      if (countResult.length > 0) {
+        const top5 = countResult.slice(0, Math.min(5, countResult.length));
+        this.logger.log(
+          `서재 담긴 순 상위 ${top5.length}개: ${top5
+            .map((item) => `ID:${item.bookId}(${item.libraryCount}권)`)
+            .join(', ')}`,
+        );
+      }
+
+      return countResult;
+    } catch (error) {
+      this.logger.error(`책별 서재 담긴 수 집계 중 오류: ${error.message}`);
+      // 오류 발생 시 기본값 반환
+      return bookIds.map((bookId) => ({ bookId, libraryCount: 0 }));
+    }
   }
 }

@@ -90,7 +90,7 @@ export class BookController {
     name: 'sort',
     required: false,
     enum: PopularBooksSortOptions,
-    description: '정렬 방식 (별점순, 리뷰순, 서재순, 출판일순, 가나다순)',
+    description: '정렬 방식 (별점순, 리뷰순, 라이브러리순, 출판일순, 가나다순)',
   })
   @ApiQuery({
     name: 'timeRange',

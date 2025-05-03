@@ -30,6 +30,7 @@ import { SearchBookDto } from './dto/search-book.dto';
 import { SearchService } from '../search/search.service';
 import { RatingService } from '../rating/rating.service';
 import { ReadingStatusService } from '../reading-status/reading-status.service';
+import { LibraryService } from '../library/library.service';
 import { CreateCategoryDto } from '../category/dto/create-category.dto';
 import { CreateSubCategoryDto } from '../category/dto/create-subcategory.dto';
 import { Category } from '../category/entities/category.entity';
@@ -52,6 +53,8 @@ export class BookService {
     private readonly ratingService: RatingService,
     @Inject(forwardRef(() => ReadingStatusService))
     private readonly readingStatusService: ReadingStatusService,
+    @Inject(forwardRef(() => LibraryService))
+    private readonly libraryService: LibraryService,
   ) {}
 
   /**
@@ -1728,7 +1731,7 @@ export class BookService {
    * 인기 도서 조회 통합 API (카테고리/서브카테고리 필터링 및 페이징 지원)
    * @param categoryId 카테고리 ID (선택)
    * @param subcategoryId 서브카테고리 ID (선택)
-   * @param sort 정렬 방식 (rating-desc, reviews-desc, shelf-desc, publishDate-desc, publishDate-asc)
+   * @param sort 정렬 방식 (rating-desc, reviews-desc, library-desc, publishDate-desc, title-asc)
    * @param timeRange 기간 필터 (all: 전체 기간, today: 오늘, week: 이번 주, month: 이번 달, year: 올해)
    * @param page 페이지 번호
    * @param limit 페이지당 결과 수
@@ -1743,11 +1746,20 @@ export class BookService {
     limit: number = 20,
     userId?: number,
   ): Promise<BookSearchResponse> {
+    this.logger.log(
+      `인기 도서 조회 요청: 카테고리=${categoryId}, 서브카테고리=${subcategoryId}, 정렬=${sort}`,
+    );
+
     // 기본 쿼리 빌더 생성
     const queryBuilder = this.bookRepository
       .createQueryBuilder('book')
       .leftJoinAndSelect('book.category', 'category')
       .leftJoinAndSelect('book.subcategory', 'subcategory');
+
+    // 서재 정렬을 위한 변수들
+    let isLibrarySort = false;
+    let bookIds: number[] = [];
+    let sortedBookIds: number[] = [];
 
     // 카테고리 필터링 (있는 경우)
     if (categoryId) {
@@ -1793,23 +1805,89 @@ export class BookService {
       }
     }
 
-    // 정렬 적용
+    // 서재에 담긴 순 정렬인 경우
+    if (sort === 'library-desc') {
+      isLibrarySort = true;
+
+      // 필터에 해당하는 모든 책 ID 가져오기
+      const allBookIds = await queryBuilder.select('book.id').getMany();
+
+      bookIds = allBookIds.map((book) => book.id);
+
+      this.logger.log(
+        `서재 담긴 순 정렬: 필터 적용 후 책 총 ${bookIds.length}개`,
+      );
+
+      // 서재에 담긴 수 가져오기 및 정렬
+      if (bookIds.length > 0) {
+        const libraryCountResult =
+          await this.libraryService.getLibraryCountsByBooks(bookIds);
+
+        // 정렬된 ID 추출
+        sortedBookIds = libraryCountResult.map((item) => item.bookId);
+
+        // 로깅: 상위 5개 항목
+        if (sortedBookIds.length > 0) {
+          const top5 = libraryCountResult.slice(
+            0,
+            Math.min(5, libraryCountResult.length),
+          );
+          this.logger.log(
+            `서재 담긴 순 상위 5개: ${top5.map((item) => `ID:${item.bookId}(${item.libraryCount}권)`).join(', ')}`,
+          );
+        }
+      } else {
+        this.logger.log('필터 조건에 맞는 책이 없습니다');
+        sortedBookIds = [];
+      }
+
+      // 전체 결과 수는 ID 배열 길이
+      const total = bookIds.length;
+
+      // 페이징 적용
+      const skip = (page - 1) * limit;
+      const pagedBookIds = sortedBookIds.slice(skip, skip + limit);
+
+      this.logger.log(
+        `페이지 ${page}, 항목 수 ${limit}, 반환할 책 수: ${pagedBookIds.length}`,
+      );
+
+      // 페이징된 ID에 해당하는 책 조회
+      const books =
+        pagedBookIds.length > 0
+          ? await this.bookRepository
+              .createQueryBuilder('book')
+              .leftJoinAndSelect('book.category', 'category')
+              .leftJoinAndSelect('book.subcategory', 'subcategory')
+              .where('book.id IN (:...ids)', { ids: pagedBookIds })
+              .getMany()
+          : [];
+
+      // ID 순서대로 책을 정렬
+      const orderedBooks = pagedBookIds
+        .map((id) => books.find((book) => book.id === id))
+        .filter(Boolean) as Book[];
+
+      // 사용자별 데이터로 책 정보 보강
+      const enrichedBooks = await Promise.all(
+        orderedBooks.map((book) => this.enrichBookWithUserData(book, userId)),
+      );
+
+      return {
+        books: enrichedBooks,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+      };
+    }
+
+    // 일반 정렬 적용
     switch (sort) {
       case 'rating-desc':
         queryBuilder.orderBy('book.rating', 'DESC');
         break;
       case 'reviews-desc':
         queryBuilder.orderBy('book.reviews', 'DESC');
-        break;
-      case 'library-desc':
-        // 서재에 담긴 수 정렬 (ReadingStatus 테이블과 관계)
-        queryBuilder
-          .leftJoin('reading_status', 'rs', 'rs.bookId = book.id')
-          .addSelect('COUNT(DISTINCT rs.userId)', 'libraryCount')
-          .groupBy('book.id')
-          .addGroupBy('category.id')
-          .addGroupBy('subcategory.id')
-          .orderBy('libraryCount', 'DESC');
         break;
       case 'publishDate-desc':
         queryBuilder.orderBy('book.publishDate', 'DESC');
