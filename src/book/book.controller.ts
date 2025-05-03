@@ -12,13 +12,24 @@ import {
 } from '@nestjs/common';
 import { BookService } from './book.service';
 import { Book } from './entities/book.entity';
-import { CreateBookDto, UpdateBookDto, BookResponse } from './dto/book.dto';
+import {
+  CreateBookDto,
+  UpdateBookDto,
+  BookResponse,
+  BookSearchResponse,
+  BookSearchResponseDto,
+} from './dto/book.dto';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
 import { ReadingStatusService } from '../reading-status/reading-status.service';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { RatingService } from '../rating/rating.service';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import {
+  PopularBooksRequestDto,
+  PopularBooksSortOptions,
+  TimeRangeOptions,
+} from './dto/popular-books.dto';
 
 @ApiTags('book')
 @Controller('book')
@@ -55,6 +66,61 @@ export class BookController {
     @Param('subcategoryId', ParseIntPipe) subcategoryId: number,
   ): Promise<Book[]> {
     return this.bookService.findBySubcategoryId(subcategoryId);
+  }
+
+  // 통합 인기 도서 API
+  @Get('popular')
+  @IsPublic()
+  @ApiOperation({
+    summary: '인기 도서 조회 (무한 스크롤 지원)',
+    description:
+      '카테고리와 서브카테고리 필터, 정렬, 기간 필터를 지원하는 인기 도서 조회 API',
+  })
+  @ApiQuery({
+    name: 'categoryId',
+    required: false,
+    description: '카테고리 ID (필터링)',
+  })
+  @ApiQuery({
+    name: 'subcategoryId',
+    required: false,
+    description: '서브카테고리 ID (필터링)',
+  })
+  @ApiQuery({
+    name: 'sort',
+    required: false,
+    enum: PopularBooksSortOptions,
+    description: '정렬 방식 (별점순, 리뷰순, 서재순, 출판일순, 가나다순)',
+  })
+  @ApiQuery({
+    name: 'timeRange',
+    required: false,
+    enum: TimeRangeOptions,
+    description: '기간 필터 (전체, 오늘, 이번 주, 이번 달, 올해)',
+  })
+  @ApiQuery({ name: 'page', required: false, description: '페이지 번호' })
+  @ApiQuery({ name: 'limit', required: false, description: '페이지당 결과 수' })
+  @ApiResponse({
+    status: 200,
+    description: '인기 도서 목록 및 페이지네이션 정보',
+    type: BookSearchResponseDto,
+  })
+  async findPopularBooks(
+    @Query() queryParams: PopularBooksRequestDto,
+    @GetUser() user?: User,
+  ): Promise<BookSearchResponse> {
+    const { categoryId, subcategoryId, sort, timeRange, page, limit } =
+      queryParams;
+
+    return this.bookService.findPopularBooks(
+      categoryId,
+      subcategoryId,
+      sort,
+      timeRange,
+      page,
+      limit,
+      user?.id,
+    );
   }
 
   @Get(':id')
@@ -148,33 +214,6 @@ export class BookController {
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.bookService.remove(id);
-  }
-
-  // 분야별 인기 도서 API
-  @Get('popular/category/:categoryId')
-  @IsPublic()
-  async findPopularBooksByCategory(
-    @Param('categoryId', ParseIntPipe) categoryId: number,
-    @Query('subcategoryId') subcategoryId?: string,
-    @Query('sort') sort?: string,
-    @Query('timeRange') timeRange?: string,
-  ): Promise<Book[]> {
-    return this.bookService.findPopularBooksByCategory(
-      categoryId,
-      subcategoryId ? Number(subcategoryId) : undefined,
-      sort,
-      timeRange,
-    );
-  }
-
-  // 모든 분야의 인기 도서 API
-  @Get('popular/all')
-  @IsPublic()
-  async findAllPopularBooks(
-    @Query('sort') sort?: string,
-    @Query('timeRange') timeRange?: string,
-  ): Promise<Book[]> {
-    return this.bookService.findAllPopularBooks(sort, timeRange);
   }
 
   // 홈화면용 인기 도서 API

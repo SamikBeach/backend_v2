@@ -1723,4 +1723,124 @@ export class BookService {
       };
     }
   }
+
+  /**
+   * 인기 도서 조회 통합 API (카테고리/서브카테고리 필터링 및 페이징 지원)
+   * @param categoryId 카테고리 ID (선택)
+   * @param subcategoryId 서브카테고리 ID (선택)
+   * @param sort 정렬 방식 (rating-desc, reviews-desc, shelf-desc, publishDate-desc, publishDate-asc)
+   * @param timeRange 기간 필터 (all: 전체 기간, today: 오늘, week: 이번 주, month: 이번 달, year: 올해)
+   * @param page 페이지 번호
+   * @param limit 페이지당 결과 수
+   * @param userId 사용자 ID (선택, 사용자별 독서 상태와 평점 정보 포함)
+   */
+  async findPopularBooks(
+    categoryId?: number,
+    subcategoryId?: number,
+    sort: string = 'rating-desc',
+    timeRange: string = 'all',
+    page: number = 1,
+    limit: number = 20,
+    userId?: number,
+  ): Promise<BookSearchResponse> {
+    // 기본 쿼리 빌더 생성
+    const queryBuilder = this.bookRepository
+      .createQueryBuilder('book')
+      .leftJoinAndSelect('book.category', 'category')
+      .leftJoinAndSelect('book.subcategory', 'subcategory');
+
+    // 카테고리 필터링 (있는 경우)
+    if (categoryId) {
+      queryBuilder.where('category.id = :categoryId', { categoryId });
+
+      // 서브카테고리 필터링 (있고 카테고리가 지정된 경우에만)
+      if (subcategoryId) {
+        queryBuilder.andWhere('subcategory.id = :subcategoryId', {
+          subcategoryId,
+        });
+      }
+    }
+
+    // 기간 필터링
+    if (timeRange !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+
+      if (timeRange === 'today') {
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+          0,
+          0,
+          0,
+        );
+      } else if (timeRange === 'week') {
+        // 이번 주의 시작일(월요일)을 계산
+        const dayOfWeek = now.getDay(); // 0: 일요일, 1: 월요일, ..., 6: 토요일
+        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 일요일이면 6, 아니면 현재 요일 - 1
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - diff);
+        startDate.setHours(0, 0, 0, 0);
+      } else if (timeRange === 'month') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      } else if (timeRange === 'year') {
+        startDate = new Date(now.getFullYear(), 0, 1);
+      }
+
+      if (startDate) {
+        queryBuilder.andWhere('book.publishDate >= :startDate', { startDate });
+      }
+    }
+
+    // 정렬 적용
+    switch (sort) {
+      case 'rating-desc':
+        queryBuilder.orderBy('book.rating', 'DESC');
+        break;
+      case 'reviews-desc':
+        queryBuilder.orderBy('book.reviews', 'DESC');
+        break;
+      case 'library-desc':
+        // 서재에 담긴 수 정렬 (ReadingStatus 테이블과 관계)
+        queryBuilder
+          .leftJoin('reading_status', 'rs', 'rs.bookId = book.id')
+          .addSelect('COUNT(DISTINCT rs.userId)', 'libraryCount')
+          .groupBy('book.id')
+          .addGroupBy('category.id')
+          .addGroupBy('subcategory.id')
+          .orderBy('libraryCount', 'DESC');
+        break;
+      case 'publishDate-desc':
+        queryBuilder.orderBy('book.publishDate', 'DESC');
+        break;
+      case 'title-asc':
+        queryBuilder.orderBy('book.title', 'ASC');
+        break;
+      default:
+        queryBuilder.orderBy('book.rating', 'DESC');
+    }
+
+    // 전체 결과 수 조회
+    const total = await queryBuilder.getCount();
+
+    // 페이징 적용
+    const skip = (page - 1) * limit;
+    queryBuilder.skip(skip).take(limit);
+
+    // 결과 가져오기
+    const books = await queryBuilder.getMany();
+
+    // 사용자별 데이터로 책 정보 보강
+    const enrichedBooks = await Promise.all(
+      books.map((book) => this.enrichBookWithUserData(book, userId)),
+    );
+
+    return {
+      books: enrichedBooks,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
 }
