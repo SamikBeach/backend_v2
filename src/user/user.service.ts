@@ -326,8 +326,7 @@ export class UserService {
   }
 
   private async hashPassword(password: string): Promise<string> {
-    const salt = await bcrypt.genSalt();
-    return bcrypt.hash(password, salt);
+    return bcrypt.hash(password, 10);
   }
 
   private generateVerificationCode(): string {
@@ -2003,5 +2002,43 @@ export class UserService {
       currentPage: page,
       totalPages,
     };
+  }
+
+  async updatePassword(userId: number, hashedPassword: string): Promise<User> {
+    const user = await this.findOne(userId);
+
+    if (!user) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+
+    user.password = hashedPassword;
+    return this.userRepository.save(user);
+  }
+
+  async deleteAccount(userId: number): Promise<void> {
+    const user = await this.findOne(userId);
+
+    if (!user) {
+      throw new NotFoundException('사용자를 찾을 수 없습니다.');
+    }
+
+    try {
+      // 사용자 프로필 이미지 삭제
+      if (user.profileImage) {
+        await this.fileService.deleteFile(user.profileImage);
+      }
+
+      // 사용자 계정 삭제
+      await this.userRepository.remove(user);
+
+      this.logger.log(
+        `사용자 계정 삭제 완료: ID=${userId}, 이메일=${user.email}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `사용자 계정 삭제 실패: ID=${userId}, 오류=${error.message}`,
+      );
+      throw new BadRequestException('계정 삭제 중 오류가 발생했습니다.');
+    }
   }
 }
