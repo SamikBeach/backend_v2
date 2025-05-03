@@ -251,7 +251,7 @@ export class NotificationService {
         reviewId,
         commentId,
         action: 'comment_added',
-        linkUrl: `/review/${reviewId}?comment=${commentId}`,
+        linkUrl: `/review/${reviewId}?commentId=${commentId}`,
       });
 
       this.logger.log(
@@ -374,7 +374,7 @@ export class NotificationService {
         reviewId,
         commentId,
         action: 'comment_liked',
-        linkUrl: `/review/${reviewId}?comment=${commentId}`,
+        linkUrl: `/review/${reviewId}?commentId=${commentId}`,
       });
 
       this.logger.log(
