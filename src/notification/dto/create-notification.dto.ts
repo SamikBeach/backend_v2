@@ -21,16 +21,12 @@ export class CreateNotificationDto {
   title: string;
 
   @IsString()
-  @IsNotEmpty()
-  content: string;
-
-  @IsNumber()
   @IsOptional()
-  sourceId?: number;
+  content?: string;
 
   @IsString()
   @IsOptional()
-  sourceType?: string;
+  action?: string;
 
   @IsNumber()
   @IsOptional()
@@ -43,4 +39,20 @@ export class CreateNotificationDto {
   @IsString()
   @IsOptional()
   linkUrl?: string;
+
+  @IsNumber()
+  @IsOptional()
+  reviewId?: number;
+
+  @IsNumber()
+  @IsOptional()
+  commentId?: number;
+
+  @IsNumber()
+  @IsOptional()
+  libraryId?: number;
+
+  @IsNumber()
+  @IsOptional()
+  bookId?: number;
 }

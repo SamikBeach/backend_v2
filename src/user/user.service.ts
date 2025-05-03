@@ -7,6 +7,7 @@ import {
   Inject,
   forwardRef,
   Logger,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, FindOptionsWhere } from 'typeorm';
@@ -48,6 +49,7 @@ import { BookService } from '../book/book.service';
 import { RatingService } from '../rating/rating.service';
 import { ReviewLike } from '../review/entities/review-like.entity';
 import { LibraryListResponseDto } from '../library/dto/library-response.dto';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class UserService {
@@ -84,6 +86,8 @@ export class UserService {
     private bookService: BookService,
     @Inject(forwardRef(() => RatingService))
     private ratingService: RatingService,
+    @Inject(forwardRef(() => NotificationService))
+    private notificationService: NotificationService,
     private fileService: FileService,
     private configService: ConfigService,
   ) {
@@ -694,6 +698,16 @@ export class UserService {
     });
 
     await this.userFollowerRepository.save(newFollow);
+
+    // 팔로우 알림 생성
+    const follower = await this.findOne(followerId);
+    if (follower) {
+      await this.notificationService.createFollowNotification(
+        followerId,
+        followingId,
+        follower.username || '사용자',
+      );
+    }
   }
 
   async unfollowUser(followerId: number, followingId: number): Promise<void> {

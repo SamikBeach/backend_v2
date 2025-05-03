@@ -55,7 +55,7 @@ export class NotificationController {
       return { error: '접근 권한이 없습니다.' };
     }
 
-    return notification;
+    return this.notificationService.findOneDto(id);
   }
 
   /**

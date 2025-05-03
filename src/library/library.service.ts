@@ -45,6 +45,7 @@ import { LibraryTagService } from '../library-tag/library-tag.service';
 import { ReadingStatusService } from '../reading-status/reading-status.service';
 import { RatingService } from '../rating/rating.service';
 import { Book } from '../book/entities/book.entity';
+import { NotificationType } from '../notification/entities/notification.entity';
 
 @Injectable()
 export class LibraryService {
@@ -847,6 +848,7 @@ export class LibraryService {
           book.id,
           book.title,
           subscriberIds,
+          userId,
         );
       }
 
@@ -1052,6 +1054,7 @@ export class LibraryService {
   async subscribeToLibrary(libraryId: number, userId: number): Promise<void> {
     const library = await this.libraryRepository.findOne({
       where: { id: libraryId },
+      relations: ['owner'],
     });
 
     if (!library) {
@@ -1105,6 +1108,21 @@ export class LibraryService {
       null,
       null,
     );
+
+    // 서재 소유자에게 구독 알림 전송
+    if (library.owner) {
+      try {
+        await this.notificationService.createLibrarySubscribeNotification(
+          userId,
+          user.username || '사용자',
+          library.ownerId,
+          libraryId,
+          library.name,
+        );
+      } catch (error) {
+        this.logger.error(`서재 구독 알림 생성 실패: ${error.message}`);
+      }
+    }
   }
 
   // 서재 구독 취소하기

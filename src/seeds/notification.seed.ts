@@ -67,7 +67,7 @@ async function bootstrap() {
         title: '고전산책에 오신 것을 환영합니다!',
         content:
           '고전산책에서 다양한 고전 도서를 발견하고 서재를 관리해보세요.',
-        sourceType: 'system',
+        action: 'system_welcome',
         linkUrl: '/discover',
       });
 
@@ -77,7 +77,7 @@ async function bootstrap() {
         title: '서비스 업데이트 안내',
         content:
           '새로운 기능이 추가되었습니다. 이제 더 많은 도서를 검색하고 저장할 수 있습니다.',
-        sourceType: 'system',
+        action: 'system_update',
         linkUrl: '/home',
       });
     }
@@ -92,8 +92,8 @@ async function bootstrap() {
         type: NotificationType.COMMENT,
         title: '새 댓글',
         content: `${commenter.username || commenter.email}님이 당신의 리뷰에 댓글을 남겼습니다.`,
-        sourceId: i + 1, // 가상의 게시물 ID
-        sourceType: 'review',
+        reviewId: i + 1, // 가상의 게시물 ID
+        action: 'comment_added',
         actorId: commenter.id,
         linkUrl: `/review/${i + 1}`,
       });
@@ -109,8 +109,8 @@ async function bootstrap() {
         type: NotificationType.LIKE,
         title: '새 좋아요',
         content: `${liker.username || liker.email}님이 당신의 독서 목록을 좋아합니다.`,
-        sourceId: i + 5, // 가상의 게시물 ID
-        sourceType: 'review',
+        reviewId: i + 5, // 가상의 게시물 ID
+        action: 'review_liked',
         actorId: liker.id,
         linkUrl: `/review/${i + 5}`,
       });
@@ -127,8 +127,7 @@ async function bootstrap() {
         title: '새 팔로워',
         content: `${follower.username || follower.email}님이 당신을
         팔로우합니다.`,
-        sourceId: follower.id,
-        sourceType: 'user',
+        action: 'user_followed',
         actorId: follower.id,
         linkUrl: `/profile/${follower.id}`,
       });
@@ -149,8 +148,9 @@ async function bootstrap() {
         type: NotificationType.LIBRARY_UPDATE,
         title: '서재 업데이트',
         content: `구독 중인 서재 [${libraryName}]에 새 책이 추가되었습니다: ${bookTitle}`,
-        sourceId: libraryId,
-        sourceType: 'library',
+        libraryId,
+        bookId,
+        action: 'library_updated',
         linkUrl: `/library/${libraryId}`,
       });
     }

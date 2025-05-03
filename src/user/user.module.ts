@@ -35,7 +35,7 @@ import { BookModule } from '../book/book.module';
     forwardRef(() => RatingModule),
     forwardRef(() => BookModule),
     CommonModule,
-    NotificationModule,
+    forwardRef(() => NotificationModule),
     StatisticsModule,
   ],
   controllers: [UserController],
