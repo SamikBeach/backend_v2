@@ -44,12 +44,7 @@ export class BookController {
     private readonly ratingService: RatingService,
   ) {}
 
-  @Get()
-  @IsPublic()
-  async findAll(): Promise<Book[]> {
-    return this.bookService.findAll();
-  }
-
+  // ======= 카테고리 관련 API =======
   @Get('featured')
   @IsPublic()
   async findFeaturedBooks() {
@@ -70,6 +65,33 @@ export class BookController {
     @Param('subcategoryId', ParseIntPipe) subcategoryId: number,
   ): Promise<Book[]> {
     return this.bookService.findBySubcategoryId(subcategoryId);
+  }
+
+  // ======= ISBN 조회 API =======
+  @Get('isbn/:isbn')
+  @IsPublic()
+  async findByIsbn(
+    @Param('isbn') isbn: string,
+    @GetUser() user?: User,
+  ): Promise<BookResponse> {
+    try {
+      // getBookDetailByIsbn 메서드는 DB에 없으면 알라딘에서 가져와 동일한 Book 형식으로 반환합니다.
+      // 명시적으로 saveToDb=false를 설정하여 검색 시에는 DB에 저장하지 않습니다.
+      const book = await this.bookService.getBookDetailByIsbn(isbn, false);
+
+      // 서비스 메서드를 사용하여 책 정보를 사용자별 데이터와 통합
+      return await this.bookService.enrichBookWithUserData(book, user?.id);
+    } catch (error) {
+      console.error(`ISBN ${isbn} 조회 중 오류 발생:`, error);
+      throw new NotFoundException(`ISBN ${isbn}으로 도서를 찾을 수 없습니다.`);
+    }
+  }
+
+  // ======= 인기 도서 관련 API =======
+  @Get('popular/home')
+  @IsPublic()
+  async findPopularBooksForHome(@Query('limit') limit?: number): Promise<any> {
+    return this.bookService.findPopularBooksForHome(limit || 4);
   }
 
   // 통합 인기 도서 API
@@ -127,25 +149,6 @@ export class BookController {
     );
   }
 
-  @Get('isbn/:isbn')
-  @IsPublic()
-  async findByIsbn(
-    @Param('isbn') isbn: string,
-    @GetUser() user?: User,
-  ): Promise<BookResponse> {
-    try {
-      // getBookDetailByIsbn 메서드는 DB에 없으면 알라딘에서 가져와 동일한 Book 형식으로 반환합니다.
-      // 명시적으로 saveToDb=false를 설정하여 검색 시에는 DB에 저장하지 않습니다.
-      const book = await this.bookService.getBookDetailByIsbn(isbn, false);
-
-      // 서비스 메서드를 사용하여 책 정보를 사용자별 데이터와 통합
-      return await this.bookService.enrichBookWithUserData(book, user?.id);
-    } catch (error) {
-      console.error(`ISBN ${isbn} 조회 중 오류 발생:`, error);
-      throw new NotFoundException(`ISBN ${isbn}으로 도서를 찾을 수 없습니다.`);
-    }
-  }
-
   @Post('initialize-featured')
   async initializeFeaturedBooks(
     @Query('categoryId') categoryId?: string,
@@ -184,21 +187,12 @@ export class BookController {
     }
   }
 
-  // 홈화면용 인기 도서 API
-  @Get('popular/home')
-  @IsPublic()
-  async findPopularBooksForHome(@Query('limit') limit?: number): Promise<any> {
-    return this.bookService.findPopularBooksForHome(limit || 4);
-  }
-
-  // 홈화면용 오늘의 발견 API
+  // ======= 발견하기 관련 API =======
   @Get('discover/home')
   @IsPublic()
   async findDiscoverBooksForHome(@Query('limit') limit?: number): Promise<any> {
     return this.bookService.findDiscoverBooksForHome(limit || 6);
   }
-
-  // ======= Discover 관련 엔드포인트 =======
 
   // 통합 발견하기 도서 API
   @Get('discover')
@@ -262,20 +256,45 @@ export class BookController {
   }
 
   @Post('discover/add')
+  @IsPublic()
   async addBookToDiscoverCategory(
-    @Query('bookId', ParseIntPipe) bookId: number,
     @Query('discoverCategoryId', ParseIntPipe) discoverCategoryId: number,
-    @Query('discoverSubCategoryId', ParseIntPipe)
-    discoverSubCategoryId?: number,
+    @Query('bookId') bookId?: string,
+    @Query('isbn') isbn?: string,
+    @Query('discoverSubCategoryId') discoverSubCategoryId?: string,
   ): Promise<Book> {
+    // bookId나 isbn 중 하나는 반드시 필요
+    if (!bookId && !isbn) {
+      throw new NotFoundException('bookId 또는 isbn이 필요합니다.');
+    }
+
+    // 서브카테고리 ID 처리
+    const subCategoryId = discoverSubCategoryId
+      ? parseInt(discoverSubCategoryId, 10)
+      : undefined;
+
+    // ISBN이 제공되고 bookId가 없는 경우
+    if (isbn && !bookId) {
+      // ISBN으로 책 정보 가져오기 (없으면 알라딘에서 가져와 DB에 저장)
+      const book = await this.bookService.getBookDetailByIsbn(isbn, true);
+      return this.bookService.addBookToDiscoverCategory(
+        book.id,
+        discoverCategoryId,
+        subCategoryId,
+      );
+    }
+
+    // bookId가 제공된 경우
+    const bookIdNumber = parseInt(bookId as string, 10);
     return this.bookService.addBookToDiscoverCategory(
-      bookId,
+      bookIdNumber,
       discoverCategoryId,
-      discoverSubCategoryId,
+      subCategoryId,
     );
   }
 
   @Post('discover/remove')
+  @IsPublic()
   async removeBookFromDiscoverCategory(
     @Query('bookId', ParseIntPipe) bookId: number,
   ): Promise<Book> {
@@ -290,6 +309,21 @@ export class BookController {
     return this.bookService.setBookAsDiscovered(id, isDiscovered);
   }
 
+  // ======= 기본 CRUD API =======
+  @Patch(':id')
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateBookDto: UpdateBookDto,
+  ): Promise<Book> {
+    return this.bookService.update(id, updateBookDto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.bookService.remove(id);
+  }
+
+  // 와일드카드 엔드포인트는 맨 마지막에 선언하여 다른 구체적인 경로가 먼저 매칭되도록 함
   @Get(':id')
   @IsPublic()
   async findById(
@@ -308,21 +342,15 @@ export class BookController {
     }
   }
 
+  // ======= 기본 조회 API =======
+  @Get()
+  @IsPublic()
+  async findAll(): Promise<Book[]> {
+    return this.bookService.findAll();
+  }
+
   @Post()
   async create(@Body() createBookDto: CreateBookDto): Promise<Book> {
     return this.bookService.create(createBookDto);
-  }
-
-  @Patch(':id')
-  async update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateBookDto: UpdateBookDto,
-  ): Promise<Book> {
-    return this.bookService.update(id, updateBookDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.bookService.remove(id);
   }
 }

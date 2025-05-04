@@ -765,14 +765,8 @@ export class BookService {
   async removeBookFromDiscoverCategory(bookId: number): Promise<Book> {
     const book = await this.findById(bookId);
 
-    // 도서가 Discover에 속하지 않으면 오류
-    if (!book.discoverCategory) {
-      throw new NotFoundException(
-        `Book with ID ${bookId} is not in any DiscoverCategory`,
-      );
-    }
-
-    // 도서 업데이트
+    // 도서가 Discover에 속하지 않더라도 에러 발생하지 않음
+    // 이미 관련 필드가 null이거나 false일 수 있으나, 명시적으로 설정
     book.discoverCategory = null;
     book.discoverSubCategory = null;
     book.isDiscovered = false;
