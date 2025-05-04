@@ -877,111 +877,289 @@ export class BookService {
    * 홈 화면용 인기 도서 조회 (제한된 수량, 카테고리별로 분류)
    * @param limit 카테고리별 최대 도서 수
    */
-  async findPopularBooksForHome(limit: number = 4): Promise<any> {
-    // 기본 쿼리 빌더 생성
-    const queryBuilder = this.bookRepository
-      .createQueryBuilder('book')
-      .leftJoinAndSelect('book.category', 'category')
-      .leftJoinAndSelect('book.subcategory', 'subcategory')
-      .where('book.isFeatured = :isFeatured', { isFeatured: true })
-      .orderBy('book.rating', 'DESC')
-      .addOrderBy('book.reviews', 'DESC')
-      .take(limit * 2); // 충분한 수의 책을 가져와서 카테고리별로 필터링
+  async findPopularBooksForHome(
+    limit: number = 4,
+  ): Promise<BookSearchResponse> {
+    try {
+      // 오늘 날짜 기준 설정
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-    const books = await queryBuilder.getMany();
+      let activeBookIds: number[] = [];
 
-    // 홈화면에 표시할 책 정보를 포함 (ISBN 등 추가)
-    const simplifiedBooks = books.map((book) => ({
-      id: book.id,
-      title: book.title,
-      author: book.author,
-      coverImage: book.coverImage,
-      isbn: book.isbn,
-      isbn13: book.isbn13,
-      publisher: book.publisher,
-      publishDate: book.publishDate,
-      rating: book.rating,
-      reviews: book.reviews,
-      description: book.description?.substring(0, 100) + '...', // 간략한 설명만 포함
-      priceSales: book.priceSales,
-      priceStandard: book.priceStandard,
-      category: {
-        id: book.category?.id,
-        name: book.category?.name,
-      },
-      subcategory: book.subcategory
-        ? {
-            id: book.subcategory.id,
-            name: book.subcategory.name,
+      try {
+        // 1. 오늘 서재에 담긴 책 ID
+        const libraryBookIds =
+          await this.libraryService.getBookIdsAddedInPeriod(today);
+
+        // 2. 오늘 평점이 등록된 책 ID
+        const ratingBookIds =
+          await this.ratingService.getBookIdsRatedInPeriod(today);
+
+        // 3. 오늘 독서 상태가 변경된 책 ID
+        const readingStatusBookIds =
+          await this.readingStatusService.getBookIdsStatusChangedInPeriod(
+            today,
+          );
+
+        // 4. 오늘 리뷰가 작성된 책 ID
+        const reviewBookIds =
+          await this.reviewService.getBookIdsReviewedInPeriod(today);
+
+        // 모든 ID를 합치고 중복 제거
+        activeBookIds = [
+          ...new Set([
+            ...libraryBookIds,
+            ...ratingBookIds,
+            ...readingStatusBookIds,
+            ...reviewBookIds,
+          ]),
+        ];
+
+        this.logger.log(`오늘 활동이 있는 책: ${activeBookIds.length}개`);
+      } catch (error) {
+        this.logger.error(`활성 도서 ID 조회 중 오류 발생: ${error.message}`);
+        activeBookIds = [];
+      }
+
+      // 활성 도서가 충분한 경우 (3개 이상)
+      if (activeBookIds.length >= 3) {
+        try {
+          const activeBooks = await this.bookRepository
+            .createQueryBuilder('book')
+            .leftJoinAndSelect('book.category', 'category')
+            .leftJoinAndSelect('book.subcategory', 'subcategory')
+            .where('book.id IN (:...ids)', { ids: activeBookIds })
+            .orderBy('book.rating', 'DESC')
+            .addOrderBy('book.reviews', 'DESC')
+            .take(limit)
+            .getMany();
+
+          if (activeBooks.length > 0) {
+            this.logger.log(
+              `오늘의 인기 도서 ${activeBooks.length}개를 반환합니다.`,
+            );
+
+            // 사용자별 데이터로 책 정보 보강
+            const enrichedBooks = await Promise.all(
+              activeBooks.map((book) => this.enrichBookWithUserData(book)),
+            );
+
+            return {
+              books: enrichedBooks,
+              total: enrichedBooks.length,
+              page: 1,
+              totalPages: 1,
+            };
           }
-        : null,
-    }));
+        } catch (error) {
+          this.logger.error(`활성 도서 조회 중 오류 발생: ${error.message}`);
+          // 오류 발생 시 기본 인기 도서 반환 (fallback)
+        }
+      }
 
-    return simplifiedBooks;
+      // 활성 도서가 없거나 오류 발생 시 기본 인기 도서 반환 (fallback)
+      this.logger.log('기본 인기 도서를 사용합니다.');
+
+      const books = await this.bookRepository
+        .createQueryBuilder('book')
+        .leftJoinAndSelect('book.category', 'category')
+        .leftJoinAndSelect('book.subcategory', 'subcategory')
+        .orderBy('book.rating', 'DESC')
+        .addOrderBy('book.reviews', 'DESC')
+        .take(limit)
+        .getMany();
+
+      // 사용자별 데이터로 책 정보 보강
+      const enrichedBooks = await Promise.all(
+        books.map((book) => this.enrichBookWithUserData(book)),
+      );
+
+      return {
+        books: enrichedBooks,
+        total: enrichedBooks.length,
+        page: 1,
+        totalPages: 1,
+      };
+    } catch (error) {
+      this.logger.error(`인기 도서 조회 중 치명적 오류 발생: ${error.message}`);
+      return {
+        books: [],
+        total: 0,
+        page: 1,
+        totalPages: 0,
+      };
+    }
   }
 
   /**
    * 홈 화면용 오늘의 발견 도서 조회
    * @param limit 가져올 도서 수
    */
-  async findDiscoverBooksForHome(limit: number = 6): Promise<any> {
-    // discoverCategory에서 활성화된 카테고리 가져오기
-    const categories = await this.discoverCategoryService.findAllCategories();
+  async findDiscoverBooksForHome(
+    limit: number = 6,
+  ): Promise<BookSearchResponse> {
+    try {
+      // 오늘 날짜 기준 설정
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-    if (!categories.length) {
-      return [];
-    }
+      // discoverCategory에서 활성화된 카테고리 가져오기
+      const categories = await this.discoverCategoryService.findAllCategories();
 
-    // 활성화된 상위 2개 카테고리만 사용
-    const activeCategories = categories.slice(0, 2);
-
-    // 각 카테고리에 속한 도서 가져오기
-    const result = await Promise.all(
-      activeCategories.map(async (category) => {
-        // 해당 카테고리에 속한 도서 가져오기
-        const books = await this.bookRepository
-          .createQueryBuilder('book')
-          .leftJoinAndSelect('book.category', 'bookCategory')
-          .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
-          .where('book.isDiscovered = :isDiscovered', { isDiscovered: true })
-          .andWhere('discoverCategory.id = :categoryId', {
-            categoryId: category.id,
-          })
-          .orderBy('book.rating', 'DESC')
-          .take(limit / activeCategories.length)
-          .getMany();
-
-        // 도서 정보 가공
-        const discoveryBooks = books.map((book) => ({
-          id: book.id,
-          title: book.title,
-          author: book.author,
-          coverImage: book.coverImage,
-          rating: book.rating,
-          reviews: book.reviews,
-          isbn: book.isbn,
-          isbn13: book.isbn13,
-          publisher: book.publisher,
-          publishDate: book.publishDate,
-          description: book.description?.substring(0, 100) + '...',
-          priceSales: book.priceSales,
-          priceStandard: book.priceStandard,
-          category: {
-            id: book.category?.id,
-            name: book.category?.name,
-          },
-        }));
-
+      if (!categories.length) {
+        this.logger.log('활성화된 발견 카테고리가 없습니다.');
         return {
-          categoryId: category.id,
-          categoryName: category.name,
-          books: discoveryBooks,
+          books: [],
+          total: 0,
+          page: 1,
+          totalPages: 0,
         };
-      }),
-    );
+      }
 
-    // 결과에서 빈 카테고리 제외
-    return result.filter((item) => item.books.length > 0);
+      // 활성화된 상위 2개 카테고리만 사용
+      const activeCategories = categories.slice(0, 2);
+
+      let activeBookIds: number[] = [];
+
+      try {
+        // 1. 오늘 서재에 담긴 책 ID
+        const libraryBookIds =
+          await this.libraryService.getBookIdsAddedInPeriod(today);
+
+        // 2. 오늘 평점이 등록된 책 ID
+        const ratingBookIds =
+          await this.ratingService.getBookIdsRatedInPeriod(today);
+
+        // 3. 오늘 독서 상태가 변경된 책 ID
+        const readingStatusBookIds =
+          await this.readingStatusService.getBookIdsStatusChangedInPeriod(
+            today,
+          );
+
+        // 4. 오늘 리뷰가 작성된 책 ID
+        const reviewBookIds =
+          await this.reviewService.getBookIdsReviewedInPeriod(today);
+
+        // 모든 ID를 합치고 중복 제거
+        activeBookIds = [
+          ...new Set([
+            ...libraryBookIds,
+            ...ratingBookIds,
+            ...readingStatusBookIds,
+            ...reviewBookIds,
+          ]),
+        ];
+
+        this.logger.log(`오늘 활동이 있는 책: ${activeBookIds.length}개`);
+      } catch (error) {
+        this.logger.error(`활성 도서 ID 조회 중 오류 발생: ${error.message}`);
+        activeBookIds = [];
+      }
+
+      // 각 카테고리에 속한 모든 도서를 하나의 배열로 수집
+      let allDiscoverBooks: Book[] = [];
+
+      for (const category of activeCategories) {
+        try {
+          let books;
+
+          // 오늘 활동이 있는 책이 있는 경우 해당 책 중에서 필터링
+          if (activeBookIds.length > 0) {
+            books = await this.bookRepository
+              .createQueryBuilder('book')
+              .leftJoinAndSelect('book.category', 'bookCategory')
+              .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
+              .where('book.isDiscovered = :isDiscovered', {
+                isDiscovered: true,
+              })
+              .andWhere('discoverCategory.id = :categoryId', {
+                categoryId: category.id,
+              })
+              .andWhere('book.id IN (:...ids)', { ids: activeBookIds })
+              .orderBy('book.rating', 'DESC')
+              .take(Math.max(1, Math.floor(limit / activeCategories.length)))
+              .getMany();
+
+            // 활성 도서가 없거나 부족한 경우 기본 조회로 보충
+            if (!books || books.length < 2) {
+              this.logger.log(
+                `카테고리 ${category.name}의 활성 도서가 부족하여 기본 조회로 보충합니다.`,
+              );
+              books = await this.bookRepository
+                .createQueryBuilder('book')
+                .leftJoinAndSelect('book.category', 'bookCategory')
+                .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
+                .where('book.isDiscovered = :isDiscovered', {
+                  isDiscovered: true,
+                })
+                .andWhere('discoverCategory.id = :categoryId', {
+                  categoryId: category.id,
+                })
+                .orderBy('book.rating', 'DESC')
+                .take(Math.max(1, Math.floor(limit / activeCategories.length)))
+                .getMany();
+            }
+          } else {
+            // 오늘 활동이 없으면 기존 방식으로 가져오기 (fallback)
+            books = await this.bookRepository
+              .createQueryBuilder('book')
+              .leftJoinAndSelect('book.category', 'bookCategory')
+              .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
+              .where('book.isDiscovered = :isDiscovered', {
+                isDiscovered: true,
+              })
+              .andWhere('discoverCategory.id = :categoryId', {
+                categoryId: category.id,
+              })
+              .orderBy('book.rating', 'DESC')
+              .take(Math.max(1, Math.floor(limit / activeCategories.length)))
+              .getMany();
+          }
+
+          if (books && books.length > 0) {
+            allDiscoverBooks = [...allDiscoverBooks, ...books];
+          }
+        } catch (error) {
+          this.logger.error(
+            `카테고리 ${category.name} 도서 조회 중 오류: ${error.message}`,
+          );
+        }
+      }
+
+      // 도서가 없는 경우 빈 결과 반환
+      if (allDiscoverBooks.length === 0) {
+        return {
+          books: [],
+          total: 0,
+          page: 1,
+          totalPages: 0,
+        };
+      }
+
+      // 최대 limit 개수만큼 반환
+      allDiscoverBooks = allDiscoverBooks.slice(0, limit);
+
+      // 사용자별 데이터로 책 정보 보강
+      const enrichedBooks = await Promise.all(
+        allDiscoverBooks.map((book) => this.enrichBookWithUserData(book)),
+      );
+
+      return {
+        books: enrichedBooks,
+        total: enrichedBooks.length,
+        page: 1,
+        totalPages: 1,
+      };
+    } catch (error) {
+      this.logger.error(`발견 도서 조회 중 치명적 오류 발생: ${error.message}`);
+      return {
+        books: [],
+        total: 0,
+        page: 1,
+        totalPages: 0,
+      };
+    }
   }
 
   /**
@@ -1814,8 +1992,6 @@ export class BookService {
       .leftJoinAndSelect('book.subcategory', 'subcategory');
 
     // 서재 정렬을 위한 변수들
-    let isLibrarySort = false;
-    let bookIds: number[] = [];
     let sortedBookIds: number[] = [];
 
     // 카테고리 필터링 (있는 경우)
@@ -1858,8 +2034,6 @@ export class BookService {
 
     // 서재에 담긴 순 정렬인 경우
     if (sort === 'library-desc') {
-      isLibrarySort = true;
-
       // 기간 필터링 설정
       let filteredBookIds: number[] = [];
 
@@ -2235,9 +2409,6 @@ export class BookService {
       .leftJoinAndSelect('book.discoverSubCategory', 'discoverSubCategory')
       .where('book.isDiscovered = :isDiscovered', { isDiscovered: true });
 
-    // 서재 정렬을 위한 변수들
-    let isLibrarySort = false;
-    let bookIds: number[] = [];
     let sortedBookIds: number[] = [];
 
     // 카테고리 필터링 (있는 경우)
@@ -2290,8 +2461,6 @@ export class BookService {
 
     // 서재에 담긴 순 정렬인 경우
     if (sort === 'library-desc') {
-      isLibrarySort = true;
-
       // 기간 필터링 설정
       let filteredBookIds: number[] = [];
 
@@ -2671,5 +2840,118 @@ export class BookService {
       page,
       totalPages: Math.ceil(total / limit),
     };
+  }
+
+  /**
+   * 홈 화면용 오늘의 분야별 인기 도서 조회
+   * @param limit 가져올 도서 수
+   */
+  async findPopularBooksByCategoryForHome(limit: number = 6): Promise<any> {
+    // 오늘 날짜 기준 설정
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 모든 카테고리 가져오기
+    const categories = await this.categoryService.findAll();
+
+    if (!categories.length) {
+      return [];
+    }
+
+    // 활성화된 상위 3개 카테고리만 사용
+    const activeCategories = categories.slice(0, 3);
+
+    // 오늘 활동이 있는 책 ID 가져오기
+    // 1. 오늘 서재에 담긴 책 ID
+    const libraryBookIds =
+      await this.libraryService.getBookIdsAddedInPeriod(today);
+
+    // 2. 오늘 평점이 등록된 책 ID
+    const ratingBookIds =
+      await this.ratingService.getBookIdsRatedInPeriod(today);
+
+    // 3. 오늘 독서 상태가 변경된 책 ID
+    const readingStatusBookIds =
+      await this.readingStatusService.getBookIdsStatusChangedInPeriod(today);
+
+    // 4. 오늘 리뷰가 작성된 책 ID
+    const reviewBookIds =
+      await this.reviewService.getBookIdsReviewedInPeriod(today);
+
+    // 모든 ID를 합치고 중복 제거
+    const activeBookIds = [
+      ...new Set([
+        ...libraryBookIds,
+        ...ratingBookIds,
+        ...readingStatusBookIds,
+        ...reviewBookIds,
+      ]),
+    ];
+
+    this.logger.log(`오늘 활동이 있는 책: ${activeBookIds.length}개`);
+
+    // 각 카테고리에 속한 도서 가져오기
+    const result = await Promise.all(
+      activeCategories.map(async (category) => {
+        let books;
+
+        // 오늘 활동이 있는 책이 있는 경우 해당 책 중에서 필터링
+        if (activeBookIds.length > 0) {
+          books = await this.bookRepository
+            .createQueryBuilder('book')
+            .leftJoinAndSelect('book.category', 'category')
+            .leftJoinAndSelect('book.subcategory', 'subcategory')
+            .where('category.id = :categoryId', { categoryId: category.id })
+            .andWhere('book.id IN (:...ids)', { ids: activeBookIds })
+            .orderBy('book.rating', 'DESC')
+            .addOrderBy('book.reviews', 'DESC')
+            .take(limit / activeCategories.length)
+            .getMany();
+        } else {
+          // 오늘 활동이 없으면 기존 방식으로 가져오기 (fallback)
+          books = await this.bookRepository
+            .createQueryBuilder('book')
+            .leftJoinAndSelect('book.category', 'category')
+            .leftJoinAndSelect('book.subcategory', 'subcategory')
+            .where('category.id = :categoryId', { categoryId: category.id })
+            .orderBy('book.rating', 'DESC')
+            .addOrderBy('book.reviews', 'DESC')
+            .take(limit / activeCategories.length)
+            .getMany();
+        }
+
+        // 도서 정보 가공
+        const categoryBooks = books.map((book) => ({
+          id: book.id,
+          title: book.title,
+          author: book.author,
+          coverImage: book.coverImage,
+          rating: book.rating,
+          reviews: book.reviews,
+          isbn: book.isbn,
+          isbn13: book.isbn13,
+          publisher: book.publisher,
+          publishDate: book.publishDate,
+          description: book.description?.substring(0, 100) + '...',
+          priceSales: book.priceSales,
+          priceStandard: book.priceStandard,
+          subcategory: book.subcategory
+            ? {
+                id: book.subcategory.id,
+                name: book.subcategory.name,
+              }
+            : null,
+        }));
+
+        return {
+          categoryId: category.id,
+          categoryName: category.name,
+          books: categoryBooks,
+        };
+      }),
+    );
+
+    // 결과에서 빈 카테고리 제외
+    return result.filter((item) => item.books.length > 0);
   }
 }

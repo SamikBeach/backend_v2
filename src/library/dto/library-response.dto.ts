@@ -2,6 +2,7 @@ export interface OwnerInfoDto {
   id: number;
   username: string;
   email: string;
+  profileImage?: string;
 }
 
 export interface BookInfoDto {
@@ -103,6 +104,7 @@ export interface PopularLibraryResponseDto {
   id: number;
   name: string;
   ownerName: string;
+  ownerProfileImage?: string;
   subscriberCount: number;
   bookCount: number;
   previewBooks: BookInfoDto[];

@@ -611,7 +611,15 @@ export class ReviewService {
   /**
    * 홈화면용 인기 리뷰 조회
    */
-  async findPopularReviewsForHome(limit: number = 4): Promise<any> {
+  async findPopularReviewsForHome(
+    limit: number = 4,
+    userId?: number,
+  ): Promise<{
+    reviews: ReviewResponseDto[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
     try {
       const popularReviews = await this.reviewRepository
         .createQueryBuilder('review')
@@ -625,41 +633,81 @@ export class ReviewService {
         .take(limit)
         .getMany();
 
-      const simplifiedReviews = await Promise.all(
+      // 책 ID를 수집하여 한 번에 정보 가져오기
+      const bookIds = popularReviews
+        .flatMap((review) => review.books?.map((rb) => rb.book.id) || [])
+        .filter((id) => id !== undefined);
+
+      // 책 정보 맵 생성
+      const bookDetailsMap = new Map();
+
+      if (bookIds.length > 0) {
+        // 책 상세 정보 가져오기
+        const bookDetails = await Promise.all(
+          bookIds.map((id) =>
+            this.bookService
+              .findById(id)
+              .then((book) =>
+                this.bookService.enrichBookWithUserData(book, userId),
+              )
+              .catch((err) => {
+                this.logger.error(`책 ID ${id} 정보 조회 실패: ${err.message}`);
+                return null;
+              }),
+          ),
+        );
+
+        // 책 ID로 맵핑
+        bookDetails.forEach((book) => {
+          if (book) {
+            bookDetailsMap.set(book.id, book);
+          }
+        });
+      }
+
+      // 리뷰 정보 변환
+      const reviewDtos = await Promise.all(
         popularReviews.map(async (review) => {
-          // 첫 번째 이미지만 사용 (미리보기용)
-          const previewImageUrl =
-            review.images.length > 0 ? review.images[0].url : null;
+          const dto = await this.mapReviewToResponseDto(review, userId);
 
-          // 연결된 책 정보
-          const books = review.books?.map((reviewBook) => ({
-            id: reviewBook.book.id,
-            title: reviewBook.book.title,
-            author: reviewBook.book.author,
-            coverImage: reviewBook.book.coverImage,
-          }));
+          // 책 정보 강화
+          if (dto.books && dto.books.length > 0) {
+            dto.books = dto.books.map((book) => {
+              const enrichedBook = bookDetailsMap.get(book.id);
+              if (enrichedBook) {
+                return {
+                  id: book.id,
+                  title: book.title,
+                  author: book.author,
+                  coverImage: book.coverImage,
+                  publisher: book.publisher,
+                  isbn: enrichedBook.isbn,
+                  isbn13: enrichedBook.isbn13,
+                  publishDate: enrichedBook.publishDate,
+                  description:
+                    enrichedBook.description?.substring(0, 100) + '...',
+                  rating: enrichedBook.rating,
+                  reviews: enrichedBook.reviews,
+                  totalRatings: enrichedBook.totalRatings,
+                  readingStats: enrichedBook.readingStats,
+                  userRating: enrichedBook.userRating,
+                  userReadingStatus: enrichedBook.userReadingStatus,
+                };
+              }
+              return book;
+            });
+          }
 
-          // 짧은 버전의 컨텐츠
-          const shortContent =
-            review.content.length > 100
-              ? review.content.substring(0, 100) + '...'
-              : review.content;
-
-          return {
-            id: review.id,
-            content: shortContent,
-            type: review.type,
-            authorName: review.author.username || '사용자',
-            previewImage: previewImageUrl,
-            likeCount: review.likeCount,
-            commentCount: review.commentCount,
-            books,
-            createdAt: review.createdAt,
-          };
+          return dto;
         }),
       );
 
-      return simplifiedReviews;
+      return {
+        reviews: reviewDtos,
+        total: reviewDtos.length,
+        page: 1,
+        totalPages: 1,
+      };
     } catch (error) {
       this.logger.error(
         `Failed to fetch popular reviews for home: ${error.message}`,

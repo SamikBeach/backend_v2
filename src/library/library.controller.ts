@@ -20,7 +20,7 @@ import { User } from '../user/entities/user.entity';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
 import {
   LibrarySortOption,
-  PopularLibraryResponseDto,
+  PaginatedLibraryResponse,
 } from './dto/library-response.dto';
 
 @Controller('library')
@@ -208,7 +208,19 @@ export class LibraryController {
   @IsPublic()
   async findPopularLibrariesForHome(
     @Query('limit') limit?: number,
-  ): Promise<PopularLibraryResponseDto[]> {
-    return this.libraryService.findPopularLibrariesForHome(limit || 3);
+  ): Promise<PaginatedLibraryResponse> {
+    const libraries = await this.libraryService.findPopularLibrariesForHome(
+      limit || 3,
+    );
+    return {
+      data: libraries,
+      meta: {
+        total: libraries.length,
+        page: 1,
+        limit: libraries.length,
+        totalPages: 1,
+        sort: LibrarySortOption.SUBSCRIBERS,
+      },
+    };
   }
 }

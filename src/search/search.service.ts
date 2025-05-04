@@ -277,6 +277,8 @@ export class SearchService {
           subcategory: null,
           discoverCategory: null,
           discoverSubCategory: null,
+          discoverCategoryId: null,
+          discoverSubCategoryId: null,
           rating: 0,
           reviews: 0,
           totalRatings: 0,

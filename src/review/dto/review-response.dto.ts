@@ -21,6 +21,16 @@ export class ReviewResponseDto {
     author: string;
     coverImage: string;
     publisher: string;
+    isbn?: string;
+    isbn13?: string;
+    publishDate?: Date;
+    description?: string;
+    rating?: number;
+    reviews?: number;
+    totalRatings?: number;
+    readingStats?: any;
+    userRating?: any;
+    userReadingStatus?: string;
   }[];
   // 리뷰 작성자의 해당 책에 대한 평점 정보
   userRating?: {

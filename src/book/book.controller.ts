@@ -27,7 +27,6 @@ import { RatingService } from '../rating/rating.service';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import {
   PopularBooksRequestDto,
-  PopularBooksSortOptions,
   TimeRangeOptions,
 } from './dto/popular-books.dto';
 import {
@@ -90,47 +89,15 @@ export class BookController {
   // ======= 인기 도서 관련 API =======
   @Get('popular/home')
   @IsPublic()
-  async findPopularBooksForHome(@Query('limit') limit?: number): Promise<any> {
+  async findPopularBooksForHome(
+    @Query('limit') limit?: number,
+  ): Promise<BookSearchResponse> {
     return this.bookService.findPopularBooksForHome(limit || 4);
   }
 
   // 통합 인기 도서 API
   @Get('popular')
   @IsPublic()
-  @ApiOperation({
-    summary: '인기 도서 조회 (무한 스크롤 지원)',
-    description:
-      '카테고리와 서브카테고리 필터, 정렬, 기간 필터를 지원하는 인기 도서 조회 API',
-  })
-  @ApiQuery({
-    name: 'categoryId',
-    required: false,
-    description: '카테고리 ID (필터링)',
-  })
-  @ApiQuery({
-    name: 'subcategoryId',
-    required: false,
-    description: '서브카테고리 ID (필터링)',
-  })
-  @ApiQuery({
-    name: 'sort',
-    required: false,
-    enum: PopularBooksSortOptions,
-    description: '정렬 방식 (별점순, 리뷰순, 라이브러리순, 출판일순, 가나다순)',
-  })
-  @ApiQuery({
-    name: 'timeRange',
-    required: false,
-    enum: TimeRangeOptions,
-    description: '기간 필터 (전체, 오늘, 이번 주, 이번 달, 올해)',
-  })
-  @ApiQuery({ name: 'page', required: false, description: '페이지 번호' })
-  @ApiQuery({ name: 'limit', required: false, description: '페이지당 결과 수' })
-  @ApiResponse({
-    status: 200,
-    description: '인기 도서 목록 및 페이지네이션 정보',
-    type: BookSearchResponseDto,
-  })
   async findPopularBooks(
     @Query() queryParams: PopularBooksRequestDto,
     @GetUser() user?: User,
@@ -190,7 +157,9 @@ export class BookController {
   // ======= 발견하기 관련 API =======
   @Get('discover/home')
   @IsPublic()
-  async findDiscoverBooksForHome(@Query('limit') limit?: number): Promise<any> {
+  async findDiscoverBooksForHome(
+    @Query('limit') limit?: number,
+  ): Promise<BookSearchResponse> {
     return this.bookService.findDiscoverBooksForHome(limit || 6);
   }
 

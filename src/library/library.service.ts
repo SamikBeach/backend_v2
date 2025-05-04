@@ -36,7 +36,6 @@ import {
   LibrarySortOption,
   PaginatedLibraryResponse,
   BookInfoDto,
-  PopularLibraryResponseDto,
 } from './dto/library-response.dto';
 import { UserService } from '../user/user.service';
 import { NotificationService } from '../notification/notification.service';
@@ -45,7 +44,6 @@ import { LibraryTagService } from '../library-tag/library-tag.service';
 import { ReadingStatusService } from '../reading-status/reading-status.service';
 import { RatingService } from '../rating/rating.service';
 import { Book } from '../book/entities/book.entity';
-import { NotificationType } from '../notification/entities/notification.entity';
 
 @Injectable()
 export class LibraryService {
@@ -150,7 +148,7 @@ export class LibraryService {
   // 홈화면용 인기 서재 목록 조회
   async findPopularLibrariesForHome(
     limit: number = 3,
-  ): Promise<PopularLibraryResponseDto[]> {
+  ): Promise<LibraryListResponseDto[]> {
     // 구독자 수가 많은 순으로 공개 서재 조회
     const popularLibraries = await this.libraryRepository
       .createQueryBuilder('library')
@@ -162,34 +160,15 @@ export class LibraryService {
       .take(limit)
       .getMany();
 
-    // 홈화면에 표시할 형태로 데이터 가공
-    const result = popularLibraries.map((library) => {
-      // 미리보기용 책 - 최근 추가된 3권으로 제한
-      const previewBooks = library.libraryBooks
-        ? library.libraryBooks
-            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-            .slice(0, 3)
-            .map((libraryBook) => ({
-              id: libraryBook.book.id,
-              title: libraryBook.book.title,
-              author: libraryBook.book.author,
-              coverImage: libraryBook.book.coverImage || '',
-              isbn: libraryBook.book.isbn || '',
-              publisher: libraryBook.book.publisher || '',
-            }))
-        : [];
+    // 서재 정보 변환
+    const librariesWithDetails = await Promise.all(
+      popularLibraries.map(async (library) => {
+        // 구독 여부는 로그인한 사용자만 확인 가능하므로 기본값 false 사용
+        return this.transformLibraryToListResponseDto(library, false);
+      }),
+    );
 
-      return {
-        id: library.id,
-        name: library.name,
-        ownerName: library.owner.username,
-        subscriberCount: library.subscriberCount,
-        bookCount: library.libraryBooks.length,
-        previewBooks,
-      };
-    });
-
-    return result;
+    return librariesWithDetails;
   }
 
   // 모든 서재 목록 조회 (공개된 서재만)
@@ -540,6 +519,9 @@ export class LibraryService {
         )
       : [];
 
+    // BASE_URL 환경변수 가져오기
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+
     return {
       id: library.id,
       name: library.name,
@@ -549,18 +531,35 @@ export class LibraryService {
         id: library.owner.id,
         username: library.owner.username,
         email: library.owner.email,
+        profileImage: library.owner.profileImage?.startsWith('http')
+          ? library.owner.profileImage
+          : library.owner.profileImage
+            ? `${baseUrl}${library.owner.profileImage}`
+            : null,
       },
       books: libraryBooks,
       tags,
       isSubscribed,
       subscriberCount: library.subscriptions?.length || 0,
       subscribers:
-        library.subscriptions?.map((subscription) => ({
-          id: subscription.subscriber.id,
-          username: subscription.subscriber.username,
-          email: subscription.subscriber.email,
-          profileImage: null, // 프로필 이미지가 있다면 추가
-        })) || [],
+        library.subscriptions?.map((subscription) => {
+          // 구독자의 프로필 이미지 URL 생성
+          let profileImageUrl = null;
+          if (subscription.subscriber.profileImage) {
+            profileImageUrl = subscription.subscriber.profileImage.startsWith(
+              'http',
+            )
+              ? subscription.subscriber.profileImage
+              : `${baseUrl}${subscription.subscriber.profileImage}`;
+          }
+
+          return {
+            id: subscription.subscriber.id,
+            username: subscription.subscriber.username,
+            email: subscription.subscriber.email,
+            profileImage: profileImageUrl,
+          };
+        }) || [],
       recentUpdates,
       createdAt: library.createdAt,
       updatedAt: library.updatedAt,
@@ -1177,21 +1176,39 @@ export class LibraryService {
 
   // 서재의 구독자 목록 조회
   async getLibrarySubscribers(id: number): Promise<SubscriberResponseDto[]> {
-    const library = await this.libraryRepository.findOne({
-      where: { id },
-      relations: ['subscriptions', 'subscriptions.subscriber'],
-    });
+    // 서재 가져오기
+    const library = await this.libraryRepository
+      .createQueryBuilder('library')
+      .leftJoinAndSelect('library.subscriptions', 'subscription')
+      .leftJoinAndSelect('subscription.subscriber', 'subscriber')
+      .where('library.id = :id', { id })
+      .getOne();
 
     if (!library) {
       throw new NotFoundException(`Library with ID ${id} not found`);
     }
 
-    return library.subscriptions.map((subscription) => ({
-      id: subscription.subscriber.id,
-      username: subscription.subscriber.username,
-      email: subscription.subscriber.email,
-      profileImage: null, // 프로필 이미지가 있다면 추가
-    }));
+    // BASE_URL 환경변수 가져오기
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+
+    return library.subscriptions.map((subscription) => {
+      // 구독자 프로필 이미지 URL 생성
+      let profileImageUrl = null;
+      if (subscription.subscriber.profileImage) {
+        profileImageUrl = subscription.subscriber.profileImage.startsWith(
+          'http',
+        )
+          ? subscription.subscriber.profileImage
+          : `${baseUrl}${subscription.subscriber.profileImage}`;
+      }
+
+      return {
+        id: subscription.subscriber.id,
+        username: subscription.subscriber.username,
+        email: subscription.subscriber.email,
+        profileImage: profileImageUrl,
+      };
+    });
   }
 
   // 최근 업데이트 이력 조회
@@ -1329,6 +1346,18 @@ export class LibraryService {
   private async mapToLibraryResponseDto(
     library: Library,
   ): Promise<LibraryResponseDto> {
+    // BASE_URL 환경변수 가져오기
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+
+    // 프로필 이미지 URL 생성
+    let profileImageUrl = null;
+    if (library.owner.profileImage) {
+      // 이미 완전한 URL인 경우 그대로 사용, 아닌 경우 baseUrl 추가
+      profileImageUrl = library.owner.profileImage.startsWith('http')
+        ? library.owner.profileImage
+        : `${baseUrl}${library.owner.profileImage}`;
+    }
+
     return {
       id: library.id,
       name: library.name,
@@ -1339,6 +1368,7 @@ export class LibraryService {
         id: library.owner.id,
         username: library.owner.username,
         email: library.owner.email,
+        profileImage: profileImageUrl,
       },
       createdAt: library.createdAt,
       updatedAt: library.updatedAt,
@@ -1616,6 +1646,18 @@ export class LibraryService {
         }))
       : [];
 
+    // BASE_URL 환경변수 가져오기
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+
+    // 프로필 이미지 URL 생성
+    let profileImageUrl = null;
+    if (library.owner.profileImage) {
+      // 이미 완전한 URL인 경우 그대로 사용, 아닌 경우 baseUrl 추가
+      profileImageUrl = library.owner.profileImage.startsWith('http')
+        ? library.owner.profileImage
+        : `${baseUrl}${library.owner.profileImage}`;
+    }
+
     return {
       id: library.id,
       name: library.name,
@@ -1626,6 +1668,7 @@ export class LibraryService {
         id: library.owner.id,
         username: library.owner.username,
         email: library.owner.email,
+        profileImage: profileImageUrl,
       },
       tags,
       bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
