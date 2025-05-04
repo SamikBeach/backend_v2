@@ -35,6 +35,7 @@ import { CreateCategoryDto } from '../category/dto/create-category.dto';
 import { CreateSubCategoryDto } from '../category/dto/create-subcategory.dto';
 import { Category } from '../category/entities/category.entity';
 import { SubCategory } from '../category/entities/subcategory.entity';
+import { ReviewService } from '../review/review.service';
 
 @Injectable()
 export class BookService {
@@ -55,6 +56,8 @@ export class BookService {
     private readonly readingStatusService: ReadingStatusService,
     @Inject(forwardRef(() => LibraryService))
     private readonly libraryService: LibraryService,
+    @Inject(forwardRef(() => ReviewService))
+    private readonly reviewService: ReviewService,
   ) {}
 
   /**
@@ -357,7 +360,7 @@ export class BookService {
     // 기간 필터링
     if (timeRange !== 'all') {
       const now = new Date();
-      let startDate: Date;
+      let startDate: Date | null = null;
 
       if (timeRange === 'today') {
         startDate = new Date(
@@ -382,7 +385,19 @@ export class BookService {
       }
 
       if (startDate) {
-        queryBuilder.andWhere('book.publishDate >= :startDate', { startDate });
+        const formattedDate = startDate.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+        this.logger.log(
+          `기간 필터 적용: ${timeRange}, 시작일: ${formattedDate}`,
+        );
+
+        // 날짜 형식을 일관되게 맞추기 위해 날짜 비교를 문자열로 변환
+        queryBuilder.andWhere('DATE(book.publishDate) >= :startDate', {
+          startDate: formattedDate,
+        });
+
+        // 필터링 후 남은 책 개수 로깅을 위한 카운트 쿼리
+        const countAfterFilter = await queryBuilder.getCount();
+        this.logger.log(`기간 필터 적용 후 남은 책 개수: ${countAfterFilter}`);
       }
     }
 
@@ -429,7 +444,7 @@ export class BookService {
     // 기간 필터링
     if (timeRange !== 'all') {
       const now = new Date();
-      let startDate: Date;
+      let startDate: Date | null = null;
 
       if (timeRange === 'today') {
         startDate = new Date(
@@ -454,7 +469,19 @@ export class BookService {
       }
 
       if (startDate) {
-        queryBuilder.andWhere('book.publishDate >= :startDate', { startDate });
+        const formattedDate = startDate.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+        this.logger.log(
+          `기간 필터 적용: ${timeRange}, 시작일: ${formattedDate}`,
+        );
+
+        // 날짜 형식을 일관되게 맞추기 위해 날짜 비교를 문자열로 변환
+        queryBuilder.andWhere('DATE(book.publishDate) >= :startDate', {
+          startDate: formattedDate,
+        });
+
+        // 필터링 후 남은 책 개수 로깅을 위한 카운트 쿼리
+        const countAfterFilter = await queryBuilder.getCount();
+        this.logger.log(`기간 필터 적용 후 남은 책 개수: ${countAfterFilter}`);
       }
     }
 
@@ -526,7 +553,7 @@ export class BookService {
     // 기간 필터링
     if (timeRange !== 'all') {
       const now = new Date();
-      let startDate: Date;
+      let startDate: Date | null = null;
 
       if (timeRange === 'today') {
         startDate = new Date(
@@ -551,7 +578,19 @@ export class BookService {
       }
 
       if (startDate) {
-        queryBuilder.andWhere('book.publishDate >= :startDate', { startDate });
+        const formattedDate = startDate.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+        this.logger.log(
+          `기간 필터 적용: ${timeRange}, 시작일: ${formattedDate}`,
+        );
+
+        // 날짜 형식을 일관되게 맞추기 위해 날짜 비교를 문자열로 변환
+        queryBuilder.andWhere('DATE(book.publishDate) >= :startDate', {
+          startDate: formattedDate,
+        });
+
+        // 필터링 후 남은 책 개수 로깅을 위한 카운트 쿼리
+        const countAfterFilter = await queryBuilder.getCount();
+        this.logger.log(`기간 필터 적용 후 남은 책 개수: ${countAfterFilter}`);
       }
     }
 
@@ -616,7 +655,7 @@ export class BookService {
     // 기간 필터링
     if (timeRange !== 'all') {
       const now = new Date();
-      let startDate: Date;
+      let startDate: Date | null = null;
 
       if (timeRange === 'today') {
         startDate = new Date(
@@ -641,7 +680,19 @@ export class BookService {
       }
 
       if (startDate) {
-        queryBuilder.andWhere('book.publishDate >= :startDate', { startDate });
+        const formattedDate = startDate.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+        this.logger.log(
+          `기간 필터 적용: ${timeRange}, 시작일: ${formattedDate}`,
+        );
+
+        // 날짜 형식을 일관되게 맞추기 위해 날짜 비교를 문자열로 변환
+        queryBuilder.andWhere('DATE(book.publishDate) >= :startDate', {
+          startDate: formattedDate,
+        });
+
+        // 필터링 후 남은 책 개수 로깅을 위한 카운트 쿼리
+        const countAfterFilter = await queryBuilder.getCount();
+        this.logger.log(`기간 필터 적용 후 남은 책 개수: ${countAfterFilter}`);
       }
     }
 
@@ -750,7 +801,7 @@ export class BookService {
     // 기간 필터링
     if (timeRange !== 'all') {
       const now = new Date();
-      let startDate: Date;
+      let startDate: Date | null = null;
 
       if (timeRange === 'today') {
         startDate = new Date(
@@ -775,7 +826,19 @@ export class BookService {
       }
 
       if (startDate) {
-        queryBuilder.andWhere('book.publishDate >= :startDate', { startDate });
+        const formattedDate = startDate.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+        this.logger.log(
+          `기간 필터 적용: ${timeRange}, 시작일: ${formattedDate}`,
+        );
+
+        // 날짜 형식을 일관되게 맞추기 위해 날짜 비교를 문자열로 변환
+        queryBuilder.andWhere('DATE(book.publishDate) >= :startDate', {
+          startDate: formattedDate,
+        });
+
+        // 필터링 후 남은 책 개수 로깅을 위한 카운트 쿼리
+        const countAfterFilter = await queryBuilder.getCount();
+        this.logger.log(`기간 필터 적용 후 남은 책 개수: ${countAfterFilter}`);
       }
     }
 
@@ -1747,7 +1810,7 @@ export class BookService {
     userId?: number,
   ): Promise<BookSearchResponse> {
     this.logger.log(
-      `인기 도서 조회 요청: 카테고리=${categoryId}, 서브카테고리=${subcategoryId}, 정렬=${sort}`,
+      `인기 도서 조회 요청: 카테고리=${categoryId}, 서브카테고리=${subcategoryId}, 정렬=${sort}, 기간=${timeRange}`,
     );
 
     // 기본 쿼리 빌더 생성
@@ -1773,20 +1836,14 @@ export class BookService {
       }
     }
 
-    // 기간 필터링
+    // 기간 필터링 설정
+    let startDate: Date | null = null;
+
     if (timeRange !== 'all') {
       const now = new Date();
-      let startDate: Date;
 
       if (timeRange === 'today') {
-        startDate = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate(),
-          0,
-          0,
-          0,
-        );
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       } else if (timeRange === 'week') {
         // 이번 주의 시작일(월요일)을 계산
         const dayOfWeek = now.getDay(); // 0: 일요일, 1: 월요일, ..., 6: 토요일
@@ -1800,34 +1857,160 @@ export class BookService {
         startDate = new Date(now.getFullYear(), 0, 1);
       }
 
-      if (startDate) {
-        queryBuilder.andWhere('book.publishDate >= :startDate', { startDate });
-      }
+      this.logger.log(
+        `기간 필터 적용: ${timeRange}, 시작일: ${startDate?.toISOString()}`,
+      );
     }
 
     // 서재에 담긴 순 정렬인 경우
     if (sort === 'library-desc') {
       isLibrarySort = true;
 
-      // 필터에 해당하는 모든 책 ID 가져오기
-      const allBookIds = await queryBuilder.select('book.id').getMany();
+      // 기간 필터링 설정
+      let filteredBookIds: number[] = [];
 
-      bookIds = allBookIds.map((book) => book.id);
+      // 기간 필터가 있는 경우, 먼저 기간 필터를 적용
+      if (timeRange !== 'all' && startDate) {
+        this.logger.log(
+          `기간 필터 적용: ${timeRange} (${startDate.toISOString()}부터)`,
+        );
 
-      this.logger.log(
-        `서재 담긴 순 정렬: 필터 적용 후 책 총 ${bookIds.length}개`,
-      );
+        // 1. 해당 기간 동안 서재에 담긴 책 ID
+        const libraryBookIds =
+          await this.libraryService.getBookIdsAddedInPeriod(startDate);
+        this.logger.log(`서재에 담긴 책: ${libraryBookIds.length}개`);
+
+        // 2. 해당 기간 동안 평점이 등록된 책 ID
+        const ratingBookIds =
+          await this.ratingService.getBookIdsRatedInPeriod(startDate);
+        this.logger.log(`평점이 등록된 책: ${ratingBookIds.length}개`);
+
+        // 3. 해당 기간 동안 독서 상태가 변경된 책 ID
+        const readingStatusBookIds =
+          await this.readingStatusService.getBookIdsStatusChangedInPeriod(
+            startDate,
+          );
+        this.logger.log(
+          `읽기 상태가 변경된 책: ${readingStatusBookIds.length}개`,
+        );
+
+        // 4. 해당 기간 동안 리뷰가 작성된 책 ID
+        const reviewBookIds =
+          await this.reviewService.getBookIdsReviewedInPeriod(startDate);
+        this.logger.log(`리뷰가 작성된 책: ${reviewBookIds.length}개`);
+
+        // 모든 ID를 합치고 중복 제거
+        filteredBookIds = [
+          ...new Set([
+            ...libraryBookIds,
+            ...ratingBookIds,
+            ...readingStatusBookIds,
+            ...reviewBookIds,
+          ]),
+        ];
+
+        this.logger.log(
+          `기간 필터 적용 시 활동이 있는 책 총 개수: ${filteredBookIds.length}개`,
+        );
+
+        if (filteredBookIds.length === 0) {
+          // 활동이 없는 경우 빈 결과 반환
+          this.logger.log('기간 내 활동이 있는 책이 없습니다.');
+          return {
+            books: [],
+            total: 0,
+            page,
+            totalPages: 0,
+          };
+        }
+
+        // 카테고리/서브카테고리 필터링도 적용
+        if (categoryId) {
+          const booksInCategory = await this.bookRepository
+            .createQueryBuilder('book')
+            .leftJoin('book.category', 'category')
+            .leftJoin('book.subcategory', 'subcategory')
+            .where('category.id = :categoryId', { categoryId })
+            .andWhere(
+              subcategoryId ? 'subcategory.id = :subcategoryId' : '1=1',
+              subcategoryId ? { subcategoryId } : {},
+            )
+            .select('book.id')
+            .getMany();
+
+          const categoryBookIds = booksInCategory.map((book) => book.id);
+          filteredBookIds = filteredBookIds.filter((id) =>
+            categoryBookIds.includes(id),
+          );
+
+          this.logger.log(
+            `카테고리/서브카테고리 필터 적용 후 책 개수: ${filteredBookIds.length}개`,
+          );
+        }
+      } else {
+        // 기간 필터가 없는 경우, 카테고리/서브카테고리 필터만 적용
+        const queryBuilderForIds = this.bookRepository
+          .createQueryBuilder('book')
+          .leftJoin('book.category', 'category')
+          .leftJoin('book.subcategory', 'subcategory')
+          .select('book.id');
+
+        if (categoryId) {
+          queryBuilderForIds.where('category.id = :categoryId', { categoryId });
+
+          if (subcategoryId) {
+            queryBuilderForIds.andWhere('subcategory.id = :subcategoryId', {
+              subcategoryId,
+            });
+          }
+        }
+
+        const allBooks = await queryBuilderForIds.getMany();
+        filteredBookIds = allBooks.map((book) => book.id);
+        this.logger.log(`필터 적용 전 책 총 ${filteredBookIds.length}개`);
+      }
 
       // 서재에 담긴 수 가져오기 및 정렬
-      if (bookIds.length > 0) {
-        const libraryCountResult =
-          await this.libraryService.getLibraryCountsByBooks(bookIds);
+      if (filteredBookIds.length > 0) {
+        const libraryCountResult = startDate
+          ? await this.libraryService.getLibraryCountsByBooksAndPeriod(
+              filteredBookIds,
+              startDate,
+            )
+          : await this.libraryService.getLibraryCountsByBooks(filteredBookIds);
 
-        // 정렬된 ID 추출
+        // 서재에 담긴 책 ID만 추출
+        const booksInLibrary = libraryCountResult.map((item) => item.bookId);
+
+        // 서재에 담기지 않은 책 ID 추출
+        const booksNotInLibrary = filteredBookIds.filter(
+          (id) => !booksInLibrary.includes(id),
+        );
+
+        this.logger.log(
+          `서재에 담긴 책: ${booksInLibrary.length}개, 담기지 않은 책: ${booksNotInLibrary.length}개`,
+        );
+
+        // 1. 서재에 담긴 책들을 담긴 순으로 먼저 정렬
         sortedBookIds = libraryCountResult.map((item) => item.bookId);
 
+        // 2. 서재에 담기지 않은 책들도 평점 순으로 정렬하여 추가
+        if (booksNotInLibrary.length > 0) {
+          const booksNotInLibraryData = await this.bookRepository
+            .createQueryBuilder('book')
+            .where('book.id IN (:...ids)', { ids: booksNotInLibrary })
+            .orderBy('book.rating', 'DESC')
+            .addOrderBy('book.reviews', 'DESC')
+            .getMany();
+
+          const additionalBookIds = booksNotInLibraryData.map(
+            (book) => book.id,
+          );
+          sortedBookIds = [...sortedBookIds, ...additionalBookIds];
+        }
+
         // 로깅: 상위 5개 항목
-        if (sortedBookIds.length > 0) {
+        if (sortedBookIds.length > 0 && libraryCountResult.length > 0) {
           const top5 = libraryCountResult.slice(
             0,
             Math.min(5, libraryCountResult.length),
@@ -1842,7 +2025,7 @@ export class BookService {
       }
 
       // 전체 결과 수는 ID 배열 길이
-      const total = bookIds.length;
+      const total = sortedBookIds.length;
 
       // 페이징 적용
       const skip = (page - 1) * limit;
@@ -1863,7 +2046,7 @@ export class BookService {
               .getMany()
           : [];
 
-      // ID 순서대로 책을 정렬
+      // ID 순서대로 책을 정렬 (IN 쿼리는 순서를 보장하지 않음)
       const orderedBooks = pagedBookIds
         .map((id) => books.find((book) => book.id === id))
         .filter(Boolean) as Book[];
@@ -1879,9 +2062,113 @@ export class BookService {
         page,
         totalPages: Math.ceil(total / limit),
       };
+    } else if (timeRange !== 'all') {
+      // 기간 필터가 있고 서재순이 아닌 다른 정렬의 경우
+      // 먼저 해당 기간 동안의 활동이 있는 책 ID를 가져옵니다
+
+      this.logger.log(
+        `기간 필터 적용: ${timeRange} (${startDate?.toISOString()}부터)`,
+      );
+
+      // 1. 해당 기간 동안 서재에 담긴 책 ID
+      const libraryBookIds = await this.libraryService.getBookIdsAddedInPeriod(
+        startDate as Date,
+      );
+      this.logger.log(`서재에 담긴 책: ${libraryBookIds.length}개`);
+
+      // 2. 해당 기간 동안 평점이 등록된 책 ID
+      const ratingBookIds = await this.ratingService.getBookIdsRatedInPeriod(
+        startDate as Date,
+      );
+      this.logger.log(`평점이 등록된 책: ${ratingBookIds.length}개`);
+
+      // 3. 해당 기간 동안 독서 상태가 변경된 책 ID
+      const readingStatusBookIds =
+        await this.readingStatusService.getBookIdsStatusChangedInPeriod(
+          startDate as Date,
+        );
+      this.logger.log(
+        `읽기 상태가 변경된 책: ${readingStatusBookIds.length}개`,
+      );
+
+      // 4. 해당 기간 동안 리뷰가 작성된 책 ID
+      const reviewBookIds = await this.reviewService.getBookIdsReviewedInPeriod(
+        startDate as Date,
+      );
+      this.logger.log(`리뷰가 작성된 책: ${reviewBookIds.length}개`);
+
+      // 모든 ID를 합치고 중복 제거
+      const allActivityBookIds = [
+        ...new Set([
+          ...libraryBookIds,
+          ...ratingBookIds,
+          ...readingStatusBookIds,
+          ...reviewBookIds,
+        ]),
+      ];
+
+      this.logger.log(
+        `기간 필터 적용 시 활동이 있는 책 총 개수: ${allActivityBookIds.length}개`,
+      );
+
+      if (allActivityBookIds.length === 0) {
+        // 활동이 없는 경우 빈 결과 반환
+        this.logger.log('기간 내 활동이 있는 책이 없습니다.');
+        return {
+          books: [],
+          total: 0,
+          page,
+          totalPages: 0,
+        };
+      }
+
+      // 활동이 있는 책만 필터링
+      queryBuilder.andWhere('book.id IN (:...ids)', {
+        ids: allActivityBookIds,
+      });
+
+      // 정렬 적용
+      switch (sort) {
+        case 'rating-desc':
+          queryBuilder.orderBy('book.rating', 'DESC');
+          break;
+        case 'reviews-desc':
+          queryBuilder.orderBy('book.reviews', 'DESC');
+          break;
+        case 'publishDate-desc':
+          queryBuilder.orderBy('book.publishDate', 'DESC');
+          break;
+        case 'title-asc':
+          queryBuilder.orderBy('book.title', 'ASC');
+          break;
+        default:
+          queryBuilder.orderBy('book.rating', 'DESC');
+      }
+
+      // 전체 결과 수 조회
+      const total = await queryBuilder.getCount();
+
+      // 페이징 적용
+      const skip = (page - 1) * limit;
+      queryBuilder.skip(skip).take(limit);
+
+      // 결과 가져오기
+      const books = await queryBuilder.getMany();
+
+      // 사용자별 데이터로 책 정보 보강
+      const enrichedBooks = await Promise.all(
+        books.map((book) => this.enrichBookWithUserData(book, userId)),
+      );
+
+      return {
+        books: enrichedBooks,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+      };
     }
 
-    // 일반 정렬 적용
+    // 일반 정렬 적용 (기간 필터 없는 경우)
     switch (sort) {
       case 'rating-desc':
         queryBuilder.orderBy('book.rating', 'DESC');

@@ -10,6 +10,7 @@ import { SearchModule } from '../search/search.module';
 import { ReadingStatusModule } from '../reading-status/reading-status.module';
 import { RatingModule } from '../rating/rating.module';
 import { LibraryModule } from '../library/library.module';
+import { ReviewModule } from '../review/review.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { LibraryModule } from '../library/library.module';
     forwardRef(() => ReadingStatusModule),
     forwardRef(() => RatingModule),
     forwardRef(() => LibraryModule),
+    forwardRef(() => ReviewModule),
   ],
   controllers: [BookController],
   providers: [BookService],

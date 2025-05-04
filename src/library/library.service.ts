@@ -1637,69 +1637,84 @@ export class LibraryService {
   }
 
   /**
-   * 책 ID 배열을 받아 각 책별 서재에 담긴 수를 계산하여 반환
+   * 여러 책의 서재 담긴 수를 가져오고 담긴 수에 따라 내림차순으로 정렬
    * @param bookIds 책 ID 배열
-   * @returns 책 ID와 서재에 담긴 수를 포함한 객체 배열
+   * @returns {bookId: number, libraryCount: number} 형태의 배열, 담긴 수 내림차순 정렬
    */
   async getLibraryCountsByBooks(
     bookIds: number[],
-  ): Promise<Array<{ bookId: number; libraryCount: number }>> {
+  ): Promise<{ bookId: number; libraryCount: number }[]> {
     if (!bookIds || bookIds.length === 0) {
       return [];
     }
 
-    try {
-      // 책 ID 목록에 대한 서재 담긴 수 집계 쿼리
-      const libraryCounts = await this.libraryBookRepository
-        .createQueryBuilder('libraryBook')
-        .select('libraryBook.bookId', 'bookId')
-        .addSelect('COUNT(DISTINCT libraryBook.libraryId)', 'libraryCount')
-        .where('libraryBook.bookId IN (:...bookIds)', { bookIds })
-        .groupBy('libraryBook.bookId')
-        .getRawMany();
+    // 책 ID 별로 서재에 담긴 수를 집계하는 쿼리
+    const result = await this.libraryBookRepository
+      .createQueryBuilder('libraryBook')
+      .select('libraryBook.bookId', 'bookId')
+      .addSelect('COUNT(libraryBook.id)', 'libraryCount')
+      .where('libraryBook.bookId IN (:...bookIds)', { bookIds })
+      .groupBy('libraryBook.bookId')
+      .orderBy('libraryCount', 'DESC')
+      .getRawMany();
 
-      this.logger.log(
-        `서재 담긴 수 집계 결과: ${libraryCounts.length}개 책에 대한 정보 조회됨`,
-      );
+    return result.map((item) => ({
+      bookId: parseInt(item.bookId, 10),
+      libraryCount: parseInt(item.libraryCount, 10),
+    }));
+  }
 
-      // 결과를 객체 배열로 변환
-      const countResult = libraryCounts.map((item) => ({
-        bookId: Number(item.bookId),
-        libraryCount: Number(item.libraryCount),
-      }));
-
-      // 결과에 없는 책 ID는 서재에 담긴 수 0으로 추가
-      const resultMap = new Map(countResult.map((item) => [item.bookId, item]));
-
-      for (const bookId of bookIds) {
-        if (!resultMap.has(bookId)) {
-          countResult.push({ bookId, libraryCount: 0 });
-        }
-      }
-
-      // 서재 담긴 수로 내림차순 정렬
-      countResult.sort((a, b) => {
-        if (b.libraryCount !== a.libraryCount) {
-          return b.libraryCount - a.libraryCount; // 서재 카운트 내림차순
-        }
-        return a.bookId - b.bookId; // 같은 경우 ID 오름차순
-      });
-
-      // 로깅: 상위 5개 항목 (있는 경우)
-      if (countResult.length > 0) {
-        const top5 = countResult.slice(0, Math.min(5, countResult.length));
-        this.logger.log(
-          `서재 담긴 순 상위 ${top5.length}개: ${top5
-            .map((item) => `ID:${item.bookId}(${item.libraryCount}권)`)
-            .join(', ')}`,
-        );
-      }
-
-      return countResult;
-    } catch (error) {
-      this.logger.error(`책별 서재 담긴 수 집계 중 오류: ${error.message}`);
-      // 오류 발생 시 기본값 반환
-      return bookIds.map((bookId) => ({ bookId, libraryCount: 0 }));
+  /**
+   * 특정 기간 동안 여러 책의 서재 담긴 수를 가져오고 담긴 수에 따라 내림차순으로 정렬
+   * @param bookIds 책 ID 배열
+   * @param startDate 시작 날짜
+   * @returns {bookId: number, libraryCount: number} 형태의 배열, 담긴 수 내림차순 정렬
+   */
+  async getLibraryCountsByBooksAndPeriod(
+    bookIds: number[],
+    startDate: Date,
+  ): Promise<{ bookId: number; libraryCount: number }[]> {
+    if (!bookIds || bookIds.length === 0) {
+      return [];
     }
+
+    // 책 ID 별로 특정 기간에 서재에 담긴 수를 집계하는 쿼리
+    const result = await this.libraryBookRepository
+      .createQueryBuilder('libraryBook')
+      .select('libraryBook.bookId', 'bookId')
+      .addSelect('COUNT(libraryBook.id)', 'libraryCount')
+      .where('libraryBook.bookId IN (:...bookIds)', { bookIds })
+      .andWhere('libraryBook.createdAt >= :startDate', { startDate })
+      .groupBy('libraryBook.bookId')
+      .orderBy('libraryCount', 'DESC')
+      .getRawMany();
+
+    return result.map((item) => ({
+      bookId: parseInt(item.bookId, 10),
+      libraryCount: parseInt(item.libraryCount, 10),
+    }));
+  }
+
+  /**
+   * 특정 기간 동안 서재에 담긴 책 ID 목록을 가져옴
+   * @param startDate 시작 날짜
+   * @returns 책 ID 배열
+   */
+  async getBookIdsAddedInPeriod(startDate: Date): Promise<number[]> {
+    this.logger.log(
+      `특정 기간(${startDate.toISOString()} 이후)에 서재에 담긴 책 ID 조회`,
+    );
+
+    // 특정 기간에 서재에 담긴 모든 책의 ID 가져오기
+    const result = await this.libraryBookRepository
+      .createQueryBuilder('libraryBook')
+      .select('DISTINCT libraryBook.bookId', 'bookId')
+      .where('libraryBook.createdAt >= :startDate', { startDate })
+      .getRawMany();
+
+    const bookIds = result.map((item) => parseInt(item.bookId, 10));
+    this.logger.log(`기간 필터 결과: ${bookIds.length}개의 책 ID 찾음`);
+
+    return bookIds;
   }
 }

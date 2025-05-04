@@ -484,4 +484,30 @@ export class ReadingStatusService {
       };
     }
   }
+
+  /**
+   * 특정 기간에 독서 상태가 변경된 책 ID 목록을 가져옴
+   * @param startDate 시작 날짜
+   * @returns 해당 기간에 독서 상태가 변경된 책 ID 배열
+   */
+  async getBookIdsStatusChangedInPeriod(startDate: Date): Promise<number[]> {
+    this.logger.log(
+      `특정 기간(${startDate.toISOString()} 이후)에 독서 상태가 변경된 책 ID 조회`,
+    );
+
+    // 특정 기간에 독서 상태가 추가/변경된 모든 책의 ID 가져오기 (createdAt 또는 updatedAt 확인)
+    const result = await this.readingStatusRepository
+      .createQueryBuilder('readingStatus')
+      .select('DISTINCT readingStatus.bookId', 'bookId')
+      .where(
+        '(readingStatus.createdAt >= :startDate OR readingStatus.updatedAt >= :startDate)',
+        { startDate },
+      )
+      .getRawMany();
+
+    const bookIds = result.map((item) => parseInt(item.bookId, 10));
+    this.logger.log(`기간 필터 결과: ${bookIds.length}개의 책 ID 찾음`);
+
+    return bookIds;
+  }
 }

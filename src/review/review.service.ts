@@ -4,6 +4,8 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -39,7 +41,9 @@ export class ReviewService {
     @InjectRepository(Comment)
     private readonly commentRepository: Repository<Comment>,
     private readonly fileService: FileService,
+    @Inject(forwardRef(() => BookService))
     private readonly bookService: BookService,
+    @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
     private readonly notificationService: NotificationService,
     private readonly ratingService: RatingService,
@@ -1185,5 +1189,29 @@ export class ReviewService {
       );
       throw error;
     }
+  }
+
+  /**
+   * 특정 기간에 리뷰가 작성된 책 ID 목록을 가져옴
+   * @param startDate 시작 날짜
+   * @returns 해당 기간에 리뷰가 작성된 책 ID 배열
+   */
+  async getBookIdsReviewedInPeriod(startDate: Date): Promise<number[]> {
+    this.logger.log(
+      `특정 기간(${startDate.toISOString()} 이후)에 리뷰가 작성된 책 ID 조회`,
+    );
+
+    // Review와 ReviewBook 테이블을 조인하여 특정 기간에 리뷰가 작성된 책 ID 가져오기
+    const result = await this.reviewBookRepository
+      .createQueryBuilder('reviewBook')
+      .innerJoin('reviewBook.review', 'review')
+      .select('DISTINCT reviewBook.bookId', 'bookId')
+      .where('review.createdAt >= :startDate', { startDate })
+      .getRawMany();
+
+    const bookIds = result.map((item) => parseInt(item.bookId, 10));
+    this.logger.log(`기간 필터 결과: ${bookIds.length}개의 책 ID 찾음`);
+
+    return bookIds;
   }
 }

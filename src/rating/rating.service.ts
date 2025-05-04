@@ -352,4 +352,27 @@ export class RatingService {
       return [];
     }
   }
+
+  /**
+   * 특정 기간에 평점이 등록된 책 ID 목록을 가져옴
+   * @param startDate 시작 날짜
+   * @returns 해당 기간에 평점이 등록된 책 ID 배열
+   */
+  async getBookIdsRatedInPeriod(startDate: Date): Promise<number[]> {
+    this.logger.log(
+      `특정 기간(${startDate.toISOString()} 이후)에 평점이 등록된 책 ID 조회`,
+    );
+
+    // 특정 기간에 평점이 등록된 모든 책의 ID 가져오기
+    const result = await this.ratingRepository
+      .createQueryBuilder('rating')
+      .select('DISTINCT rating.bookId', 'bookId')
+      .where('rating.createdAt >= :startDate', { startDate })
+      .getRawMany();
+
+    const bookIds = result.map((item) => parseInt(item.bookId, 10));
+    this.logger.log(`기간 필터 결과: ${bookIds.length}개의 책 ID 찾음`);
+
+    return bookIds;
+  }
 }
