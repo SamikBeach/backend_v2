@@ -9,7 +9,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource, Brackets } from 'typeorm';
 import { Library } from './entities/library.entity';
 import { LibraryBook } from './entities/library-book.entity';
 import { LibraryTag } from '../library-tag/entities/library-tag.entity';
@@ -36,10 +36,10 @@ import {
   LibrarySortOption,
   PaginatedLibraryResponse,
   BookInfoDto,
+  TimeRangeOptions,
 } from './dto/library-response.dto';
 import { UserService } from '../user/user.service';
 import { NotificationService } from '../notification/notification.service';
-import { Brackets } from 'typeorm';
 import { LibraryTagService } from '../library-tag/library-tag.service';
 import { ReadingStatusService } from '../reading-status/reading-status.service';
 import { RatingService } from '../rating/rating.service';
@@ -74,6 +74,7 @@ export class LibraryService {
     private readonly readingStatusService: ReadingStatusService,
     @Inject(forwardRef(() => RatingService))
     private readonly ratingService: RatingService,
+    private readonly dataSource: DataSource,
   ) {}
 
   // 서재 생성
@@ -179,11 +180,12 @@ export class LibraryService {
     limit: number = 10,
     query?: string,
     tagId?: number,
+    timeRange?: TimeRangeOptions,
   ): Promise<PaginatedLibraryResponse> {
     const skip = (page - 1) * limit;
 
     this.logger.log(
-      `서재 목록 조회 시작: userId=${userId}, sort=${sortOption}, page=${page}, limit=${limit}, query=${query}, tagId=${tagId}`,
+      `서재 목록 조회 시작: userId=${userId}, sort=${sortOption}, page=${page}, limit=${limit}, query=${query}, tagId=${tagId}, timeRange=${timeRange}`,
     );
 
     try {
@@ -297,6 +299,7 @@ export class LibraryService {
           query: query || undefined,
           tagId: tagId || undefined,
           tagName: tagName || undefined,
+          timeRange: timeRange || undefined,
         },
       };
     } catch (error) {
@@ -310,6 +313,7 @@ export class LibraryService {
     userId: number,
     requestingUserId?: number,
     sortOption?: LibrarySortOption,
+    timeRange?: TimeRangeOptions,
   ): Promise<LibraryListResponseDto[]> {
     const user = await this.userService.findOne(userId);
 
@@ -1399,6 +1403,7 @@ export class LibraryService {
     userId?: number,
     isbn?: string,
     sortOption?: LibrarySortOption,
+    timeRange?: TimeRangeOptions,
   ): Promise<PaginatedLibraryResponse> {
     const skip = (page - 1) * limit;
 
@@ -1427,6 +1432,7 @@ export class LibraryService {
                 limit,
                 totalPages: 0,
                 sort: sortOption,
+                timeRange: timeRange || undefined,
               },
             };
           }
@@ -1442,6 +1448,7 @@ export class LibraryService {
               limit,
               totalPages: 0,
               sort: sortOption,
+              timeRange: timeRange || undefined,
             },
           };
         }
@@ -1540,6 +1547,7 @@ export class LibraryService {
           limit,
           totalPages: Math.ceil(total / limit),
           sort: sortOption,
+          timeRange: timeRange || undefined,
         },
       };
     } catch (error) {

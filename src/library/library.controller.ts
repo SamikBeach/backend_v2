@@ -12,17 +12,20 @@ import {
 import { LibraryService } from './library.service';
 import { CreateLibraryDto } from './dto/create-library.dto';
 import { UpdateLibraryDto } from './dto/update-library.dto';
-import { AddBookToLibraryDto } from './dto/add-book-to-library.dto';
-import { AddBooksToLibraryDto } from './dto/add-books-to-library.dto';
-import { AddTagToLibraryDto } from './dto/add-tag-to-library.dto';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
+import { AddBookToLibraryDto } from './dto/add-book-to-library.dto';
+import { AddBooksToLibraryDto } from './dto/add-books-to-library.dto';
+import { AddTagToLibraryDto } from './dto/add-tag-to-library.dto';
 import {
   LibrarySortOption,
   PaginatedLibraryResponse,
+  TimeRangeOptions,
 } from './dto/library-response.dto';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('library')
 @Controller('library')
 export class LibraryController {
   constructor(private readonly libraryService: LibraryService) {}
@@ -37,6 +40,7 @@ export class LibraryController {
   findAll(
     @GetUser() user?: User,
     @Query('sort') sort?: LibrarySortOption,
+    @Query('timeRange') timeRange?: TimeRangeOptions,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('query') query?: string,
@@ -46,6 +50,7 @@ export class LibraryController {
       console.log('findAll 호출됨', {
         userId: user?.id,
         sort,
+        timeRange,
         page,
         limit,
         query,
@@ -58,6 +63,7 @@ export class LibraryController {
         limit ? +limit : 10,
         query,
         tagId,
+        timeRange,
       );
     } catch (error) {
       console.error('findAll, 메소드 에러:', error);
@@ -71,11 +77,13 @@ export class LibraryController {
     @Param('userId', ParseIntPipe) userId: number,
     @Query('requestingUserId') requestingUserId?: string,
     @Query('sort') sort?: LibrarySortOption,
+    @Query('timeRange') timeRange?: TimeRangeOptions,
   ) {
     return this.libraryService.findAllByUser(
       userId,
       requestingUserId ? +requestingUserId : undefined,
       sort,
+      timeRange,
     );
   }
 
@@ -87,6 +95,7 @@ export class LibraryController {
     @Query('limit') limit?: number,
     @Query('isbn') isbn?: string,
     @Query('sort') sort?: LibrarySortOption,
+    @Query('timeRange') timeRange?: TimeRangeOptions,
     @GetUser() user?: User,
   ) {
     return this.libraryService.findLibrariesByBookId(
@@ -96,6 +105,7 @@ export class LibraryController {
       user?.id,
       isbn,
       sort,
+      timeRange,
     );
   }
 
@@ -208,6 +218,7 @@ export class LibraryController {
   @IsPublic()
   async findPopularLibrariesForHome(
     @Query('limit') limit?: number,
+    @Query('timeRange') timeRange?: TimeRangeOptions,
   ): Promise<PaginatedLibraryResponse> {
     const libraries = await this.libraryService.findPopularLibrariesForHome(
       limit || 3,
@@ -220,6 +231,7 @@ export class LibraryController {
         limit: libraries.length,
         totalPages: 1,
         sort: LibrarySortOption.SUBSCRIBERS,
+        timeRange,
       },
     };
   }
