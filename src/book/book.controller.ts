@@ -146,19 +146,6 @@ export class BookController {
     }
   }
 
-  @Post()
-  async create(@Body() createBookDto: CreateBookDto): Promise<Book> {
-    return this.bookService.create(createBookDto);
-  }
-
-  @Patch(':id')
-  async update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateBookDto: UpdateBookDto,
-  ): Promise<Book> {
-    return this.bookService.update(id, updateBookDto);
-  }
-
   @Post('initialize-featured')
   async initializeFeaturedBooks(
     @Query('categoryId') categoryId?: string,
@@ -195,11 +182,6 @@ export class BookController {
 
       return result;
     }
-  }
-
-  @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.bookService.remove(id);
   }
 
   // 홈화면용 인기 도서 API
@@ -279,51 +261,12 @@ export class BookController {
     );
   }
 
-  @Get('discover/category/:discoverCategoryId')
-  @IsPublic()
-  async findByDiscoverCategoryId(
-    @Param('discoverCategoryId', ParseIntPipe) discoverCategoryId: number,
-    @Query() queryParams: DiscoverBooksRequestDto,
-    @GetUser() user?: User,
-  ): Promise<BookSearchResponse> {
-    const { discoverSubCategoryId, sort, timeRange, page, limit } = queryParams;
-
-    return this.bookService.findDiscoverBooks(
-      discoverCategoryId,
-      discoverSubCategoryId,
-      sort,
-      timeRange,
-      page,
-      limit,
-      user?.id,
-    );
-  }
-
-  @Get('discover/subcategory/:discoverSubCategoryId')
-  @IsPublic()
-  async findByDiscoverSubCategoryId(
-    @Param('discoverSubCategoryId', ParseIntPipe) discoverSubCategoryId: number,
-    @Query() queryParams: DiscoverBooksRequestDto,
-    @GetUser() user?: User,
-  ): Promise<BookSearchResponse> {
-    const { sort, timeRange, page, limit } = queryParams;
-
-    return this.bookService.findDiscoverBooks(
-      undefined,
-      discoverSubCategoryId,
-      sort,
-      timeRange,
-      page,
-      limit,
-      user?.id,
-    );
-  }
-
   @Post('discover/add')
   async addBookToDiscoverCategory(
-    @Body('bookId', ParseIntPipe) bookId: number,
-    @Body('discoverCategoryId', ParseIntPipe) discoverCategoryId: number,
-    @Body('discoverSubCategoryId', ParseIntPipe) discoverSubCategoryId?: number,
+    @Query('bookId', ParseIntPipe) bookId: number,
+    @Query('discoverCategoryId', ParseIntPipe) discoverCategoryId: number,
+    @Query('discoverSubCategoryId', ParseIntPipe)
+    discoverSubCategoryId?: number,
   ): Promise<Book> {
     return this.bookService.addBookToDiscoverCategory(
       bookId,
@@ -332,9 +275,9 @@ export class BookController {
     );
   }
 
-  @Delete('discover/remove/:bookId')
+  @Post('discover/remove')
   async removeBookFromDiscoverCategory(
-    @Param('bookId', ParseIntPipe) bookId: number,
+    @Query('bookId', ParseIntPipe) bookId: number,
   ): Promise<Book> {
     return this.bookService.removeBookFromDiscoverCategory(bookId);
   }
@@ -363,5 +306,23 @@ export class BookController {
       console.error(`BookID ${id} 조회 중 오류 발생:`, error);
       throw new NotFoundException(`ID ${id}로 도서를 찾을 수 없습니다.`);
     }
+  }
+
+  @Post()
+  async create(@Body() createBookDto: CreateBookDto): Promise<Book> {
+    return this.bookService.create(createBookDto);
+  }
+
+  @Patch(':id')
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateBookDto: UpdateBookDto,
+  ): Promise<Book> {
+    return this.bookService.update(id, updateBookDto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.bookService.remove(id);
   }
 }

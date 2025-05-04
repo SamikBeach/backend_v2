@@ -79,12 +79,20 @@ export class Book {
   )
   discoverCategory: DiscoverCategory;
 
+  // discoverCategoryId 컬럼 추가
+  @Column({ nullable: true })
+  discoverCategoryId: number;
+
   // Discover SubCategory 관계
   @ManyToOne(
     () => DiscoverSubCategory,
     (discoverSubCategory) => discoverSubCategory.books,
   )
   discoverSubCategory: DiscoverSubCategory;
+
+  // discoverSubCategoryId 컬럼 추가
+  @Column({ nullable: true })
+  discoverSubCategoryId: number;
 
   @Column({ default: false })
   isFeatured: boolean; // 추천 도서 여부
