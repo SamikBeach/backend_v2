@@ -10,7 +10,7 @@ import { BookResponse } from '../book/dto/book.dto';
 @Injectable()
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
-  private readonly RECENT_SEARCH_MAX_PER_USER = 20; // 사용자당 최대 최근 검색어 수
+  private readonly RECENT_SEARCH_MAX_PER_USER = 3; // 사용자당 최대 최근 검색어 수
 
   constructor(
     @InjectRepository(SearchLog)
