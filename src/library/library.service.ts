@@ -9,7 +9,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource, Brackets } from 'typeorm';
 import { Library } from './entities/library.entity';
 import { LibraryBook } from './entities/library-book.entity';
 import { LibraryTag } from '../library-tag/entities/library-tag.entity';
@@ -36,16 +36,14 @@ import {
   LibrarySortOption,
   PaginatedLibraryResponse,
   BookInfoDto,
-  PopularLibraryResponseDto,
+  TimeRangeOptions,
 } from './dto/library-response.dto';
 import { UserService } from '../user/user.service';
 import { NotificationService } from '../notification/notification.service';
-import { Brackets } from 'typeorm';
 import { LibraryTagService } from '../library-tag/library-tag.service';
 import { ReadingStatusService } from '../reading-status/reading-status.service';
 import { RatingService } from '../rating/rating.service';
 import { Book } from '../book/entities/book.entity';
-import { NotificationType } from '../notification/entities/notification.entity';
 
 @Injectable()
 export class LibraryService {
@@ -64,13 +62,19 @@ export class LibraryService {
     private readonly librarySubscriptionRepository: Repository<LibrarySubscription>,
     @InjectRepository(LibraryUpdateHistory)
     private readonly libraryUpdateHistoryRepository: Repository<LibraryUpdateHistory>,
+    @Inject(forwardRef(() => BookService))
     private readonly bookService: BookService,
+    @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
     @Inject(forwardRef(() => LibraryTagService))
     private readonly libraryTagService: LibraryTagService,
+    @Inject(forwardRef(() => NotificationService))
     private readonly notificationService: NotificationService,
+    @Inject(forwardRef(() => ReadingStatusService))
     private readonly readingStatusService: ReadingStatusService,
+    @Inject(forwardRef(() => RatingService))
     private readonly ratingService: RatingService,
+    private readonly dataSource: DataSource,
   ) {}
 
   // 서재 생성
@@ -145,7 +149,7 @@ export class LibraryService {
   // 홈화면용 인기 서재 목록 조회
   async findPopularLibrariesForHome(
     limit: number = 3,
-  ): Promise<PopularLibraryResponseDto[]> {
+  ): Promise<LibraryListResponseDto[]> {
     // 구독자 수가 많은 순으로 공개 서재 조회
     const popularLibraries = await this.libraryRepository
       .createQueryBuilder('library')
@@ -157,34 +161,15 @@ export class LibraryService {
       .take(limit)
       .getMany();
 
-    // 홈화면에 표시할 형태로 데이터 가공
-    const result = popularLibraries.map((library) => {
-      // 미리보기용 책 - 최근 추가된 3권으로 제한
-      const previewBooks = library.libraryBooks
-        ? library.libraryBooks
-            .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-            .slice(0, 3)
-            .map((libraryBook) => ({
-              id: libraryBook.book.id,
-              title: libraryBook.book.title,
-              author: libraryBook.book.author,
-              coverImage: libraryBook.book.coverImage || '',
-              isbn: libraryBook.book.isbn || '',
-              publisher: libraryBook.book.publisher || '',
-            }))
-        : [];
+    // 서재 정보 변환
+    const librariesWithDetails = await Promise.all(
+      popularLibraries.map(async (library) => {
+        // 구독 여부는 로그인한 사용자만 확인 가능하므로 기본값 false 사용
+        return this.transformLibraryToListResponseDto(library, false);
+      }),
+    );
 
-      return {
-        id: library.id,
-        name: library.name,
-        ownerName: library.owner.username,
-        subscriberCount: library.subscriberCount,
-        bookCount: library.libraryBooks.length,
-        previewBooks,
-      };
-    });
-
-    return result;
+    return librariesWithDetails;
   }
 
   // 모든 서재 목록 조회 (공개된 서재만)
@@ -195,11 +180,12 @@ export class LibraryService {
     limit: number = 10,
     query?: string,
     tagId?: number,
+    timeRange?: TimeRangeOptions,
   ): Promise<PaginatedLibraryResponse> {
     const skip = (page - 1) * limit;
 
     this.logger.log(
-      `서재 목록 조회 시작: userId=${userId}, sort=${sortOption}, page=${page}, limit=${limit}, query=${query}, tagId=${tagId}`,
+      `서재 목록 조회 시작: userId=${userId}, sort=${sortOption}, page=${page}, limit=${limit}, query=${query}, tagId=${tagId}, timeRange=${timeRange}`,
     );
 
     try {
@@ -313,6 +299,7 @@ export class LibraryService {
           query: query || undefined,
           tagId: tagId || undefined,
           tagName: tagName || undefined,
+          timeRange: timeRange || undefined,
         },
       };
     } catch (error) {
@@ -326,6 +313,7 @@ export class LibraryService {
     userId: number,
     requestingUserId?: number,
     sortOption?: LibrarySortOption,
+    timeRange?: TimeRangeOptions,
   ): Promise<LibraryListResponseDto[]> {
     const user = await this.userService.findOne(userId);
 
@@ -535,6 +523,9 @@ export class LibraryService {
         )
       : [];
 
+    // BASE_URL 환경변수 가져오기
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+
     return {
       id: library.id,
       name: library.name,
@@ -544,18 +535,35 @@ export class LibraryService {
         id: library.owner.id,
         username: library.owner.username,
         email: library.owner.email,
+        profileImage: library.owner.profileImage?.startsWith('http')
+          ? library.owner.profileImage
+          : library.owner.profileImage
+            ? `${baseUrl}${library.owner.profileImage}`
+            : null,
       },
       books: libraryBooks,
       tags,
       isSubscribed,
       subscriberCount: library.subscriptions?.length || 0,
       subscribers:
-        library.subscriptions?.map((subscription) => ({
-          id: subscription.subscriber.id,
-          username: subscription.subscriber.username,
-          email: subscription.subscriber.email,
-          profileImage: null, // 프로필 이미지가 있다면 추가
-        })) || [],
+        library.subscriptions?.map((subscription) => {
+          // 구독자의 프로필 이미지 URL 생성
+          let profileImageUrl = null;
+          if (subscription.subscriber.profileImage) {
+            profileImageUrl = subscription.subscriber.profileImage.startsWith(
+              'http',
+            )
+              ? subscription.subscriber.profileImage
+              : `${baseUrl}${subscription.subscriber.profileImage}`;
+          }
+
+          return {
+            id: subscription.subscriber.id,
+            username: subscription.subscriber.username,
+            email: subscription.subscriber.email,
+            profileImage: profileImageUrl,
+          };
+        }) || [],
       recentUpdates,
       createdAt: library.createdAt,
       updatedAt: library.updatedAt,
@@ -1172,21 +1180,39 @@ export class LibraryService {
 
   // 서재의 구독자 목록 조회
   async getLibrarySubscribers(id: number): Promise<SubscriberResponseDto[]> {
-    const library = await this.libraryRepository.findOne({
-      where: { id },
-      relations: ['subscriptions', 'subscriptions.subscriber'],
-    });
+    // 서재 가져오기
+    const library = await this.libraryRepository
+      .createQueryBuilder('library')
+      .leftJoinAndSelect('library.subscriptions', 'subscription')
+      .leftJoinAndSelect('subscription.subscriber', 'subscriber')
+      .where('library.id = :id', { id })
+      .getOne();
 
     if (!library) {
       throw new NotFoundException(`Library with ID ${id} not found`);
     }
 
-    return library.subscriptions.map((subscription) => ({
-      id: subscription.subscriber.id,
-      username: subscription.subscriber.username,
-      email: subscription.subscriber.email,
-      profileImage: null, // 프로필 이미지가 있다면 추가
-    }));
+    // BASE_URL 환경변수 가져오기
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+
+    return library.subscriptions.map((subscription) => {
+      // 구독자 프로필 이미지 URL 생성
+      let profileImageUrl = null;
+      if (subscription.subscriber.profileImage) {
+        profileImageUrl = subscription.subscriber.profileImage.startsWith(
+          'http',
+        )
+          ? subscription.subscriber.profileImage
+          : `${baseUrl}${subscription.subscriber.profileImage}`;
+      }
+
+      return {
+        id: subscription.subscriber.id,
+        username: subscription.subscriber.username,
+        email: subscription.subscriber.email,
+        profileImage: profileImageUrl,
+      };
+    });
   }
 
   // 최근 업데이트 이력 조회
@@ -1324,6 +1350,18 @@ export class LibraryService {
   private async mapToLibraryResponseDto(
     library: Library,
   ): Promise<LibraryResponseDto> {
+    // BASE_URL 환경변수 가져오기
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+
+    // 프로필 이미지 URL 생성
+    let profileImageUrl = null;
+    if (library.owner.profileImage) {
+      // 이미 완전한 URL인 경우 그대로 사용, 아닌 경우 baseUrl 추가
+      profileImageUrl = library.owner.profileImage.startsWith('http')
+        ? library.owner.profileImage
+        : `${baseUrl}${library.owner.profileImage}`;
+    }
+
     return {
       id: library.id,
       name: library.name,
@@ -1334,6 +1372,7 @@ export class LibraryService {
         id: library.owner.id,
         username: library.owner.username,
         email: library.owner.email,
+        profileImage: profileImageUrl,
       },
       createdAt: library.createdAt,
       updatedAt: library.updatedAt,
@@ -1364,6 +1403,7 @@ export class LibraryService {
     userId?: number,
     isbn?: string,
     sortOption?: LibrarySortOption,
+    timeRange?: TimeRangeOptions,
   ): Promise<PaginatedLibraryResponse> {
     const skip = (page - 1) * limit;
 
@@ -1392,6 +1432,7 @@ export class LibraryService {
                 limit,
                 totalPages: 0,
                 sort: sortOption,
+                timeRange: timeRange || undefined,
               },
             };
           }
@@ -1407,6 +1448,7 @@ export class LibraryService {
               limit,
               totalPages: 0,
               sort: sortOption,
+              timeRange: timeRange || undefined,
             },
           };
         }
@@ -1505,6 +1547,7 @@ export class LibraryService {
           limit,
           totalPages: Math.ceil(total / limit),
           sort: sortOption,
+          timeRange: timeRange || undefined,
         },
       };
     } catch (error) {
@@ -1611,6 +1654,18 @@ export class LibraryService {
         }))
       : [];
 
+    // BASE_URL 환경변수 가져오기
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+
+    // 프로필 이미지 URL 생성
+    let profileImageUrl = null;
+    if (library.owner.profileImage) {
+      // 이미 완전한 URL인 경우 그대로 사용, 아닌 경우 baseUrl 추가
+      profileImageUrl = library.owner.profileImage.startsWith('http')
+        ? library.owner.profileImage
+        : `${baseUrl}${library.owner.profileImage}`;
+    }
+
     return {
       id: library.id,
       name: library.name,
@@ -1621,6 +1676,7 @@ export class LibraryService {
         id: library.owner.id,
         username: library.owner.username,
         email: library.owner.email,
+        profileImage: profileImageUrl,
       },
       tags,
       bookCount: library.libraryBooks ? library.libraryBooks.length : 0,
@@ -1629,5 +1685,87 @@ export class LibraryService {
       createdAt: library.createdAt,
       updatedAt: library.updatedAt,
     };
+  }
+
+  /**
+   * 여러 책의 서재 담긴 수를 가져오고 담긴 수에 따라 내림차순으로 정렬
+   * @param bookIds 책 ID 배열
+   * @returns {bookId: number, libraryCount: number} 형태의 배열, 담긴 수 내림차순 정렬
+   */
+  async getLibraryCountsByBooks(
+    bookIds: number[],
+  ): Promise<{ bookId: number; libraryCount: number }[]> {
+    if (!bookIds || bookIds.length === 0) {
+      return [];
+    }
+
+    // 책 ID 별로 서재에 담긴 수를 집계하는 쿼리
+    const result = await this.libraryBookRepository
+      .createQueryBuilder('libraryBook')
+      .select('libraryBook.bookId', 'bookId')
+      .addSelect('COUNT(libraryBook.id)', 'libraryCount')
+      .where('libraryBook.bookId IN (:...bookIds)', { bookIds })
+      .groupBy('libraryBook.bookId')
+      .orderBy('libraryCount', 'DESC')
+      .getRawMany();
+
+    return result.map((item) => ({
+      bookId: parseInt(item.bookId, 10),
+      libraryCount: parseInt(item.libraryCount, 10),
+    }));
+  }
+
+  /**
+   * 특정 기간 동안 여러 책의 서재 담긴 수를 가져오고 담긴 수에 따라 내림차순으로 정렬
+   * @param bookIds 책 ID 배열
+   * @param startDate 시작 날짜
+   * @returns {bookId: number, libraryCount: number} 형태의 배열, 담긴 수 내림차순 정렬
+   */
+  async getLibraryCountsByBooksAndPeriod(
+    bookIds: number[],
+    startDate: Date,
+  ): Promise<{ bookId: number; libraryCount: number }[]> {
+    if (!bookIds || bookIds.length === 0) {
+      return [];
+    }
+
+    // 책 ID 별로 특정 기간에 서재에 담긴 수를 집계하는 쿼리
+    const result = await this.libraryBookRepository
+      .createQueryBuilder('libraryBook')
+      .select('libraryBook.bookId', 'bookId')
+      .addSelect('COUNT(libraryBook.id)', 'libraryCount')
+      .where('libraryBook.bookId IN (:...bookIds)', { bookIds })
+      .andWhere('libraryBook.createdAt >= :startDate', { startDate })
+      .groupBy('libraryBook.bookId')
+      .orderBy('libraryCount', 'DESC')
+      .getRawMany();
+
+    return result.map((item) => ({
+      bookId: parseInt(item.bookId, 10),
+      libraryCount: parseInt(item.libraryCount, 10),
+    }));
+  }
+
+  /**
+   * 특정 기간 동안 서재에 담긴 책 ID 목록을 가져옴
+   * @param startDate 시작 날짜
+   * @returns 책 ID 배열
+   */
+  async getBookIdsAddedInPeriod(startDate: Date): Promise<number[]> {
+    this.logger.log(
+      `특정 기간(${startDate.toISOString()} 이후)에 서재에 담긴 책 ID 조회`,
+    );
+
+    // 특정 기간에 서재에 담긴 모든 책의 ID 가져오기
+    const result = await this.libraryBookRepository
+      .createQueryBuilder('libraryBook')
+      .select('DISTINCT libraryBook.bookId', 'bookId')
+      .where('libraryBook.createdAt >= :startDate', { startDate })
+      .getRawMany();
+
+    const bookIds = result.map((item) => parseInt(item.bookId, 10));
+    this.logger.log(`기간 필터 결과: ${bookIds.length}개의 책 ID 찾음`);
+
+    return bookIds;
   }
 }

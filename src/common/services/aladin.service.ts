@@ -375,6 +375,12 @@ export class AladinService {
       }
     }
 
+    // 커버 이미지 URL에서 cover200을 cover500으로 교체
+    let coverImage = item.cover || null;
+    if (coverImage && typeof coverImage === 'string') {
+      coverImage = coverImage.replace(/cover\d+/i, 'cover500');
+    }
+
     return {
       title: item.title,
       author: authorInfo
@@ -382,7 +388,7 @@ export class AladinService {
         .join(', ')
         .trim(),
       translator,
-      coverImage: item.cover || null,
+      coverImage: coverImage,
       isbn: item.isbn,
       isbn13: item.isbn13,
       publisher: item.publisher,

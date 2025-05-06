@@ -9,6 +9,8 @@ import { DiscoverCategoryModule } from '../discover-category/discover-category.m
 import { SearchModule } from '../search/search.module';
 import { ReadingStatusModule } from '../reading-status/reading-status.module';
 import { RatingModule } from '../rating/rating.module';
+import { LibraryModule } from '../library/library.module';
+import { ReviewModule } from '../review/review.module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { RatingModule } from '../rating/rating.module';
     forwardRef(() => SearchModule),
     forwardRef(() => ReadingStatusModule),
     forwardRef(() => RatingModule),
+    forwardRef(() => LibraryModule),
+    forwardRef(() => ReviewModule),
   ],
   controllers: [BookController],
   providers: [BookService],

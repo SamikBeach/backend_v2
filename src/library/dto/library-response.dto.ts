@@ -2,6 +2,7 @@ export interface OwnerInfoDto {
   id: number;
   username: string;
   email: string;
+  profileImage?: string;
 }
 
 export interface BookInfoDto {
@@ -81,6 +82,15 @@ export interface LibraryDetailResponseDto
   recentUpdates: UpdateHistoryItem[];
 }
 
+// 기간 필터 옵션
+export enum TimeRangeOptions {
+  ALL = 'all',
+  TODAY = 'today',
+  WEEK = 'week',
+  MONTH = 'month',
+  YEAR = 'year',
+}
+
 // 페이지네이션 메타데이터
 export interface LibraryResponseMeta {
   total: number;
@@ -88,6 +98,7 @@ export interface LibraryResponseMeta {
   limit: number;
   totalPages: number;
   sort?: LibrarySortOption;
+  timeRange?: TimeRangeOptions;
   query?: string;
   tagId?: number;
   tagName?: string;
@@ -103,6 +114,7 @@ export interface PopularLibraryResponseDto {
   id: number;
   name: string;
   ownerName: string;
+  ownerProfileImage?: string;
   subscriberCount: number;
   bookCount: number;
   previewBooks: BookInfoDto[];

@@ -32,6 +32,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CommentResponseDto } from './dto/review-response.dto';
+import { ReviewResponseDto } from './dto/review-response.dto';
 
 @ApiTags('review')
 @Controller('review')
@@ -275,7 +276,13 @@ export class ReviewController {
   @IsPublic()
   async findPopularReviewsForHome(
     @Query('limit') limit?: number,
-  ): Promise<any> {
-    return this.reviewService.findPopularReviewsForHome(limit || 4);
+    @GetUser() user?: User,
+  ): Promise<{
+    reviews: ReviewResponseDto[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    return this.reviewService.findPopularReviewsForHome(limit || 4, user?.id);
   }
 }

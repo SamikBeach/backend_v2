@@ -4,6 +4,8 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -39,7 +41,9 @@ export class ReviewService {
     @InjectRepository(Comment)
     private readonly commentRepository: Repository<Comment>,
     private readonly fileService: FileService,
+    @Inject(forwardRef(() => BookService))
     private readonly bookService: BookService,
+    @Inject(forwardRef(() => UserService))
     private readonly userService: UserService,
     private readonly notificationService: NotificationService,
     private readonly ratingService: RatingService,
@@ -607,7 +611,15 @@ export class ReviewService {
   /**
    * 홈화면용 인기 리뷰 조회
    */
-  async findPopularReviewsForHome(limit: number = 4): Promise<any> {
+  async findPopularReviewsForHome(
+    limit: number = 4,
+    userId?: number,
+  ): Promise<{
+    reviews: ReviewResponseDto[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
     try {
       const popularReviews = await this.reviewRepository
         .createQueryBuilder('review')
@@ -621,41 +633,81 @@ export class ReviewService {
         .take(limit)
         .getMany();
 
-      const simplifiedReviews = await Promise.all(
+      // 책 ID를 수집하여 한 번에 정보 가져오기
+      const bookIds = popularReviews
+        .flatMap((review) => review.books?.map((rb) => rb.book.id) || [])
+        .filter((id) => id !== undefined);
+
+      // 책 정보 맵 생성
+      const bookDetailsMap = new Map();
+
+      if (bookIds.length > 0) {
+        // 책 상세 정보 가져오기
+        const bookDetails = await Promise.all(
+          bookIds.map((id) =>
+            this.bookService
+              .findById(id)
+              .then((book) =>
+                this.bookService.enrichBookWithUserData(book, userId),
+              )
+              .catch((err) => {
+                this.logger.error(`책 ID ${id} 정보 조회 실패: ${err.message}`);
+                return null;
+              }),
+          ),
+        );
+
+        // 책 ID로 맵핑
+        bookDetails.forEach((book) => {
+          if (book) {
+            bookDetailsMap.set(book.id, book);
+          }
+        });
+      }
+
+      // 리뷰 정보 변환
+      const reviewDtos = await Promise.all(
         popularReviews.map(async (review) => {
-          // 첫 번째 이미지만 사용 (미리보기용)
-          const previewImageUrl =
-            review.images.length > 0 ? review.images[0].url : null;
+          const dto = await this.mapReviewToResponseDto(review, userId);
 
-          // 연결된 책 정보
-          const books = review.books?.map((reviewBook) => ({
-            id: reviewBook.book.id,
-            title: reviewBook.book.title,
-            author: reviewBook.book.author,
-            coverImage: reviewBook.book.coverImage,
-          }));
+          // 책 정보 강화
+          if (dto.books && dto.books.length > 0) {
+            dto.books = dto.books.map((book) => {
+              const enrichedBook = bookDetailsMap.get(book.id);
+              if (enrichedBook) {
+                return {
+                  id: book.id,
+                  title: book.title,
+                  author: book.author,
+                  coverImage: book.coverImage,
+                  publisher: book.publisher,
+                  isbn: enrichedBook.isbn,
+                  isbn13: enrichedBook.isbn13,
+                  publishDate: enrichedBook.publishDate,
+                  description:
+                    enrichedBook.description?.substring(0, 100) + '...',
+                  rating: enrichedBook.rating,
+                  reviews: enrichedBook.reviews,
+                  totalRatings: enrichedBook.totalRatings,
+                  readingStats: enrichedBook.readingStats,
+                  userRating: enrichedBook.userRating,
+                  userReadingStatus: enrichedBook.userReadingStatus,
+                };
+              }
+              return book;
+            });
+          }
 
-          // 짧은 버전의 컨텐츠
-          const shortContent =
-            review.content.length > 100
-              ? review.content.substring(0, 100) + '...'
-              : review.content;
-
-          return {
-            id: review.id,
-            content: shortContent,
-            type: review.type,
-            authorName: review.author.username || '사용자',
-            previewImage: previewImageUrl,
-            likeCount: review.likeCount,
-            commentCount: review.commentCount,
-            books,
-            createdAt: review.createdAt,
-          };
+          return dto;
         }),
       );
 
-      return simplifiedReviews;
+      return {
+        reviews: reviewDtos,
+        total: reviewDtos.length,
+        page: 1,
+        totalPages: 1,
+      };
     } catch (error) {
       this.logger.error(
         `Failed to fetch popular reviews for home: ${error.message}`,
@@ -862,18 +914,19 @@ export class ReviewService {
         );
 
         try {
-          // ISBN으로 책 조회 (saveToDb=true로 설정하여 DB에 저장하도록 수정)
-          const book = await this.bookService.getBookDetailByIsbn(isbn, true);
+          // ISBN으로 책 조회 (saveToDb=false로 설정하여 DB에 저장하지 않음)
+          const book = await this.bookService.getBookDetailByIsbn(isbn, false);
           this.logger.log(`ISBN ${isbn}로 책을 찾았습니다. ID: ${book.id}`);
 
           // DB에 이미 존재하는 책인 경우에만 실제 bookId로 검색 진행
-          if (book.id > 0) {
+          if (book && book.id > 0) {
             bookId = book.id;
-            this.logger.log(`새로운 BookID로 검색 진행: ${bookId}`);
+            this.logger.log(`기존 책 ID로 검색 진행: ${bookId}`);
           } else {
-            // 책이 DB에 없는 경우 빈 결과 반환 (이 부분은 이제 발생하지 않아야 함)
-            this.logger.log(`책 ID가 아직 유효하지 않습니다: ${book.id}`);
+            // 책이 DB에 없는 경우 빈 결과 반환
+            this.logger.log(`책이 DB에 존재하지 않아 빈 결과 반환`);
             return {
+              book: book && book.id < 0 ? book : null,
               data: [],
               meta: {
                 total: 0,
@@ -1184,5 +1237,29 @@ export class ReviewService {
       );
       throw error;
     }
+  }
+
+  /**
+   * 특정 기간에 리뷰가 작성된 책 ID 목록을 가져옴
+   * @param startDate 시작 날짜
+   * @returns 해당 기간에 리뷰가 작성된 책 ID 배열
+   */
+  async getBookIdsReviewedInPeriod(startDate: Date): Promise<number[]> {
+    this.logger.log(
+      `특정 기간(${startDate.toISOString()} 이후)에 리뷰가 작성된 책 ID 조회`,
+    );
+
+    // Review와 ReviewBook 테이블을 조인하여 특정 기간에 리뷰가 작성된 책 ID 가져오기
+    const result = await this.reviewBookRepository
+      .createQueryBuilder('reviewBook')
+      .innerJoin('reviewBook.review', 'review')
+      .select('DISTINCT reviewBook.bookId', 'bookId')
+      .where('review.createdAt >= :startDate', { startDate })
+      .getRawMany();
+
+    const bookIds = result.map((item) => parseInt(item.bookId, 10));
+    this.logger.log(`기간 필터 결과: ${bookIds.length}개의 책 ID 찾음`);
+
+    return bookIds;
   }
 }
