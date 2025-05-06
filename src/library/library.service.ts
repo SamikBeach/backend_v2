@@ -403,6 +403,9 @@ export class LibraryService {
     // Check if the user is subscribed to this library
     let isSubscribed = false;
 
+    // 사용자가 라이브러리 소유자를 팔로우하는지 확인하는 변수
+    let isFollowingOwner = false;
+
     if (userId) {
       this.logger.debug(`사용자(${userId})의 서재(${id}) 구독 여부 확인`);
 
@@ -421,6 +424,17 @@ export class LibraryService {
         isSubscribed = await this.isUserSubscribed(userId, id);
         this.logger.debug(
           `isUserSubscribed 메서드 호출 결과: ${isSubscribed ? '구독 중' : '미구독'}`,
+        );
+      }
+
+      // 3. 사용자가 라이브러리 소유자를 팔로우하는지 확인
+      if (userId !== library.ownerId) {
+        isFollowingOwner = await this.userService.isFollowing(
+          userId,
+          library.ownerId,
+        );
+        this.logger.debug(
+          `사용자(${userId})는 라이브러리 소유자(${library.ownerId})를 ${isFollowingOwner ? '팔로우 중' : '팔로우하지 않음'}`,
         );
       }
     }
@@ -540,6 +554,7 @@ export class LibraryService {
           : library.owner.profileImage
             ? `${baseUrl}${library.owner.profileImage}`
             : null,
+        isFollowing: isFollowingOwner,
       },
       books: libraryBooks,
       tags,
