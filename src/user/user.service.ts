@@ -1218,7 +1218,7 @@ export class UserService {
         for (const book of books) {
           const enrichedBook = await this.bookService.enrichBookWithUserData(
             book,
-            currentUserId,
+            userId,
           );
           bookDetailsMap.set(book.id, enrichedBook);
         }
@@ -1461,7 +1461,7 @@ export class UserService {
         1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
         ['review'], // review 타입만 필터링
         'recent',
-        currentUserId, // 좋아요 여부 확인을 위해 currentUserId 전달
+        currentUserId,
       );
 
       // 리뷰에 포함된 책의 ID 목록 생성
@@ -1558,7 +1558,7 @@ export class UserService {
         for (const book of books) {
           const enrichedBook = await this.bookService.enrichBookWithUserData(
             book,
-            currentUserId,
+            userId,
           );
           bookDetailsMap.set(book.id, enrichedBook);
         }
@@ -1703,7 +1703,7 @@ export class UserService {
         1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
         ['review'], // 'review' 타입만 포함
         filter,
-        currentUserId,
+        currentUserId, // 좋아요 여부 확인을 위해 currentUserId 유지
       );
 
       // 평점 조회
@@ -1711,7 +1711,7 @@ export class UserService {
         userId,
         1,
         1000, // 충분히 큰 숫자로 모든 평점 가져오기
-        currentUserId,
+        currentUserId, // 여기서는 currentUserId 유지 (isLiked 관련)
       );
 
       // 리뷰와 평점을 합치고 타입 필드 추가
@@ -1888,7 +1888,7 @@ export class UserService {
         1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
         ['review'], // review 타입만 필터링
         'recent',
-        currentUserId,
+        userId, // 수정: currentUserId 대신 userId를 사용하여 프로필 소유자의 평점을 가져옴
       );
 
       // 평점 조회
@@ -1896,7 +1896,7 @@ export class UserService {
         userId,
         1,
         1000, // 충분히 큰 숫자로 모든 평점 가져오기
-        currentUserId,
+        userId, // 수정: currentUserId 대신 userId를 사용하여 프로필 소유자의 평점을 가져옴
       );
 
       // 리뷰와 평점을 합치고 타입 필드 추가
