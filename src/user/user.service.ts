@@ -435,7 +435,7 @@ export class UserService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    const libraryCount = await this.getLibraryCount(id);
+    const libraryCount = await this.getLibraryCount(id, currentUserId);
     const readCount = await this.getReadCount(id);
     const subscribedLibraryCount = await this.getSubscribedLibraryCount(id);
     const reviewCounts = await this.getUserReviewTypeCounts(id);
@@ -644,8 +644,24 @@ export class UserService {
   }
 
   // 라이브러리 수 조회
-  private async getLibraryCount(userId: number): Promise<number> {
+  private async getLibraryCount(
+    userId: number,
+    currentUserId?: number,
+  ): Promise<number> {
     const libraryRepo = this.userRepository.manager.getRepository(Library);
+
+    // 본인 프로필을 조회하는 경우 모든 서재 카운트, 다른 사람이 조회하는 경우 공개 서재만 카운트
+    const isOwnProfile = userId === currentUserId;
+
+    if (!isOwnProfile) {
+      return libraryRepo.count({
+        where: {
+          ownerId: userId,
+          isPublic: true,
+        },
+      });
+    }
+
     return libraryRepo.count({ where: { ownerId: userId } });
   }
 
