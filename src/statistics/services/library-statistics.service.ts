@@ -784,20 +784,35 @@ export class LibraryStatisticsService {
         .createQueryBuilder('history')
         .innerJoin('history.library', 'library')
         .select('library.name', 'library')
+        .addSelect('COUNT(history.id)', 'totalUpdates')
         .addSelect(
-          'COUNT(history.id) / (DATEDIFF(NOW(), MIN(history.createdAt)) / 30)',
-          'updatesPerMonth',
+          'GREATEST(DATEDIFF(NOW(), MIN(history.createdAt)), 1) as daysSinceFirstUpdate',
         )
         .where('library.ownerId = :userId', { userId })
         .groupBy('library.id')
         .having('COUNT(history.id) > 0')
-        .orderBy('updatesPerMonth', 'DESC')
+        .orderBy('totalUpdates', 'DESC')
         .getRawMany();
 
-      const updateFrequency = updateFrequencyData.map((item) => ({
-        library: item.library,
-        updatesPerMonth: parseFloat(item.updatesPerMonth) || 0,
-      }));
+      // 업데이트 빈도를 계산: 총 업데이트 수 / (첫 업데이트 이후 날짜 수 / 30)
+      // 최소 1일을 보장하여 0으로 나누기를 방지
+      const updateFrequency = updateFrequencyData.map((item) => {
+        const totalUpdates = parseInt(item.totalUpdates, 10);
+        const daysSinceFirstUpdate = parseInt(item.daysSinceFirstUpdate, 10);
+        const monthsSinceFirstUpdate = Math.max(daysSinceFirstUpdate / 30, 1);
+
+        // 월별 업데이트 횟수 계산 (최소 0.1 보장)
+        const updatesPerMonth = totalUpdates / monthsSinceFirstUpdate;
+
+        this.logger.debug(
+          `서재(${item.library}) 업데이트 계산: 총 ${totalUpdates}회 / ${daysSinceFirstUpdate}일(${monthsSinceFirstUpdate.toFixed(2)}개월) = ${updatesPerMonth.toFixed(2)}회/월`,
+        );
+
+        return {
+          library: item.library,
+          updatesPerMonth: parseFloat(updatesPerMonth.toFixed(2)) || 0,
+        };
+      });
 
       // 업데이트가 가장 활발한 서재
       let mostActiveLibrary = '없음';
@@ -829,9 +844,27 @@ export class LibraryStatisticsService {
         Sunday: '일요일',
       };
 
-      const weekdayActivity = weekdayActivityData.map((item) => ({
-        day: dayNameMap[item.day] || item.day,
-        count: parseInt(item.count, 10),
+      // 모든 요일을 포함하는 배열 생성 (영어 요일명)
+      const allDays = [
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday',
+      ];
+
+      // 요일별 활동 데이터를 맵으로 변환 (영어 요일명 기준)
+      const dayActivityMap = {};
+      weekdayActivityData.forEach((item) => {
+        dayActivityMap[item.day] = parseInt(item.count, 10);
+      });
+
+      // 모든 요일을 포함하는 결과 생성
+      const weekdayActivity = allDays.map((day) => ({
+        day: dayNameMap[day] || day,
+        count: dayActivityMap[day] || 0, // 해당 요일 데이터가 없으면 0으로 설정
       }));
 
       return {
