@@ -499,10 +499,20 @@ export class UserService {
     // TypeORM QueryBuilder를 사용한 라이브러리 조회
     const libraryRepo = this.userRepository.manager.getRepository(Library);
 
-    const [libraries, total] = await libraryRepo
+    // 다른 사용자의 라이브러리를 조회하는 경우 공개 라이브러리만 조회
+    const isOwnProfile = userId === currentUserId;
+
+    let query = libraryRepo
       .createQueryBuilder('lib')
       .where('lib.ownerId = :userId', { userId })
-      .leftJoinAndSelect('lib.owner', 'owner')
+      .leftJoinAndSelect('lib.owner', 'owner');
+
+    // 본인이 아닌 경우 공개된 라이브러리만 보여줌
+    if (!isOwnProfile) {
+      query = query.andWhere('lib.isPublic = :isPublic', { isPublic: true });
+    }
+
+    const [libraries, total] = await query
       .orderBy('lib.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
