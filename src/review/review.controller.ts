@@ -65,7 +65,7 @@ export class ReviewController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('type') type?: string | string[],
-    @Query('filter') filter?: 'popular' | 'recent',
+    @Query('filter') filter?: 'popular' | 'recent' | 'following',
   ) {
     // type이 string[] 또는 string 둘 다 처리
     const typeArray = Array.isArray(type) ? type : type ? [type] : undefined;

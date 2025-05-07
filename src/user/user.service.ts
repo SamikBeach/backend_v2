@@ -874,6 +874,25 @@ export class UserService {
     };
   }
 
+  /**
+   * 사용자가 팔로우하는 모든 사용자의 ID 목록 조회
+   */
+  async findFollowingIds(userId: number): Promise<number[]> {
+    try {
+      const followingRelations = await this.userFollowerRepository.find({
+        where: { follower_id: userId },
+        select: ['following_id'],
+      });
+
+      return followingRelations.map((relation) => relation.following_id);
+    } catch (error) {
+      this.logger.error(
+        `사용자 ID ${userId}의 팔로잉 목록 조회 중 오류: ${error.message}`,
+      );
+      return [];
+    }
+  }
+
   async isFollowing(followerId: number, followingId: number): Promise<boolean> {
     const follow = await this.userFollowerRepository.findOne({
       where: {

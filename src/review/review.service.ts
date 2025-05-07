@@ -125,7 +125,7 @@ export class ReviewService {
     page: number = 1,
     limit: number = 10,
     type?: string | string[],
-    filter: 'popular' | 'recent' = 'recent',
+    filter: 'popular' | 'recent' | 'following' = 'recent',
   ): Promise<{
     reviews: ReviewResponseDto[];
     total: number;
@@ -155,8 +155,37 @@ export class ReviewService {
         }
       }
 
-      // 필터 적용 (인기순 / 최신순)
+      // 필터 적용 (인기순 / 최신순 / 팔로잉)
       switch (filter) {
+        case 'following':
+          // 팔로잉 유저의 게시글만 표시
+          if (userId) {
+            // 사용자가 팔로우하는 사용자 ID 목록 조회
+            const followingUsers =
+              await this.userService.findFollowingIds(userId);
+
+            if (followingUsers.length > 0) {
+              // 팔로우하는 사용자가 있는 경우에만 필터링
+              queryBuilder.andWhere('review.authorId IN (:...followingIds)', {
+                followingIds: followingUsers,
+              });
+
+              // 인기순 정렬 (좋아요 + 댓글 + 최신순)
+              queryBuilder
+                .orderBy('review.likeCount', 'DESC')
+                .addOrderBy('review.commentCount', 'DESC')
+                .addOrderBy('review.createdAt', 'DESC');
+            } else {
+              // 팔로우하는 사용자가 없는 경우 빈 결과 반환을 위한 설정
+              this.logger.log('팔로우하는 사용자가 없습니다.');
+              queryBuilder.andWhere('1 = 0'); // 항상 false 조건
+            }
+          } else {
+            // 로그인하지 않은 경우 빈 결과 반환을 위한 설정
+            this.logger.log('로그인하지 않은 사용자의 팔로잉 필터 요청');
+            queryBuilder.andWhere('1 = 0'); // 항상 false 조건
+          }
+          break;
         case 'popular':
           // 인기순: 좋아요가 많은 순서 + 댓글이 많은 순서
           queryBuilder
