@@ -67,6 +67,7 @@ export class UserController {
   }
 
   @Get(':id/profile')
+  @IsPublic()
   getUserProfile(
     @Param('id', ParseIntPipe) id: number,
     @IsOwnProfile() isOwnProfile: boolean,
@@ -77,6 +78,7 @@ export class UserController {
   }
 
   @Get(':id/libraries')
+  @IsPublic()
   getUserLibraries(
     @Param('id', ParseIntPipe) id: number,
     @IsOwnProfile() isOwnProfile: boolean,
@@ -128,6 +130,7 @@ export class UserController {
 
   // 팔로워 목록 조회 엔드포인트
   @Get(':id/followers')
+  @IsPublic()
   getFollowers(
     @Param('id', ParseIntPipe) id: number,
     @Query('page') page: number = 1,
@@ -140,6 +143,7 @@ export class UserController {
 
   // 팔로잉 목록 조회 엔드포인트
   @Get(':id/following')
+  @IsPublic()
   getFollowing(
     @Param('id', ParseIntPipe) id: number,
     @Query('page') page: number = 1,
@@ -193,6 +197,7 @@ export class UserController {
   }
 
   @Get(':id/books')
+  @IsPublic()
   getUserBooks(
     @Param('id', ParseIntPipe) id: number,
     @IsOwnProfile() isOwnProfile: boolean,
@@ -267,6 +272,7 @@ export class UserController {
    * @returns 구독한 서재 목록과 페이지네이션 정보
    */
   @Get(':userId/libraries/subscribed')
+  @IsPublic()
   async getUserSubscribedLibraries(
     @Param('userId', ParseIntPipe) userId: number,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
@@ -317,6 +323,7 @@ export class UserController {
 
   // 독서 상태 통계
   @Get(':id/statistics/reading-status')
+  @IsPublic()
   @ApiOperation({ summary: '독서 상태별 도서 수 통계 조회' })
   @ApiResponse({
     status: 200,
@@ -427,6 +434,7 @@ export class UserController {
 
   // 사용자 상호작용 통계
   @Get(':id/statistics/user-interaction')
+  @IsPublic()
   @ApiOperation({ summary: '사용자 상호작용 통계 조회' })
   @ApiResponse({
     status: 200,
@@ -442,6 +450,7 @@ export class UserController {
 
   // 팔로워/팔로잉 통계
   @Get(':id/statistics/follower')
+  @IsPublic()
   @ApiOperation({ summary: '팔로워/팔로잉 통계 조회' })
   @ApiResponse({
     status: 200,
@@ -457,6 +466,7 @@ export class UserController {
 
   // 커뮤니티 활동 통계
   @Get(':id/statistics/community-activity')
+  @IsPublic()
   @ApiOperation({ summary: '커뮤니티 활동 통계 조회' })
   @ApiResponse({
     status: 200,
@@ -472,6 +482,7 @@ export class UserController {
 
   // 리뷰 영향력 통계
   @Get(':id/statistics/review-influence')
+  @IsPublic()
   @ApiOperation({ summary: '리뷰 영향력 통계 조회' })
   @ApiResponse({
     status: 200,
@@ -487,6 +498,7 @@ export class UserController {
 
   // 서재 구성 통계
   @Get(':id/statistics/library-composition')
+  @IsPublic()
   @ApiOperation({ summary: '서재 구성 통계 조회' })
   @ApiResponse({
     status: 200,
@@ -502,6 +514,7 @@ export class UserController {
 
   // 서재 인기도 통계
   @Get(':id/statistics/library-popularity')
+  @IsPublic()
   @ApiOperation({ summary: '서재 인기도 통계 조회' })
   @ApiResponse({
     status: 200,
@@ -517,6 +530,7 @@ export class UserController {
 
   // 서재 업데이트 패턴 통계
   @Get(':id/statistics/library-update-pattern')
+  @IsPublic()
   @ApiOperation({ summary: '서재 업데이트 패턴 통계 조회' })
   @ApiResponse({
     status: 200,
@@ -532,6 +546,7 @@ export class UserController {
 
   // 검색 활동 통계
   @Get(':id/statistics/search-activity')
+  @IsPublic()
   @ApiOperation({ summary: '검색 활동 통계 조회' })
   @ApiResponse({
     status: 200,
