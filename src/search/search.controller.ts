@@ -125,10 +125,18 @@ export class SearchController {
    * 최근 검색어 API
    */
   @Get('recent')
+  @IsPublic()
   async getRecentSearchTerms(
-    @GetUser() user: User,
+    @GetUser() user?: User,
     @Query('limit') limit?: number,
   ): Promise<any> {
+    if (!user) {
+      return {
+        books: [],
+        count: 0,
+      };
+    }
+
     const recentBooks = await this.searchService.getRecentSearchTerms(
       user.id,
       limit || 5,
