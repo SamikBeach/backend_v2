@@ -26,7 +26,6 @@ import { User } from '../user/entities/user.entity';
 import { RatingService } from '../rating/rating.service';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import {
-  PopularBooksRequestDto,
   PopularBooksSortOptions,
   TimeRangeOptions,
 } from './dto/popular-books.dto';
@@ -68,24 +67,6 @@ export class BookController {
     return this.bookService.findBySubcategoryId(subcategoryId);
   }
 
-  @Get(':id')
-  @IsPublic()
-  async findById(
-    @Param('id', ParseIntPipe) id: number,
-    @GetUser() user?: User,
-  ): Promise<BookResponse> {
-    try {
-      // 기본 책 정보 조회
-      const book = await this.bookService.findById(id);
-
-      // 서비스 메서드를 사용하여 책 정보를 사용자별 데이터와 통합
-      return await this.bookService.enrichBookWithUserData(book, user?.id);
-    } catch (error) {
-      console.error(`BookID ${id} 조회 중 오류 발생:`, error);
-      throw new NotFoundException(`ID ${id}로 도서를 찾을 수 없습니다.`);
-    }
-  }
-
   @Get('isbn/:isbn')
   @IsPublic()
   async findByIsbn(
@@ -103,19 +84,6 @@ export class BookController {
       console.error(`ISBN ${isbn} 조회 중 오류 발생:`, error);
       throw new NotFoundException(`ISBN ${isbn}으로 도서를 찾을 수 없습니다.`);
     }
-  }
-
-  @Post()
-  async create(@Body() createBookDto: CreateBookDto): Promise<Book> {
-    return this.bookService.create(createBookDto);
-  }
-
-  @Patch(':id')
-  async update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateBookDto: UpdateBookDto,
-  ): Promise<Book> {
-    return this.bookService.update(id, updateBookDto);
   }
 
   @Post('initialize-featured')
@@ -156,11 +124,6 @@ export class BookController {
     }
   }
 
-  @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.bookService.remove(id);
-  }
-
   // 통합 인기 도서 API
   @Get('popular')
   @IsPublic()
@@ -199,12 +162,14 @@ export class BookController {
     type: BookSearchResponseDto,
   })
   async findPopularBooks(
-    @Query('categoryId', ParseIntPipe) categoryId?: number,
-    @Query('subcategoryId', ParseIntPipe) subcategoryId?: number,
+    @Query('categoryId', new ParseIntPipe({ optional: true }))
+    categoryId?: number,
+    @Query('subcategoryId', new ParseIntPipe({ optional: true }))
+    subcategoryId?: number,
     @Query('sort') sort: string = 'rating-desc',
     @Query('timeRange') timeRange: string = 'all',
-    @Query('page', ParseIntPipe) page: number = 1,
-    @Query('limit', ParseIntPipe) limit: number = 20,
+    @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 20,
     @GetUser() user?: User,
   ): Promise<BookSearchResponse> {
     return this.bookService.findPopularBooks(
@@ -212,8 +177,8 @@ export class BookController {
       subcategoryId,
       sort,
       timeRange,
-      page,
-      limit,
+      page || 1,
+      limit || 20,
       user?.id,
     );
   }
@@ -234,6 +199,64 @@ export class BookController {
 
   // ======= Discover 관련 엔드포인트 =======
 
+  @Get('discover')
+  @IsPublic()
+  @ApiOperation({
+    summary: '오늘의 발견 도서 조회 (무한 스크롤 지원)',
+    description:
+      '발견하기 카테고리와 서브카테고리 필터, 정렬, 기간 필터를 지원하는 도서 조회 API',
+  })
+  @ApiQuery({
+    name: 'discoverCategoryId',
+    required: false,
+    description: '발견하기 카테고리 ID (필터링)',
+  })
+  @ApiQuery({
+    name: 'discoverSubCategoryId',
+    required: false,
+    description: '발견하기 서브카테고리 ID (필터링)',
+  })
+  @ApiQuery({
+    name: 'sort',
+    required: false,
+    enum: PopularBooksSortOptions,
+    description: '정렬 방식 (별점순, 리뷰순, 서재순, 출판일순)',
+  })
+  @ApiQuery({
+    name: 'timeRange',
+    required: false,
+    enum: TimeRangeOptions,
+    description: '기간 필터 (전체, 오늘, 이번 주, 이번 달, 올해)',
+  })
+  @ApiQuery({ name: 'page', required: false, description: '페이지 번호' })
+  @ApiQuery({ name: 'limit', required: false, description: '페이지당 결과 수' })
+  @ApiResponse({
+    status: 200,
+    description: '발견하기 도서 목록 및 페이지네이션 정보',
+    type: BookSearchResponseDto,
+  })
+  async findDiscoverBooks(
+    @Query('discoverCategoryId', new ParseIntPipe({ optional: true }))
+    discoverCategoryId?: number,
+    @Query('discoverSubCategoryId', new ParseIntPipe({ optional: true }))
+    discoverSubCategoryId?: number,
+    @Query('sort') sort: string = 'rating-desc',
+    @Query('timeRange') timeRange: string = 'all',
+    @Query('page', new ParseIntPipe({ optional: true })) page: number = 1,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit: number = 20,
+    @GetUser() user?: User,
+  ): Promise<BookSearchResponse> {
+    return this.bookService.findDiscoverBooks(
+      discoverCategoryId,
+      discoverSubCategoryId,
+      sort,
+      timeRange,
+      page || 1,
+      limit || 20,
+      user?.id,
+    );
+  }
+
   @Get('discover/all')
   @IsPublic()
   async findAllDiscoverBooks(
@@ -247,13 +270,14 @@ export class BookController {
   @IsPublic()
   async findByDiscoverCategoryId(
     @Param('discoverCategoryId', ParseIntPipe) discoverCategoryId: number,
-    @Query('discoverSubCategoryId') discoverSubCategoryId?: string,
+    @Query('discoverSubCategoryId', new ParseIntPipe({ optional: true }))
+    discoverSubCategoryId?: number,
     @Query('sort') sort?: string,
     @Query('timeRange') timeRange?: string,
   ): Promise<Book[]> {
     return this.bookService.findByDiscoverCategoryId(
       discoverCategoryId,
-      discoverSubCategoryId ? Number(discoverSubCategoryId) : undefined,
+      discoverSubCategoryId,
       sort,
       timeRange,
     );
@@ -299,5 +323,41 @@ export class BookController {
     @Body('isDiscovered') isDiscovered: boolean,
   ): Promise<Book> {
     return this.bookService.setBookAsDiscovered(id, isDiscovered);
+  }
+
+  @Get(':id')
+  @IsPublic()
+  async findById(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user?: User,
+  ): Promise<BookResponse> {
+    try {
+      // 기본 책 정보 조회
+      const book = await this.bookService.findById(id);
+
+      // 서비스 메서드를 사용하여 책 정보를 사용자별 데이터와 통합
+      return await this.bookService.enrichBookWithUserData(book, user?.id);
+    } catch (error) {
+      console.error(`BookID ${id} 조회 중 오류 발생:`, error);
+      throw new NotFoundException(`ID ${id}로 도서를 찾을 수 없습니다.`);
+    }
+  }
+
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.bookService.remove(id);
+  }
+
+  @Post()
+  async create(@Body() createBookDto: CreateBookDto): Promise<Book> {
+    return this.bookService.create(createBookDto);
+  }
+
+  @Patch(':id')
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateBookDto: UpdateBookDto,
+  ): Promise<Book> {
+    return this.bookService.update(id, updateBookDto);
   }
 }
