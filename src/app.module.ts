@@ -41,6 +41,8 @@ import { Rating } from './rating/entities/rating.entity';
 import { LibraryTagModule } from './library-tag/library-tag.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { UserStatisticsSetting } from './statistics/entities/user-statistics-setting.entity';
+import { FeedbackModule } from './feedback/feedback.module';
+import { Feedback } from './feedback/entities/feedback.entity';
 
 @Module({
   imports: [
@@ -85,6 +87,7 @@ import { UserStatisticsSetting } from './statistics/entities/user-statistics-set
           ReadingStatus,
           Rating,
           UserStatisticsSetting,
+          Feedback,
         ],
         synchronize: true,
         namingStrategy: new SnakeNamingStrategy(),
@@ -104,6 +107,7 @@ import { UserStatisticsSetting } from './statistics/entities/user-statistics-set
     RatingModule,
     ReadingStatusModule,
     StatisticsModule,
+    FeedbackModule,
   ],
 })
 export class AppModule implements NestModule {
