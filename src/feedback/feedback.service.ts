@@ -19,24 +19,18 @@ export class FeedbackService {
    * 새 피드백을 생성합니다.
    * @param createFeedbackDto 피드백 생성 DTO
    * @param user 사용자 정보 (로그인한 경우)
-   * @param ipAddress IP 주소
-   * @param userAgent 사용자 에이전트
    * @returns 생성된 피드백 정보
    */
   async create(
     createFeedbackDto: CreateFeedbackDto,
     user?: User,
-    ipAddress?: string,
-    userAgent?: string,
   ): Promise<FeedbackResponseDto> {
     try {
       // 피드백 엔티티 생성
       const feedback = this.feedbackRepository.create({
         content: createFeedbackDto.content,
         email: user?.email, // 사용자 정보에서 이메일 추출
-        userId: user?.id,
-        ipAddress,
-        userAgent,
+        user: user, // 사용자 정보 설정
       });
 
       // 피드백 저장
@@ -59,7 +53,7 @@ export class FeedbackService {
   }
 
   /**
-   * 모든 피드백을 조회합니다. (관리자용)
+   * 모든 피드백을 조회합니다.
    * @param page 페이지 번호
    * @param limit 페이지당 항목 수
    * @returns 피드백 목록과 페이지네이션 정보
@@ -106,23 +100,7 @@ export class FeedbackService {
   }
 
   /**
-   * 피드백의 해결 상태를 업데이트합니다. (관리자용)
-   * @param id 피드백 ID
-   * @param isResolved 해결 상태
-   * @returns 업데이트된 피드백 정보
-   */
-  async updateResolutionStatus(id: number, isResolved: boolean) {
-    try {
-      await this.feedbackRepository.update(id, { isResolved });
-      return this.findOne(id);
-    } catch (error) {
-      this.logger.error(`피드백 상태 업데이트 중 오류 발생: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * 피드백을 삭제합니다. (관리자용)
+   * 피드백을 삭제합니다.
    * @param id 피드백 ID
    */
   async remove(id: number) {

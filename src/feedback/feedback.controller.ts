@@ -6,8 +6,6 @@ import {
   Param,
   Delete,
   Query,
-  Patch,
-  Req,
   ParseIntPipe,
 } from '@nestjs/common';
 import { FeedbackService } from './feedback.service';
@@ -21,7 +19,6 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
-import { Request } from 'express';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 
@@ -40,18 +37,9 @@ export class FeedbackController {
   })
   async create(
     @Body() createFeedbackDto: CreateFeedbackDto,
-    @Req() req: Request,
     @GetUser() user?: User,
   ): Promise<FeedbackResponseDto> {
-    const ipAddress = req.ip;
-    const userAgent = req.headers['user-agent'];
-
-    return this.feedbackService.create(
-      createFeedbackDto,
-      user,
-      ipAddress,
-      userAgent,
-    );
+    return this.feedbackService.create(createFeedbackDto, user);
   }
 
   @Get()
@@ -68,16 +56,6 @@ export class FeedbackController {
   @ApiOperation({ summary: '특정 피드백 조회' })
   async findOne(@Param('id', ParseIntPipe) id: number) {
     return this.feedbackService.findOne(id);
-  }
-
-  @Patch(':id/resolve')
-  @ApiBearerAuth()
-  @ApiOperation({ summary: '피드백 해결 상태 업데이트' })
-  async updateResolutionStatus(
-    @Param('id', ParseIntPipe) id: number,
-    @Body('isResolved') isResolved: boolean,
-  ) {
-    return this.feedbackService.updateResolutionStatus(id, isResolved);
   }
 
   @Delete(':id')

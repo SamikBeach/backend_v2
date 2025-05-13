@@ -20,20 +20,8 @@ export class Feedback {
   @Column({ nullable: true })
   email: string;
 
-  @Column({ nullable: true })
-  ipAddress: string;
-
-  @Column({ nullable: true })
-  userAgent: string;
-
-  @Column({ default: false })
-  isResolved: boolean;
-
-  @Column({ nullable: true })
-  userId: number;
-
   @ManyToOne(() => User, { nullable: true })
-  @JoinColumn({ name: 'userId' })
+  @JoinColumn({ name: 'user_id' })
   user: User;
 
   @CreateDateColumn()

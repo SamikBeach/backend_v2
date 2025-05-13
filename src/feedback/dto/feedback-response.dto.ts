@@ -9,7 +9,7 @@ export class FeedbackResponseDto {
 
   @ApiProperty({
     description: '피드백 내용',
-    example: '앱 사용 중 검색 기능이 느려요. 개선해주세요.',
+    example: '검색 기능 개선해주세요.',
   })
   content: string;
 
