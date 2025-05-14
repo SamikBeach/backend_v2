@@ -997,7 +997,7 @@ export class BookService {
    * @param limit 가져올 도서 수
    */
   async findDiscoverBooksForHome(
-    limit: number = 6,
+    limit: number = 4,
   ): Promise<BookSearchResponse> {
     try {
       // 오늘 날짜 기준 설정
@@ -1009,16 +1009,29 @@ export class BookService {
 
       if (!categories.length) {
         this.logger.log('활성화된 발견 카테고리가 없습니다.');
-        return {
-          books: [],
-          total: 0,
-          page: 1,
-          totalPages: 0,
-        };
+        // 카테고리가 없더라도 isDiscovered가 true인 책들을 가져옵니다
+        return this.getFallbackDiscoverBooks(limit);
       }
 
       // 활성화된 상위 2개 카테고리만 사용
       const activeCategories = categories.slice(0, 2);
+      this.logger.log(`활성화된 카테고리 수: ${activeCategories.length}개`);
+
+      // 최소 1개의 카테고리가 있어야 함
+      if (activeCategories.length === 0) {
+        return this.getFallbackDiscoverBooks(limit);
+      }
+
+      // 각 카테고리별로 가져올 책 수
+      // 카테고리가 하나면 모든 책을 그 카테고리에서 가져옵니다
+      const booksPerCategory =
+        activeCategories.length === 1
+          ? limit
+          : Math.max(Math.ceil(limit / activeCategories.length), 3);
+
+      this.logger.log(
+        `카테고리당 가져올 책 수: ${booksPerCategory}개, 총 필요한 책 수: ${limit}개`,
+      );
 
       let activeBookIds: number[] = [];
 
@@ -1078,11 +1091,11 @@ export class BookService {
               })
               .andWhere('book.id IN (:...ids)', { ids: activeBookIds })
               .orderBy('book.rating', 'DESC')
-              .take(Math.max(1, Math.floor(limit / activeCategories.length)))
+              .take(booksPerCategory)
               .getMany();
 
             // 활성 도서가 없거나 부족한 경우 기본 조회로 보충
-            if (!books || books.length < 2) {
+            if (!books || books.length < Math.min(2, limit)) {
               this.logger.log(
                 `카테고리 ${category.name}의 활성 도서가 부족하여 기본 조회로 보충합니다.`,
               );
@@ -1097,7 +1110,7 @@ export class BookService {
                   categoryId: category.id,
                 })
                 .orderBy('book.rating', 'DESC')
-                .take(Math.max(1, Math.floor(limit / activeCategories.length)))
+                .take(booksPerCategory)
                 .getMany();
             }
           } else {
@@ -1113,11 +1126,14 @@ export class BookService {
                 categoryId: category.id,
               })
               .orderBy('book.rating', 'DESC')
-              .take(Math.max(1, Math.floor(limit / activeCategories.length)))
+              .take(booksPerCategory)
               .getMany();
           }
 
           if (books && books.length > 0) {
+            this.logger.log(
+              `카테고리 ${category.name}에서 ${books.length}개의 책을 가져왔습니다.`,
+            );
             allDiscoverBooks = [...allDiscoverBooks, ...books];
           }
         } catch (error) {
@@ -1127,18 +1143,50 @@ export class BookService {
         }
       }
 
+      // 책이 충분하지 않은 경우 전체 discover 책에서 부족한 만큼 추가로 가져옴
+      if (allDiscoverBooks.length < limit) {
+        this.logger.log(
+          `카테고리에서 가져온 책이 ${allDiscoverBooks.length}개로 목표인 ${limit}개보다 부족하여 추가 책을 가져옵니다.`,
+        );
+
+        // 이미 가져온 책들의 ID
+        const existingBookIds = allDiscoverBooks.map((book) => book.id);
+
+        // 부족한 만큼 추가 책 가져오기
+        const additionalBooks = await this.bookRepository
+          .createQueryBuilder('book')
+          .leftJoinAndSelect('book.category', 'bookCategory')
+          .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
+          .where('book.isDiscovered = :isDiscovered', { isDiscovered: true })
+          .andWhere('book.id NOT IN (:...existingIds)', {
+            existingIds: existingBookIds.length ? existingBookIds : [0],
+          })
+          .orderBy('book.rating', 'DESC')
+          .take(limit - allDiscoverBooks.length)
+          .getMany();
+
+        if (additionalBooks.length > 0) {
+          this.logger.log(
+            `추가로 ${additionalBooks.length}개의 책을 가져왔습니다.`,
+          );
+          allDiscoverBooks = [...allDiscoverBooks, ...additionalBooks];
+        }
+      }
+
       // 도서가 없는 경우 빈 결과 반환
       if (allDiscoverBooks.length === 0) {
-        return {
-          books: [],
-          total: 0,
-          page: 1,
-          totalPages: 0,
-        };
+        this.logger.log('발견된 책이 없어 fallback으로 전환합니다.');
+        return this.getFallbackDiscoverBooks(limit);
       }
+
+      this.logger.log(
+        `모든 카테고리에서 총 ${allDiscoverBooks.length}개의 책을 가져왔습니다.`,
+      );
 
       // 최대 limit 개수만큼 반환
       allDiscoverBooks = allDiscoverBooks.slice(0, limit);
+
+      this.logger.log(`최종적으로 반환할 책 수: ${allDiscoverBooks.length}개`);
 
       // 사용자별 데이터로 책 정보 보강
       const enrichedBooks = await Promise.all(
@@ -1153,6 +1201,45 @@ export class BookService {
       };
     } catch (error) {
       this.logger.error(`발견 도서 조회 중 치명적 오류 발생: ${error.message}`);
+      return this.getFallbackDiscoverBooks(limit);
+    }
+  }
+
+  /**
+   * 기본 discover 책 가져오기 (fallback)
+   */
+  private async getFallbackDiscoverBooks(
+    limit: number,
+  ): Promise<BookSearchResponse> {
+    try {
+      this.logger.log(
+        `Fallback: isDiscovered=true인 책 중 평점순으로 ${limit}개 가져오기`,
+      );
+
+      const books = await this.bookRepository
+        .createQueryBuilder('book')
+        .leftJoinAndSelect('book.category', 'bookCategory')
+        .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
+        .where('book.isDiscovered = :isDiscovered', { isDiscovered: true })
+        .orderBy('book.rating', 'DESC')
+        .take(limit)
+        .getMany();
+
+      this.logger.log(`Fallback에서 ${books.length}개의 책을 가져왔습니다.`);
+
+      // 사용자별 데이터로 책 정보 보강
+      const enrichedBooks = await Promise.all(
+        books.map((book) => this.enrichBookWithUserData(book)),
+      );
+
+      return {
+        books: enrichedBooks,
+        total: enrichedBooks.length,
+        page: 1,
+        totalPages: 1,
+      };
+    } catch (error) {
+      this.logger.error(`Fallback 도서 조회 중 오류 발생: ${error.message}`);
       return {
         books: [],
         total: 0,

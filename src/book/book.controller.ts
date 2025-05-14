@@ -194,7 +194,7 @@ export class BookController {
   @Get('discover/home')
   @IsPublic()
   async findDiscoverBooksForHome(@Query('limit') limit?: number): Promise<any> {
-    return this.bookService.findDiscoverBooksForHome(limit || 6);
+    return this.bookService.findDiscoverBooksForHome(limit || 4);
   }
 
   // ======= Discover 관련 엔드포인트 =======
