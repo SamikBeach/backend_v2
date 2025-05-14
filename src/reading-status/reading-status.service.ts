@@ -223,6 +223,32 @@ export class ReadingStatusService {
   }
 
   /**
+   * bookId로 읽기 상태 삭제
+   */
+  async deleteByBookId(bookId: number, userId: number): Promise<void> {
+    try {
+      const readingStatus = await this.readingStatusRepository.findOne({
+        where: { bookId, userId },
+      });
+
+      if (!readingStatus) {
+        this.logger.error(
+          `Reading status not found for bookId: ${bookId} and userId: ${userId}`,
+        );
+        throw new NotFoundException('Reading status not found');
+      }
+
+      await this.readingStatusRepository.remove(readingStatus);
+      this.logger.log(
+        `Reading status deleted for bookId: ${bookId} and userId: ${userId}`,
+      );
+    } catch (error) {
+      this.logger.error(`Error in deleteByBookId method: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * 특정 사용자와 책에 대한 읽기 상태 조회
    */
   async findByUserAndBook(
