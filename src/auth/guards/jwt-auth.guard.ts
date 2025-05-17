@@ -40,7 +40,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       if (result instanceof Observable) {
         return new Observable((subscriber) => {
           result.subscribe({
-            next: (value) => {
+            next: () => {
               subscriber.next(true);
               subscriber.complete();
             },

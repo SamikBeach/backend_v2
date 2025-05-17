@@ -8,7 +8,6 @@ import {
   Delete,
   UseGuards,
   NotFoundException,
-  Query,
 } from '@nestjs/common';
 import { RatingService } from './rating.service';
 import {

@@ -130,31 +130,6 @@ export class ReadingStatusStatisticsService {
     }
   }
 
-  // 기본 카테고리 생성 (항상 5개 반환)
-  private generateDefaultCategories(): { category: string; count: number }[] {
-    return [
-      { category: '미분류', count: 0 },
-      { category: '소설', count: 0 },
-      { category: '인문학', count: 0 },
-      { category: '경제/경영', count: 0 },
-      { category: '자기계발', count: 0 },
-    ];
-  }
-
-  // 기본 서브카테고리 생성 (항상 5개 반환)
-  private generateDefaultSubCategories(): {
-    subCategory: string;
-    count: number;
-  }[] {
-    return [
-      { subCategory: '미분류', count: 0 },
-      { subCategory: '한국소설', count: 0 },
-      { subCategory: '외국소설', count: 0 },
-      { subCategory: '심리학', count: 0 },
-      { subCategory: '에세이', count: 0 },
-    ];
-  }
-
   // 헬퍼 메서드: 비어있는 연도별 장르 데이터 생성
   private generateEmptyYearlyGenreData(count = 5): {
     year: string;
@@ -262,7 +237,7 @@ export class ReadingStatusStatisticsService {
     return `${year}-${month}-${day}`;
   }
 
-  // 추가: 나머지 통계 메서드들의 기본 구조
+  // 장르 분석 통계 개선
   async getGenreAnalysis(
     userId: number,
     requestUserId?: number,
@@ -273,9 +248,9 @@ export class ReadingStatusStatisticsService {
         const setting = await this.getOrCreateUserStatisticsSetting(userId);
         if (!setting.isGenreAnalysisPublic) {
           return {
-            categoryCounts: this.generateDefaultCategories(),
-            subCategoryCounts: this.generateDefaultSubCategories(),
-            mostReadCategory: '미분류',
+            categoryCounts: [],
+            subCategoryCounts: [],
+            mostReadCategory: '데이터 없음',
             yearly: this.generateEmptyYearlyGenreData(),
             monthly: this.generateEmptyMonthlyGenreData(),
             weekly: this.generateEmptyWeeklyGenreData(),
@@ -293,193 +268,129 @@ export class ReadingStatusStatisticsService {
         },
       });
 
+      this.logger.log(`사용자 ${userId}의 읽은 책 개수: ${totalReadBooks}`);
+
+      // 기본값 설정
       let categoryCounts = [];
       let subCategoryCounts = [];
-      let mostReadCategory = '미분류';
+      let mostReadCategory = '데이터 없음';
       let yearly = this.generateEmptyYearlyGenreData();
       let monthly = this.generateEmptyMonthlyGenreData();
       let weekly = this.generateEmptyWeeklyGenreData();
       let daily = this.generateEmptyDailyGenreData();
 
       if (totalReadBooks > 0) {
-        // 기존 카테고리와 서브카테고리 통계 로직
-        // ... (기존 코드와 동일)
-
-        // 연도별 장르 통계
-        const fiveYearsAgo = new Date();
-        fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
-
-        // 연도별 카테고리 통계
-        // 사용자가 읽은 책의 카테고리별 통계
-        const categoryCountsQuery = this.readingStatusRepository
+        // 읽은 책 ID 목록 조회
+        const readStatusResult = await this.readingStatusRepository
           .createQueryBuilder('status')
-          .innerJoin('status.book', 'book')
-          .leftJoin('book.category', 'category')
-          .select(
-            "CASE WHEN category.id IS NULL THEN '미분류' ELSE category.name END",
-            'category',
-          )
-          .addSelect('COUNT(book.id)', 'count')
+          .select('status.bookId', 'bookId')
           .where('status.userId = :userId', { userId })
           .andWhere('status.status = :status', {
             status: ReadingStatusType.READ,
           })
-          .groupBy(
-            "CASE WHEN category.id IS NULL THEN '미분류' ELSE category.name END",
-          )
-          .orderBy('count', 'DESC');
+          .getRawMany();
 
-        const categoryCountsData = await categoryCountsQuery.getRawMany();
+        const bookIds = readStatusResult.map((status) => status.bookId);
 
-        // 카테고리별 데이터가 없으면 미분류로 모든 책 처리
-        if (categoryCountsData.length === 0 && totalReadBooks > 0) {
-          categoryCounts = [{ category: '미분류', count: totalReadBooks }];
-        } else {
-          categoryCounts = categoryCountsData.map((item) => ({
-            category: item.category || '미분류',
-            count: parseInt(item.count, 10) || 0,
+        if (bookIds.length > 0) {
+          this.logger.log(
+            `사용자 ${userId}가 읽은 책 ID 목록: ${bookIds.join(', ')}`,
+          );
+
+          // 카테고리와 서브카테고리 조회를 위한 개선된 쿼리
+          const booksWithCategories = await this.bookRepository
+            .createQueryBuilder('book')
+            .leftJoinAndSelect('book.category', 'category')
+            .leftJoinAndSelect('book.subcategory', 'subcategory')
+            .where('book.id IN (:...bookIds)', { bookIds })
+            .getMany();
+
+          this.logger.log(
+            `조회된 책 데이터 (첫 3개): ${JSON.stringify(
+              booksWithCategories.slice(0, 3).map((book) => ({
+                id: book.id,
+                title: book.title,
+                category: book.category?.name,
+                subcategory: book.subcategory?.name,
+              })),
+            )}`,
+          );
+
+          // 카테고리와 서브카테고리 데이터 수집을 위한 맵
+          const categoryMap = new Map<string, number>();
+          const subCategoryMap = new Map<string, number>();
+
+          // 데이터 집계
+          for (const book of booksWithCategories) {
+            if (book.category) {
+              const categoryName = book.category.name;
+              categoryMap.set(
+                categoryName,
+                (categoryMap.get(categoryName) || 0) + 1,
+              );
+            } else {
+              // 카테고리가 없는 경우 '미분류'로 처리
+              categoryMap.set('미분류', (categoryMap.get('미분류') || 0) + 1);
+            }
+
+            if (book.subcategory) {
+              const subCategoryName = book.subcategory.name;
+              subCategoryMap.set(
+                subCategoryName,
+                (subCategoryMap.get(subCategoryName) || 0) + 1,
+              );
+            } else {
+              // 서브카테고리가 없는 경우 '미분류'로 처리
+              subCategoryMap.set(
+                '미분류',
+                (subCategoryMap.get('미분류') || 0) + 1,
+              );
+            }
+          }
+
+          // 맵에서 배열로 변환
+          categoryCounts = Array.from(categoryMap.entries())
+            .map(([category, count]) => ({ category, count }))
+            .sort((a, b) => b.count - a.count);
+
+          subCategoryCounts = Array.from(subCategoryMap.entries())
+            .map(([subCategory, count]) => ({ subCategory, count }))
+            .sort((a, b) => b.count - a.count);
+
+          // 가장 많이 읽은 카테고리
+          if (categoryCounts.length > 0) {
+            mostReadCategory = categoryCounts[0].category;
+          }
+
+          // 연도별, 월별, 주별, 일별 데이터에 카테고리 정보 적용
+          const topCategories = categoryCounts.slice(0, 3);
+          const topSubCategories = subCategoryCounts.slice(0, 3);
+
+          // 각 기간별 데이터에 실제 카테고리 정보 적용
+          yearly = this.generateEmptyYearlyGenreData().map((item) => ({
+            ...item,
+            categories: topCategories,
+            subCategories: topSubCategories,
+          }));
+
+          monthly = this.generateEmptyMonthlyGenreData().map((item) => ({
+            ...item,
+            categories: topCategories,
+            subCategories: topSubCategories,
+          }));
+
+          weekly = this.generateEmptyWeeklyGenreData().map((item) => ({
+            ...item,
+            categories: topCategories,
+            subCategories: topSubCategories,
+          }));
+
+          daily = this.generateEmptyDailyGenreData().map((item) => ({
+            ...item,
+            categories: topCategories,
+            subCategories: topSubCategories,
           }));
         }
-
-        // 사용자가 읽은 책의 서브카테고리별 통계
-        const subCategoryCountsQuery = this.readingStatusRepository
-          .createQueryBuilder('status')
-          .innerJoin('status.book', 'book')
-          .leftJoin('book.subcategory', 'subCategory')
-          .select(
-            "CASE WHEN subCategory.id IS NULL THEN '미분류' ELSE subCategory.name END",
-            'subCategory',
-          )
-          .addSelect('COUNT(book.id)', 'count')
-          .where('status.userId = :userId', { userId })
-          .andWhere('status.status = :status', {
-            status: ReadingStatusType.READ,
-          })
-          .groupBy(
-            "CASE WHEN subCategory.id IS NULL THEN '미분류' ELSE subCategory.name END",
-          )
-          .orderBy('count', 'DESC');
-
-        const subCategoryCountsData = await subCategoryCountsQuery.getRawMany();
-
-        // 서브카테고리별 데이터가 없으면 미분류로 모든 책 처리
-        if (subCategoryCountsData.length === 0 && totalReadBooks > 0) {
-          subCategoryCounts = [
-            { subCategory: '미분류', count: totalReadBooks },
-          ];
-        } else {
-          subCategoryCounts = subCategoryCountsData.map((item) => ({
-            subCategory: item.subCategory || '미분류',
-            count: parseInt(item.count, 10) || 0,
-          }));
-        }
-
-        // 가장 많이 읽은 카테고리
-        if (categoryCounts.length > 0) {
-          mostReadCategory = categoryCounts[0].category;
-        }
-
-        // 카테고리 데이터가 5개 미만이면 기본 카테고리로 채움
-        if (categoryCounts.length < 5) {
-          const defaultCategories = this.generateDefaultCategories();
-
-          // 이미 있는 카테고리는 제외
-          const existingCategories = new Set(
-            categoryCounts.map((item) => item.category),
-          );
-          const additionalCategories = defaultCategories
-            .filter((item) => !existingCategories.has(item.category))
-            .slice(0, 5 - categoryCounts.length);
-
-          categoryCounts = [...categoryCounts, ...additionalCategories];
-        } else {
-          // 5개로 제한
-          categoryCounts = categoryCounts.slice(0, 5);
-        }
-
-        // 서브카테고리 데이터가 5개 미만이면 기본 서브카테고리로 채움
-        if (subCategoryCounts.length < 5) {
-          const defaultSubCategories = this.generateDefaultSubCategories();
-
-          // 이미 있는 서브카테고리는 제외
-          const existingSubCategories = new Set(
-            subCategoryCounts.map((item) => item.subCategory),
-          );
-          const additionalSubCategories = defaultSubCategories
-            .filter((item) => !existingSubCategories.has(item.subCategory))
-            .slice(0, 5 - subCategoryCounts.length);
-
-          subCategoryCounts = [
-            ...subCategoryCounts,
-            ...additionalSubCategories,
-          ];
-        } else {
-          // 5개로 제한
-          subCategoryCounts = subCategoryCounts.slice(0, 5);
-        }
-
-        // 연도별, 월별, 주별, 일별 데이터 업데이트
-        // 카테고리와 서브카테고리 데이터가 있으면, 기간별 데이터에 해당 값을 반영
-
-        // 연도별 데이터 업데이트
-        yearly = this.generateEmptyYearlyGenreData().map((item) => {
-          return {
-            ...item,
-            categories:
-              categoryCounts.length > 0
-                ? categoryCounts.slice(0, 1).map((c) => ({ ...c })) // 가장 많이 읽은 카테고리만 표시
-                : [{ category: '미분류', count: 0 }],
-            subCategories:
-              subCategoryCounts.length > 0
-                ? subCategoryCounts.slice(0, 1).map((sc) => ({ ...sc })) // 가장 많이 읽은 서브카테고리만 표시
-                : [{ subCategory: '미분류', count: 0 }],
-          };
-        });
-
-        // 월별 데이터 업데이트
-        monthly = this.generateEmptyMonthlyGenreData().map((item) => {
-          return {
-            ...item,
-            categories:
-              categoryCounts.length > 0
-                ? categoryCounts.slice(0, 1).map((c) => ({ ...c }))
-                : [{ category: '미분류', count: 0 }],
-            subCategories:
-              subCategoryCounts.length > 0
-                ? subCategoryCounts.slice(0, 1).map((sc) => ({ ...sc }))
-                : [{ subCategory: '미분류', count: 0 }],
-          };
-        });
-
-        // 주별 데이터 업데이트
-        weekly = this.generateEmptyWeeklyGenreData().map((item) => {
-          return {
-            ...item,
-            categories:
-              categoryCounts.length > 0
-                ? categoryCounts.slice(0, 1).map((c) => ({ ...c }))
-                : [{ category: '미분류', count: 0 }],
-            subCategories:
-              subCategoryCounts.length > 0
-                ? subCategoryCounts.slice(0, 1).map((sc) => ({ ...sc }))
-                : [{ subCategory: '미분류', count: 0 }],
-          };
-        });
-
-        // 일별 데이터 업데이트
-        daily = this.generateEmptyDailyGenreData().map((item) => {
-          return {
-            ...item,
-            categories:
-              categoryCounts.length > 0
-                ? categoryCounts.slice(0, 1).map((c) => ({ ...c }))
-                : [{ category: '미분류', count: 0 }],
-            subCategories:
-              subCategoryCounts.length > 0
-                ? subCategoryCounts.slice(0, 1).map((sc) => ({ ...sc }))
-                : [{ subCategory: '미분류', count: 0 }],
-          };
-        });
       }
 
       return {
@@ -716,7 +627,7 @@ export class ReadingStatusStatisticsService {
           const year = pubDate.getFullYear().toString();
           const currentCount = yearCountMap.get(year) || 0;
           yearCountMap.set(year, currentCount + 1);
-        } catch (err) {
+        } catch {
           this.logger.warn(
             `Error processing publish date: ${book.publishDate} for book: ${book.title}`,
           );
@@ -884,9 +795,6 @@ export class ReadingStatusStatisticsService {
       this.logger.debug(
         `emptyMonthlyData: ${JSON.stringify(emptyMonthlyData)}`,
       );
-
-      const emptyWeeklyData = this.generateEmptyWeeklyData();
-      const emptyDailyData = this.generateEmptyDailyData();
 
       // 2. 기간 설정
       const fiveYearsAgo = new Date();

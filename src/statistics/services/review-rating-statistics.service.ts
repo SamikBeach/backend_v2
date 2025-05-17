@@ -115,16 +115,6 @@ export class ReviewRatingStatisticsService {
         parseFloat(avgLengthResult?.avgLength || '0'),
       );
 
-      // 요일별 리뷰 수 - 리뷰 타입 분포로 변환
-      const weekdayDistQuery = await this.reviewRepository
-        .createQueryBuilder('review')
-        .select('WEEKDAY(review.createdAt)', 'weekday')
-        .addSelect('COUNT(*)', 'count')
-        .where('review.authorId = :userId', { userId })
-        .groupBy('weekday')
-        .orderBy('weekday', 'ASC')
-        .getRawMany();
-
       // 리뷰 유형 분포 (길이별로 구분)
       const shortReviewsCount = await this.reviewRepository.count({
         where: {
@@ -568,20 +558,51 @@ export class ReviewRatingStatisticsService {
         .createQueryBuilder('rating')
         .innerJoin('rating.book', 'book')
         .leftJoin('book.category', 'category')
-        .select('category.name', 'category')
+        .select("COALESCE(category.name, '미분류')", 'category')
         .addSelect('AVG(rating.rating)', 'averageRating')
         .addSelect('COUNT(rating.id)', 'count')
         .where('rating.userId = :userId', { userId })
-        .groupBy('category.name')
+        .groupBy("COALESCE(category.name, '미분류')")
         .having('COUNT(rating.id) >= 3') // 최소 3개 이상의 평점
         .orderBy('averageRating', 'DESC')
         .limit(5)
         .getRawMany();
 
-      const categoryRatings = categoryRatingsData.map((item) => ({
-        category: item.category || '미분류',
+      let categoryRatings = categoryRatingsData.map((item) => ({
+        category: item.category,
         averageRating: parseFloat(item.averageRating),
       }));
+
+      // 카테고리 결과가 없으면 기본 미분류 카테고리 추가
+      if (categoryRatings.length === 0) {
+        // 카테고리별 모든 평점 데이터 가져오기 (최소 카운트 기준 무시)
+        const allCategoryRatingsData = await this.ratingRepository
+          .createQueryBuilder('rating')
+          .innerJoin('rating.book', 'book')
+          .leftJoin('book.category', 'category')
+          .select("COALESCE(category.name, '미분류')", 'category')
+          .addSelect('AVG(rating.rating)', 'averageRating')
+          .addSelect('COUNT(rating.id)', 'count')
+          .where('rating.userId = :userId', { userId })
+          .groupBy("COALESCE(category.name, '미분류')")
+          .orderBy('COUNT(rating.id)', 'DESC')
+          .limit(5)
+          .getRawMany();
+
+        if (allCategoryRatingsData.length > 0) {
+          // 최소 카운트 제한 없이 모든 카테고리 데이터 사용
+          categoryRatings = allCategoryRatingsData.map((item) => ({
+            category: item.category,
+            averageRating: parseFloat(item.averageRating),
+          }));
+        } else {
+          // 그래도 데이터가 없으면 미분류 카테고리만 추가
+          categoryRatings.push({
+            category: '미분류',
+            averageRating: parseFloat(averageRating),
+          });
+        }
+      }
 
       // 월별 평균 평점 (최근 12개월)
       const oneYearAgo = new Date();

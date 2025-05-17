@@ -5,6 +5,7 @@ import {
   ManyToOne,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
 } from 'typeorm';
 import { Library } from './library.entity';
 import { LibraryTag } from '../../library-tag/entities/library-tag.entity';
@@ -34,4 +35,7 @@ export class LibraryTagMapping {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt: Date;
 }

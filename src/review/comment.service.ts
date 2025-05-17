@@ -16,6 +16,8 @@ import { CommentResponseDto } from './dto/review-response.dto';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 import { NotificationService } from '../notification/notification.service';
+import { In } from 'typeorm';
+import { DataSource } from 'typeorm';
 
 @Injectable()
 export class CommentService {
@@ -30,6 +32,7 @@ export class CommentService {
     private readonly commentLikeRepository: Repository<CommentLike>,
     private readonly userService: UserService,
     private readonly notificationService: NotificationService,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -165,10 +168,24 @@ export class CommentService {
    */
   async deleteComment(commentId: number, userId: number): Promise<void> {
     try {
+      this.logger.log(
+        `댓글 삭제 요청 - 댓글 ID: ${commentId}, 사용자 ID: ${userId}`,
+      );
+
       const comment = await this.commentRepository.findOne({
         where: { id: commentId },
         relations: ['author'],
       });
+
+      this.logger.log(
+        `댓글 조회 결과: ${JSON.stringify({
+          id: comment?.id,
+          content: comment?.content,
+          reviewId: comment?.reviewId,
+          authorId: comment?.authorId,
+          parentCommentId: comment?.parentCommentId,
+        })}`,
+      );
 
       if (!comment) {
         throw new NotFoundException(
@@ -178,6 +195,9 @@ export class CommentService {
 
       // 자신의 댓글만 삭제 가능
       if (comment.authorId !== userId) {
+        this.logger.warn(
+          `삭제 권한 없음 - 댓글 작성자: ${comment.authorId}, 요청 사용자: ${userId}`,
+        );
         throw new ForbiddenException('자신의 댓글만 삭제할 수 있습니다.');
       }
 
@@ -186,10 +206,29 @@ export class CommentService {
         where: { parentCommentId: commentId },
       });
 
+      this.logger.log(`대댓글 조회 결과: ${replies.length}개 발견`);
+      if (replies.length > 0) {
+        this.logger.log(
+          `첫 번째 대댓글 정보: ${JSON.stringify({
+            id: replies[0]?.id,
+            content: replies[0]?.content,
+            reviewId: replies[0]?.reviewId,
+            authorId: replies[0]?.authorId,
+          })}`,
+        );
+      }
+
       // 리뷰 조회
       const review = await this.reviewRepository.findOne({
         where: { id: comment.reviewId },
       });
+
+      this.logger.log(
+        `연관된 리뷰 정보: ${JSON.stringify({
+          id: review?.id,
+          commentCount: review?.commentCount,
+        })}`,
+      );
 
       if (review) {
         // 댓글 수 감소 (이 댓글 + 대댓글 수)
@@ -198,17 +237,95 @@ export class CommentService {
           review.commentCount - (1 + replies.length),
         );
         await this.reviewRepository.save(review);
+        this.logger.log(`리뷰 댓글 수 업데이트: ${review.commentCount}`);
       }
 
-      // 대댓글들 먼저 삭제
-      if (replies.length > 0) {
-        await this.commentRepository.remove(replies);
-      }
+      // 트랜잭션으로 데이터 삭제 진행
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
 
-      // 댓글 삭제
-      await this.commentRepository.remove(comment);
+      try {
+        this.logger.log('트랜잭션 시작: 댓글 및 관련 데이터 삭제');
+
+        // 1. 먼저 notification 테이블의 관련 레코드 삭제
+        // 현재 댓글과 관련된 알림 삭제
+        const notificationDeleteResult = await queryRunner.manager.query(
+          'DELETE FROM notification WHERE comment_id = ?',
+          [commentId],
+        );
+        this.logger.log(
+          `알림 데이터 삭제 결과: ${JSON.stringify(notificationDeleteResult)}`,
+        );
+
+        // 대댓글과 관련된 알림도 삭제
+        if (replies.length > 0) {
+          const replyIds = replies.map((reply) => reply.id);
+          for (const replyId of replyIds) {
+            await queryRunner.manager.query(
+              'DELETE FROM notification WHERE comment_id = ?',
+              [replyId],
+            );
+          }
+          this.logger.log(`대댓글 관련 알림 데이터 삭제 완료`);
+        }
+
+        // 2. 댓글 좋아요 정보 조회 및 삭제
+        const commentLikes = await this.commentLikeRepository.find({
+          where: { commentId },
+        });
+        this.logger.log(`댓글 좋아요 수: ${commentLikes.length}개`);
+
+        // 댓글 좋아요 정보 삭제
+        if (commentLikes.length > 0) {
+          await queryRunner.manager.remove(commentLikes);
+          this.logger.log(`댓글 좋아요 정보 삭제 완료`);
+        }
+
+        // 3. 대댓글에 대한 좋아요 정보가 있다면 함께 삭제
+        if (replies.length > 0) {
+          const replyIds = replies.map((reply) => reply.id);
+          const replyLikes = await this.commentLikeRepository.find({
+            where: { commentId: In(replyIds) },
+          });
+
+          if (replyLikes.length > 0) {
+            await queryRunner.manager.remove(replyLikes);
+            this.logger.log(
+              `대댓글 좋아요 정보 ${replyLikes.length}개 삭제 완료`,
+            );
+          }
+        }
+
+        // 4. 대댓글들 삭제
+        if (replies.length > 0) {
+          await queryRunner.manager.remove(replies);
+          this.logger.log(`대댓글 ${replies.length}개 삭제 완료`);
+        }
+
+        // 5. 댓글 삭제
+        await queryRunner.manager.remove(comment);
+        this.logger.log(`댓글 삭제 완료 - ID: ${commentId}`);
+
+        // 트랜잭션 커밋
+        await queryRunner.commitTransaction();
+        this.logger.log('트랜잭션 커밋 완료: 댓글 및 관련 데이터 삭제 성공');
+      } catch (error) {
+        // 오류 발생 시 롤백
+        await queryRunner.rollbackTransaction();
+        this.logger.error(
+          `댓글 관련 데이터 삭제 중 오류 발생, 롤백 실행: ${error.message}`,
+        );
+        this.logger.error(`스택 트레이스: ${error.stack}`);
+        throw error;
+      } finally {
+        // 항상 queryRunner 해제
+        await queryRunner.release();
+        this.logger.log('트랜잭션 완료: 쿼리 러너 해제');
+      }
     } catch (error) {
       this.logger.error(`댓글 삭제 중 오류: ${error.message}`);
+      this.logger.error(`스택 트레이스: ${error.stack}`);
       throw error;
     }
   }

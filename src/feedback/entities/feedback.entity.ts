@@ -2,40 +2,31 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
-  ManyToOne,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
-import { Book } from '../../book/entities/book.entity';
 
 @Entity()
-export class Rating {
+export class Feedback {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  userId: number;
-
-  @Column()
-  bookId: number;
-
-  @Column({ type: 'int' })
-  rating: number;
+  @Column({ type: 'text' })
+  content: string;
 
   @Column({ nullable: true })
-  comment: string;
+  email: string;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'user_id' })
+  user: User;
 
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
-
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  user: User;
-
-  @ManyToOne(() => Book, { onDelete: 'CASCADE' })
-  book: Book;
 }

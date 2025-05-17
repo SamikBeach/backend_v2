@@ -179,4 +179,20 @@ export class ReadingStatusController {
   remove(@Param('id') id: number, @GetUser() user: User): Promise<void> {
     return this.readingStatusService.delete(+id, user.id);
   }
+
+  @Delete('book/:bookId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '책 ID로 읽기 상태 삭제' })
+  @ApiParam({ name: 'bookId', description: '책 ID' })
+  @ApiResponse({
+    status: 200,
+    description: '읽기 상태 삭제 성공',
+  })
+  removeByBookId(
+    @Param('bookId') bookId: number,
+    @GetUser() user: User,
+  ): Promise<void> {
+    return this.readingStatusService.deleteByBookId(+bookId, user.id);
+  }
 }

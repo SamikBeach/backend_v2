@@ -1,9 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThan, LessThan, Raw, Not } from 'typeorm';
+import { Repository, Not } from 'typeorm';
 import { UserStatisticsSetting } from '../entities/user-statistics-setting.entity';
 import { Review } from '../../review/entities/review.entity';
-import { Rating } from '../../rating/entities/rating.entity';
 import { User } from '../../user/entities/user.entity';
 import { UserFollower } from '../../user/entities/user-follower.entity';
 import { Comment } from '../../review/entities/comment.entity';
@@ -481,6 +480,78 @@ export class CommunityActivityStatisticsService {
     }
 
     return result;
+  }
+
+  // Helper method: get ISO week number from date
+  private getISOWeek(date: Date): number {
+    const d = new Date(
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+    );
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  }
+
+  // Helper method: generate time cutoffs for each period
+  private generateTimeCutoffs() {
+    const now = new Date();
+
+    // 연도별 기준점 (최근 5년)
+    const yearCutoffs = [];
+    for (let i = 0; i < 5; i++) {
+      const year = now.getFullYear() - i;
+      yearCutoffs.push({
+        year: year.toString(),
+        date: new Date(year, 11, 31), // 해당 연도의 마지막 날
+      });
+    }
+
+    // 월별 기준점 (최근 5개월)
+    const monthCutoffs = [];
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(now);
+      date.setMonth(date.getMonth() - i);
+
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const lastDay = new Date(year, month, 0).getDate(); // 해당 월의 마지막 날
+
+      const monthStr = month < 10 ? `0${month}` : `${month}`;
+      monthCutoffs.push({
+        month: `${year}-${monthStr}`,
+        date: new Date(year, month - 1, lastDay), // 해당 월의 마지막 날
+      });
+    }
+
+    // 주별 기준점 (최근 5주)
+    const weeklyCutoffs = [];
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i * 7);
+
+      const month = date.getMonth() + 1;
+      const weekOfMonth = Math.ceil(date.getDate() / 7);
+
+      weeklyCutoffs.push({
+        week: `${month}월 ${weekOfMonth}째주`,
+        date: new Date(date), // 해당 주의 마지막 날
+      });
+    }
+
+    // 일별 기준점 (최근 5일)
+    const dailyCutoffs = [];
+    for (let i = 0; i < 5; i++) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      date.setHours(23, 59, 59, 999); // 해당 일의 마지막 시간
+
+      dailyCutoffs.push({
+        date: this.formatDate(date),
+        cutoff: date,
+      });
+    }
+
+    return { yearCutoffs, monthCutoffs, weeklyCutoffs, dailyCutoffs };
   }
 
   // 1. User Interaction
@@ -1114,213 +1185,191 @@ export class CommunityActivityStatisticsService {
                 count: 0,
               }),
             ),
-            yearly: this.generateEmptyYearlyInteractionData(5),
-            monthly: this.generateEmptyMonthlyInteractionData(5),
-            weekly: this.generateEmptyWeeklyInteractionData(),
-            daily: this.generateEmptyDailyInteractionData().slice(0, 5),
+            yearly: this.generateEmptyYearlyInteractionData(5).map((item) => ({
+              year: item.year,
+              followers: 0,
+              following: 0,
+            })),
+            monthly: this.generateEmptyMonthlyInteractionData(5).map(
+              (item) => ({
+                month: item.month,
+                followers: 0,
+                following: 0,
+              }),
+            ),
+            weekly: this.generateEmptyWeeklyInteractionData().map((item) => ({
+              week: item.week,
+              followers: 0,
+              following: 0,
+            })),
+            daily: this.generateEmptyDailyInteractionData()
+              .slice(0, 5)
+              .map((item) => ({
+                date: item.date,
+                followers: 0,
+                following: 0,
+              })),
             isPublic: false,
           };
         }
       }
 
       // 1. 빈 데이터 준비
-      const emptyYearlyData = this.generateEmptyYearlyInteractionData(5);
-      const emptyMonthlyData = this.generateEmptyMonthlyInteractionData(5);
-      const emptyWeeklyData = this.generateEmptyWeeklyInteractionData();
-      const emptyDailyData = this.generateEmptyDailyInteractionData().slice(
-        0,
-        5,
+      const emptyYearlyData = this.generateEmptyYearlyInteractionData(5).map(
+        (item) => ({
+          year: item.year,
+          followers: 0,
+          following: 0,
+        }),
       );
+      const emptyMonthlyData = this.generateEmptyMonthlyInteractionData(5).map(
+        (item) => ({
+          month: item.month,
+          followers: 0,
+          following: 0,
+        }),
+      );
+      const emptyWeeklyData = this.generateEmptyWeeklyInteractionData().map(
+        (item) => ({
+          week: item.week,
+          followers: 0,
+          following: 0,
+        }),
+      );
+      const emptyDailyData = this.generateEmptyDailyInteractionData()
+        .slice(0, 5)
+        .map((item) => ({
+          date: item.date,
+          followers: 0,
+          following: 0,
+        }));
 
       // 2. 현재 팔로워/팔로잉 수 조회
       const followers = await this.userFollowerRepository.find({
         where: { following_id: userId },
+        order: { created_at: 'ASC' },
       });
       const followersCount = followers.length;
-      this.logger.log(`팔로워 수: ${followersCount}`);
+      this.logger.log(`팔로워 수: ${followersCount}, 생성일순 정렬`);
 
       const following = await this.userFollowerRepository.find({
         where: { follower_id: userId },
+        order: { created_at: 'ASC' }, // 시간순으로 정렬
       });
       const followingCount = following.length;
       this.logger.log(`팔로잉 수: ${followingCount}`);
 
-      // 3. 기간 설정
-      const fiveYearsAgo = new Date();
-      fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+      // 3. 팔로워 데이터가 없으면 빈 데이터 반환
+      if (followers.length === 0 && following.length === 0) {
+        return {
+          followersCount: 0,
+          followingCount: 0,
+          followerGrowth: emptyMonthlyData.map((item) => ({
+            date: item.month,
+            count: 0,
+          })),
+          yearly: emptyYearlyData,
+          monthly: emptyMonthlyData,
+          weekly: emptyWeeklyData,
+          daily: emptyDailyData,
+          isPublic: true,
+        };
+      }
 
-      const oneYearAgo = new Date();
-      oneYearAgo.setMonth(oneYearAgo.getMonth() - 12);
+      // 4. 각 기간별 기준 날짜 생성
+      const { yearCutoffs, monthCutoffs, weeklyCutoffs, dailyCutoffs } =
+        this.generateTimeCutoffs();
 
-      const fiveWeeksAgo = new Date();
-      fiveWeeksAgo.setDate(fiveWeeksAgo.getDate() - 35); // 5주 = 35일
+      // 5. 각 기간별로 기준 시점까지 생성된 팔로워/팔로잉 수 계산
 
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      // 4. 연도별 팔로워 데이터 (최근 5년) 조회
-      const yearlyDataQuery = `
-        SELECT 
-          DATE_FORMAT(created_at, '%Y') as year, 
-          COUNT(id) as count 
-        FROM 
-          user_follower 
-        WHERE 
-          following_id = ? 
-          AND created_at >= ? 
-        GROUP BY 
-          year 
-        ORDER BY 
-          year DESC
-        LIMIT 5
-      `;
-
-      const yearlyData = await this.userFollowerRepository.query(
-        yearlyDataQuery,
-        [userId, fiveYearsAgo],
-      );
-
-      this.logger.log(
-        `연도별 팔로워 데이터 결과: ${JSON.stringify(yearlyData)}`,
-      );
-
-      // 5. 월별 팔로워 데이터 (최근 5개월) 조회
-      const monthlyDataQuery = `
-        SELECT 
-          DATE_FORMAT(created_at, '%Y-%m') as month, 
-          COUNT(id) as count 
-        FROM 
-          user_follower 
-        WHERE 
-          following_id = ? 
-          AND created_at >= ? 
-        GROUP BY 
-          month 
-        ORDER BY 
-          month DESC
-        LIMIT 5
-      `;
-
-      const monthlyData = await this.userFollowerRepository.query(
-        monthlyDataQuery,
-        [userId, oneYearAgo],
-      );
-
-      this.logger.log(
-        `월별 팔로워 데이터 결과: ${JSON.stringify(monthlyData)}`,
-      );
-
-      // 6. 주별 팔로워 데이터 (최근 5주) 조회
-      const weeklyDataQuery = `
-        SELECT 
-          CONCAT(YEAR(created_at), '-', WEEK(created_at)) as yearWeek,
-          CONCAT(MONTH(created_at), '월 ', FLOOR((DAY(created_at) - 1) / 7) + 1, '째주') as week,
-          COUNT(id) as count 
-        FROM 
-          user_follower 
-        WHERE 
-          following_id = ? 
-          AND created_at >= ? 
-        GROUP BY 
-          yearWeek, week
-        ORDER BY 
-          yearWeek DESC
-        LIMIT 5
-      `;
-
-      const weeklyData = await this.userFollowerRepository.query(
-        weeklyDataQuery,
-        [userId, fiveWeeksAgo],
-      );
-
-      this.logger.log(`주별 팔로워 데이터 결과: ${JSON.stringify(weeklyData)}`);
-
-      // 7. 일별 팔로워 데이터 (최근 5일) 조회
-      const dailyDataQuery = `
-        SELECT 
-          DATE_FORMAT(created_at, '%Y-%m-%d') as date, 
-          COUNT(id) as count 
-        FROM 
-          user_follower 
-        WHERE 
-          following_id = ? 
-          AND created_at >= ? 
-        GROUP BY 
-          date 
-        ORDER BY 
-          date DESC
-        LIMIT 5
-      `;
-
-      const dailyData = await this.userFollowerRepository.query(
-        dailyDataQuery,
-        [userId, thirtyDaysAgo],
-      );
-
-      this.logger.log(`일별 팔로워 데이터 결과: ${JSON.stringify(dailyData)}`);
-
-      // 8. 실제 데이터 형식 변환 및 숫자로 변환
-      const formattedYearlyData = yearlyData.map((item) => ({
-        year: item.year,
-        count: parseInt(item.count, 10) || 0,
-      }));
-
-      const formattedMonthlyData = monthlyData.map((item) => ({
-        month: item.month,
-        count: parseInt(item.count, 10) || 0,
-      }));
-
-      const formattedWeeklyData = weeklyData.map((item) => ({
-        week: item.week,
-        count: parseInt(item.count, 10) || 0,
-      }));
-
-      const formattedDailyData = dailyData.map((item) => ({
-        date: item.date,
-        count: parseInt(item.count, 10) || 0,
-      }));
-
-      // 9. 빈 데이터와 실제 데이터 병합
       // 연도별 데이터
-      let yearly = this.mergeAndSortData(
-        emptyYearlyData,
-        formattedYearlyData,
-        'year',
-        5,
-      );
+      const yearly = yearCutoffs.map((yearCutoff) => {
+        const cutoffDate = yearCutoff.date;
+
+        // 해당 연도까지의 팔로워 수
+        const followerCount = followers.filter(
+          (f) => new Date(f.created_at) <= cutoffDate,
+        ).length;
+
+        // 해당 연도까지의 팔로잉 수
+        const followingCount = following.filter(
+          (f) => new Date(f.created_at) <= cutoffDate,
+        ).length;
+
+        return {
+          year: yearCutoff.year,
+          followers: followerCount,
+          following: followingCount,
+        };
+      });
 
       // 월별 데이터
-      let monthly = this.mergeAndSortData(
-        emptyMonthlyData,
-        formattedMonthlyData,
-        'month',
-        5,
-      );
+      const monthly = monthCutoffs.map((monthCutoff) => {
+        const cutoffDate = monthCutoff.date;
+
+        // 해당 월까지의 팔로워 수
+        const followerCount = followers.filter(
+          (f) => new Date(f.created_at) <= cutoffDate,
+        ).length;
+
+        // 해당 월까지의 팔로잉 수
+        const followingCount = following.filter(
+          (f) => new Date(f.created_at) <= cutoffDate,
+        ).length;
+
+        return {
+          month: monthCutoff.month,
+          followers: followerCount,
+          following: followingCount,
+        };
+      });
 
       // 주별 데이터
-      let weekly = this.mergeWeeklyData(
-        emptyWeeklyData,
-        formattedWeeklyData,
-        5,
-      );
+      const weekly = weeklyCutoffs.map((weekCutoff) => {
+        const cutoffDate = weekCutoff.date;
+
+        // 해당 주까지의 팔로워 수
+        const followerCount = followers.filter(
+          (f) => new Date(f.created_at) <= cutoffDate,
+        ).length;
+
+        // 해당 주까지의 팔로잉 수
+        const followingCount = following.filter(
+          (f) => new Date(f.created_at) <= cutoffDate,
+        ).length;
+
+        return {
+          week: weekCutoff.week,
+          followers: followerCount,
+          following: followingCount,
+        };
+      });
 
       // 일별 데이터
-      let daily = this.mergeAndSortData(
-        emptyDailyData,
-        formattedDailyData,
-        'date',
-        5,
-      );
+      const daily = dailyCutoffs.map((dayCutoff) => {
+        const cutoffDate = dayCutoff.cutoff;
 
-      // 최신 데이터부터 정렬
-      yearly = yearly.reverse();
-      monthly = monthly.reverse();
-      daily = daily.reverse();
+        // 해당 일까지의 팔로워 수
+        const followerCount = followers.filter(
+          (f) => new Date(f.created_at) <= cutoffDate,
+        ).length;
 
-      // 10. followerGrowth 필드 생성 (월별 데이터 기반)
+        // 해당 일까지의 팔로잉 수
+        const followingCount = following.filter(
+          (f) => new Date(f.created_at) <= cutoffDate,
+        ).length;
+
+        return {
+          date: dayCutoff.date,
+          followers: followerCount,
+          following: followingCount,
+        };
+      });
+
+      // 9. followerGrowth 필드 생성 (월별 데이터 기반)
       const followerGrowth = monthly.map((item) => ({
         date: item.month,
-        count: item.count,
+        count: item.followers,
       }));
 
       this.logger.log(`팔로워 통계 조회 완료: 
@@ -1338,7 +1387,10 @@ export class CommunityActivityStatisticsService {
         isPublic: true,
       };
     } catch (error) {
-      this.logger.error(`팔로워 통계 조회 중 오류: ${error.message}`);
+      this.logger.error(
+        `팔로워 통계 조회 중 오류: ${error.message}`,
+        error.stack,
+      );
       throw error;
     }
   }
@@ -1368,9 +1420,12 @@ export class CommunityActivityStatisticsService {
         }
       }
 
-      // 작성한 총 리뷰 수
+      // 작성한 총 리뷰 수 ('review' 타입 제외)
       const totalReviews = await this.reviewRepository.count({
-        where: { authorId: userId },
+        where: {
+          authorId: userId,
+          type: Not('review'),
+        },
       });
 
       this.logger.log(`총 리뷰 개수: ${totalReviews}`);

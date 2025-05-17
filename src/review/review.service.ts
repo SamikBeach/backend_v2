@@ -8,7 +8,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { User } from '../user/entities/user.entity';
 import { Review } from './entities/review.entity';
 import { ReviewImage } from './entities/review-image.entity';
@@ -23,11 +23,12 @@ import { UserService } from '../user/user.service';
 import { NotificationService } from '../notification/notification.service';
 import { Comment } from './entities/comment.entity';
 import { RatingService } from '../rating/rating.service';
-import { In } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class ReviewService {
   private readonly logger = new Logger(ReviewService.name);
+  private serverUrl: string;
 
   constructor(
     @InjectRepository(Review)
@@ -47,7 +48,11 @@ export class ReviewService {
     private readonly userService: UserService,
     private readonly notificationService: NotificationService,
     private readonly ratingService: RatingService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    this.serverUrl =
+      this.configService.get<string>('BASE_URL') || 'http://localhost:3001';
+  }
 
   /**
    * 리뷰 생성
@@ -119,7 +124,7 @@ export class ReviewService {
     page: number = 1,
     limit: number = 10,
     type?: string | string[],
-    filter: 'popular' | 'recent' = 'recent',
+    filter: 'popular' | 'recent' | 'following' = 'recent',
   ): Promise<{
     reviews: ReviewResponseDto[];
     total: number;
@@ -149,8 +154,37 @@ export class ReviewService {
         }
       }
 
-      // 필터 적용 (인기순 / 최신순)
+      // 필터 적용 (인기순 / 최신순 / 팔로잉)
       switch (filter) {
+        case 'following':
+          // 팔로잉 유저의 게시글만 표시
+          if (userId) {
+            // 사용자가 팔로우하는 사용자 ID 목록 조회
+            const followingUsers =
+              await this.userService.findFollowingIds(userId);
+
+            if (followingUsers.length > 0) {
+              // 팔로우하는 사용자가 있는 경우에만 필터링
+              queryBuilder.andWhere('review.authorId IN (:...followingIds)', {
+                followingIds: followingUsers,
+              });
+
+              // 인기순 정렬 (좋아요 + 댓글 + 최신순)
+              queryBuilder
+                .orderBy('review.likeCount', 'DESC')
+                .addOrderBy('review.commentCount', 'DESC')
+                .addOrderBy('review.createdAt', 'DESC');
+            } else {
+              // 팔로우하는 사용자가 없는 경우 빈 결과 반환을 위한 설정
+              this.logger.log('팔로우하는 사용자가 없습니다.');
+              queryBuilder.andWhere('1 = 0'); // 항상 false 조건
+            }
+          } else {
+            // 로그인하지 않은 경우 빈 결과 반환을 위한 설정
+            this.logger.log('로그인하지 않은 사용자의 팔로잉 필터 요청');
+            queryBuilder.andWhere('1 = 0'); // 항상 false 조건
+          }
+          break;
         case 'popular':
           // 인기순: 좋아요가 많은 순서 + 댓글이 많은 순서
           queryBuilder
@@ -852,16 +886,13 @@ export class ReviewService {
       }
     }
 
-    // BASE_URL 환경변수 가져오기
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
-
     // 프로필 이미지 URL 생성
     let profileImageUrl = null;
     if (review.author.profileImage) {
       // 이미 완전한 URL인 경우 그대로 사용, 아닌 경우 baseUrl 추가
       profileImageUrl = review.author.profileImage.startsWith('http')
         ? review.author.profileImage
-        : `${baseUrl}${review.author.profileImage}`;
+        : `${this.serverUrl}${review.author.profileImage}`;
     }
 
     return {
@@ -1181,12 +1212,18 @@ export class ReviewService {
           };
         }
 
+        // 프로필 이미지 URL 처리 (상대 경로인 경우 전체 URL로 변환)
+        const profileImage = this.ensureFullImageUrl(
+          review.author.profileImage,
+        );
+
         return {
           id: review.id,
           content: review.content,
           author: {
             id: review.author.id,
             username: review.author.username,
+            profileImage: profileImage,
           },
           book: book
             ? {
@@ -1261,5 +1298,20 @@ export class ReviewService {
     this.logger.log(`기간 필터 결과: ${bookIds.length}개의 책 ID 찾음`);
 
     return bookIds;
+  }
+
+  // 이미지 URL이 상대 경로인 경우 전체 URL로 변환하는 유틸리티 메소드
+  private ensureFullImageUrl(imageUrl: string | null): string | null {
+    if (!imageUrl) return null;
+    if (imageUrl.startsWith('http')) return imageUrl; // 이미 전체 URL이면 그대로 반환
+
+    // 상대 경로인 경우 서버 URL 추가
+    if (imageUrl.startsWith('/uploads/')) {
+      return `${this.serverUrl}${imageUrl}`;
+    } else if (imageUrl.startsWith('uploads/')) {
+      return `${this.serverUrl}/${imageUrl}`;
+    }
+
+    return imageUrl;
   }
 }

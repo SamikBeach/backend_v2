@@ -3,6 +3,7 @@ export interface OwnerInfoDto {
   username: string;
   email: string;
   profileImage?: string;
+  isFollowing?: boolean;
 }
 
 export interface BookInfoDto {

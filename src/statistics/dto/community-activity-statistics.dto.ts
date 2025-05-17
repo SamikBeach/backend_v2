@@ -83,31 +83,38 @@ export class FollowerStatsResponseDto {
   @ApiProperty({ description: '팔로워 증가 추이', type: [Object] })
   followerGrowth: { date: string; count: number }[];
 
-  @ApiProperty({ description: '연도별 팔로워 추이', type: [Object] })
+  @ApiProperty({ description: '연도별 팔로워/팔로잉 추이', type: [Object] })
   yearly: {
     year: string;
-    count: number;
+    followers: number;
+    following: number;
   }[];
 
   @ApiProperty({
-    description: '월별 팔로워 추이 (최근 12개월)',
+    description: '월별 팔로워/팔로잉 추이 (최근 12개월)',
     type: [Object],
   })
   monthly: {
     month: string;
-    count: number;
+    followers: number;
+    following: number;
   }[];
 
-  @ApiProperty({ description: '주별 팔로워 추이', type: [Object] })
+  @ApiProperty({ description: '주별 팔로워/팔로잉 추이', type: [Object] })
   weekly: {
     week: string;
-    count: number;
+    followers: number;
+    following: number;
   }[];
 
-  @ApiProperty({ description: '일별 팔로워 추이 (최근 30일)', type: [Object] })
+  @ApiProperty({
+    description: '일별 팔로워/팔로잉 추이 (최근 30일)',
+    type: [Object],
+  })
   daily: {
     date: string;
-    count: number;
+    followers: number;
+    following: number;
   }[];
 
   @ApiProperty({ description: '공개 여부' })

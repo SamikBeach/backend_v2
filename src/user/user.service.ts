@@ -7,7 +7,6 @@ import {
   Inject,
   forwardRef,
   Logger,
-  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, FindOptionsWhere } from 'typeorm';
@@ -435,7 +434,7 @@ export class UserService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    const libraryCount = await this.getLibraryCount(id);
+    const libraryCount = await this.getLibraryCount(id, currentUserId);
     const readCount = await this.getReadCount(id);
     const subscribedLibraryCount = await this.getSubscribedLibraryCount(id);
     const reviewCounts = await this.getUserReviewTypeCounts(id);
@@ -443,10 +442,7 @@ export class UserService {
     const ratingCount = await this.getRatingCount(id, currentUserId);
 
     // 중복 제거된 리뷰와 평점 수 계산
-    const reviewAndRatingCount = await this.getReviewAndRatingCount(
-      id,
-      currentUserId,
-    );
+    const reviewAndRatingCount = await this.getReviewAndRatingCount(id);
 
     // 팔로워, 팔로잉 수 계산
     const followerCount = await this.userFollowerRepository.count({
@@ -499,10 +495,20 @@ export class UserService {
     // TypeORM QueryBuilder를 사용한 라이브러리 조회
     const libraryRepo = this.userRepository.manager.getRepository(Library);
 
-    const [libraries, total] = await libraryRepo
+    // 다른 사용자의 라이브러리를 조회하는 경우 공개 라이브러리만 조회
+    const isOwnProfile = userId === currentUserId;
+
+    let query = libraryRepo
       .createQueryBuilder('lib')
       .where('lib.ownerId = :userId', { userId })
-      .leftJoinAndSelect('lib.owner', 'owner')
+      .leftJoinAndSelect('lib.owner', 'owner');
+
+    // 본인이 아닌 경우 공개된 라이브러리만 보여줌
+    if (!isOwnProfile) {
+      query = query.andWhere('lib.isPublic = :isPublic', { isPublic: true });
+    }
+
+    const [libraries, total] = await query
       .orderBy('lib.createdAt', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
@@ -634,8 +640,24 @@ export class UserService {
   }
 
   // 라이브러리 수 조회
-  private async getLibraryCount(userId: number): Promise<number> {
+  private async getLibraryCount(
+    userId: number,
+    currentUserId?: number,
+  ): Promise<number> {
     const libraryRepo = this.userRepository.manager.getRepository(Library);
+
+    // 본인 프로필을 조회하는 경우 모든 서재 카운트, 다른 사람이 조회하는 경우 공개 서재만 카운트
+    const isOwnProfile = userId === currentUserId;
+
+    if (!isOwnProfile) {
+      return libraryRepo.count({
+        where: {
+          ownerId: userId,
+          isPublic: true,
+        },
+      });
+    }
+
     return libraryRepo.count({ where: { ownerId: userId } });
   }
 
@@ -846,6 +868,25 @@ export class UserService {
       totalPages: Math.ceil(total / limit),
       hasNextPage: page < Math.ceil(total / limit),
     };
+  }
+
+  /**
+   * 사용자가 팔로우하는 모든 사용자의 ID 목록 조회
+   */
+  async findFollowingIds(userId: number): Promise<number[]> {
+    try {
+      const followingRelations = await this.userFollowerRepository.find({
+        where: { follower_id: userId },
+        select: ['following_id'],
+      });
+
+      return followingRelations.map((relation) => relation.following_id);
+    } catch (error) {
+      this.logger.error(
+        `사용자 ID ${userId}의 팔로잉 목록 조회 중 오류: ${error.message}`,
+      );
+      return [];
+    }
   }
 
   async isFollowing(followerId: number, followingId: number): Promise<boolean> {
@@ -1208,7 +1249,7 @@ export class UserService {
         for (const book of books) {
           const enrichedBook = await this.bookService.enrichBookWithUserData(
             book,
-            currentUserId,
+            userId,
           );
           bookDetailsMap.set(book.id, enrichedBook);
         }
@@ -1451,7 +1492,7 @@ export class UserService {
         1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
         ['review'], // review 타입만 필터링
         'recent',
-        currentUserId, // 좋아요 여부 확인을 위해 currentUserId 전달
+        currentUserId,
       );
 
       // 리뷰에 포함된 책의 ID 목록 생성
@@ -1548,7 +1589,7 @@ export class UserService {
         for (const book of books) {
           const enrichedBook = await this.bookService.enrichBookWithUserData(
             book,
-            currentUserId,
+            userId,
           );
           bookDetailsMap.set(book.id, enrichedBook);
         }
@@ -1693,7 +1734,7 @@ export class UserService {
         1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
         ['review'], // 'review' 타입만 포함
         filter,
-        currentUserId,
+        currentUserId, // 좋아요 여부 확인을 위해 currentUserId 유지
       );
 
       // 평점 조회
@@ -1701,7 +1742,7 @@ export class UserService {
         userId,
         1,
         1000, // 충분히 큰 숫자로 모든 평점 가져오기
-        currentUserId,
+        currentUserId, // 여기서는 currentUserId 유지 (isLiked 관련)
       );
 
       // 리뷰와 평점을 합치고 타입 필드 추가
@@ -1866,10 +1907,7 @@ export class UserService {
   }
 
   // 중복 제거된 리뷰와 평점 수 계산
-  private async getReviewAndRatingCount(
-    userId: number,
-    currentUserId?: number,
-  ): Promise<number> {
+  private async getReviewAndRatingCount(userId: number): Promise<number> {
     try {
       // 리뷰 조회 - 리뷰 타입의 리뷰만 가져오기
       const reviewsResult = await this.getUserReviews(
@@ -1878,7 +1916,7 @@ export class UserService {
         1000, // 충분히 큰 숫자로 모든 리뷰 가져오기
         ['review'], // review 타입만 필터링
         'recent',
-        currentUserId,
+        userId, // 수정: currentUserId 대신 userId를 사용하여 프로필 소유자의 평점을 가져옴
       );
 
       // 평점 조회
@@ -1886,7 +1924,7 @@ export class UserService {
         userId,
         1,
         1000, // 충분히 큰 숫자로 모든 평점 가져오기
-        currentUserId,
+        userId, // 수정: currentUserId 대신 userId를 사용하여 프로필 소유자의 평점을 가져옴
       );
 
       // 리뷰와 평점을 합치고 타입 필드 추가

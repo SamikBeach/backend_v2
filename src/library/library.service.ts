@@ -313,7 +313,6 @@ export class LibraryService {
     userId: number,
     requestingUserId?: number,
     sortOption?: LibrarySortOption,
-    timeRange?: TimeRangeOptions,
   ): Promise<LibraryListResponseDto[]> {
     const user = await this.userService.findOne(userId);
 
@@ -403,6 +402,9 @@ export class LibraryService {
     // Check if the user is subscribed to this library
     let isSubscribed = false;
 
+    // 사용자가 라이브러리 소유자를 팔로우하는지 확인하는 변수
+    let isFollowingOwner = false;
+
     if (userId) {
       this.logger.debug(`사용자(${userId})의 서재(${id}) 구독 여부 확인`);
 
@@ -421,6 +423,17 @@ export class LibraryService {
         isSubscribed = await this.isUserSubscribed(userId, id);
         this.logger.debug(
           `isUserSubscribed 메서드 호출 결과: ${isSubscribed ? '구독 중' : '미구독'}`,
+        );
+      }
+
+      // 3. 사용자가 라이브러리 소유자를 팔로우하는지 확인
+      if (userId !== library.ownerId) {
+        isFollowingOwner = await this.userService.isFollowing(
+          userId,
+          library.ownerId,
+        );
+        this.logger.debug(
+          `사용자(${userId})는 라이브러리 소유자(${library.ownerId})를 ${isFollowingOwner ? '팔로우 중' : '팔로우하지 않음'}`,
         );
       }
     }
@@ -540,6 +553,7 @@ export class LibraryService {
           : library.owner.profileImage
             ? `${baseUrl}${library.owner.profileImage}`
             : null,
+        isFollowing: isFollowingOwner,
       },
       books: libraryBooks,
       tags,
@@ -720,25 +734,96 @@ export class LibraryService {
 
   // 서재 삭제
   async remove(id: number, userId: number): Promise<void> {
-    const library = await this.libraryRepository.findOne({
-      where: { id },
-    });
+    try {
+      this.logger.log(`서재 삭제 요청 - 서재 ID: ${id}, 사용자 ID: ${userId}`);
 
-    if (!library) {
-      throw new NotFoundException(`서재 ID ${id}를 찾을 수 없습니다.`);
+      // 서재 정보 조회 시 모든 관계를 함께 로드
+      const library = await this.libraryRepository.findOne({
+        where: { id },
+        relations: [
+          'libraryBooks',
+          'libraryTagMappings',
+          'subscriptions',
+          'updateHistory',
+        ],
+      });
+
+      this.logger.log(
+        `서재 정보 조회 결과: ${JSON.stringify({
+          id: library?.id,
+          name: library?.name,
+          ownerId: library?.ownerId,
+          booksCount: library?.libraryBooks?.length,
+          tagsCount: library?.libraryTagMappings?.length,
+          subsCount: library?.subscriptions?.length,
+          historyCount: library?.updateHistory?.length,
+        })}`,
+      );
+
+      if (!library) {
+        throw new NotFoundException(`서재 ID ${id}를 찾을 수 없습니다.`);
+      }
+
+      if (library.ownerId !== userId) {
+        throw new ForbiddenException('이 서재를 삭제할 권한이 없습니다.');
+      }
+
+      // 트랜잭션 시작
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      try {
+        this.logger.log(`서재 ID ${id} 삭제 시작: 관련 데이터 정리 중...`);
+
+        // 알림 데이터 삭제 - 외래 키 제약 조건으로 인한 오류 방지
+        await queryRunner.manager.delete('notification', { libraryId: id });
+        this.logger.log(`서재 ID ${id}에 연결된 알림 데이터 삭제 완료`);
+
+        // 관련된 libraryBooks, libraryTagMappings, subscriptions, updateHistory 먼저 삭제
+        await queryRunner.manager.softDelete('library_book', { libraryId: id });
+        this.logger.log(`서재 ID ${id}에 연결된 책 정보 소프트 삭제 완료`);
+
+        await queryRunner.manager.softDelete('library_tag_mapping', {
+          libraryId: id,
+        });
+        this.logger.log(`서재 ID ${id}에 연결된 태그 매핑 소프트 삭제 완료`);
+
+        await queryRunner.manager.softDelete('library_subscription', {
+          libraryId: id,
+        });
+        this.logger.log(`서재 ID ${id}에 연결된 구독 정보 소프트 삭제 완료`);
+
+        await queryRunner.manager.softDelete('library_update_history', {
+          libraryId: id,
+        });
+        this.logger.log(
+          `서재 ID ${id}에 연결된 업데이트 히스토리 소프트 삭제 완료`,
+        );
+
+        // 서재 자체를 소프트 삭제
+        await queryRunner.manager.softDelete('library', { id });
+        this.logger.log(`서재 ID ${id} 소프트 삭제 완료`);
+
+        // 트랜잭션 커밋
+        await queryRunner.commitTransaction();
+        this.logger.log(`서재 ID ${id} 삭제 트랜잭션 커밋 완료`);
+      } catch (error) {
+        // 트랜잭션 롤백
+        await queryRunner.rollbackTransaction();
+        this.logger.error(`서재 ID ${id} 삭제 중 오류 발생: ${error.message}`);
+        this.logger.error(`스택 트레이스: ${error.stack}`);
+        throw error;
+      } finally {
+        // 쿼리 러너 해제
+        await queryRunner.release();
+        this.logger.log(`서재 ID ${id} 삭제 작업 종료 (쿼리 러너 해제)`);
+      }
+    } catch (error) {
+      this.logger.error(`서재 ID ${id} 삭제 실패: ${error.message}`);
+      this.logger.error(`스택 트레이스: ${error.stack}`);
+      throw error;
     }
-
-    if (library.ownerId !== userId) {
-      throw new ForbiddenException('이 서재를 삭제할 권한이 없습니다.');
-    }
-
-    // 관련된 libraryBooks, libraryTagMappings, subscriptions, updateHistory 먼저 삭제
-    await this.libraryBookRepository.delete({ libraryId: id });
-    await this.libraryTagMappingRepository.delete({ libraryId: id });
-    await this.librarySubscriptionRepository.delete({ libraryId: id });
-    await this.libraryUpdateHistoryRepository.delete({ libraryId: id });
-
-    await this.libraryRepository.remove(library);
   }
 
   // 서재에 책 추가
