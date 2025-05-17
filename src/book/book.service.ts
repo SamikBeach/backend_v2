@@ -922,8 +922,8 @@ export class BookService {
         activeBookIds = [];
       }
 
-      // 활성 도서가 충분한 경우 (3개 이상)
-      if (activeBookIds.length >= 3) {
+      // 활성 도서가 있는 경우 해당 도서들을 반환
+      if (activeBookIds.length > 0) {
         try {
           const activeBooks = await this.bookRepository
             .createQueryBuilder('book')
