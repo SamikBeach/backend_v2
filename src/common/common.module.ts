@@ -13,15 +13,15 @@ import { FileService } from './services/file.service';
       useFactory: (configService: ConfigService) => ({
         transport: {
           host: configService.get('MAIL_HOST'),
-          port: configService.get('MAIL_PORT'),
-          secure: false,
+          port: parseInt(configService.get('MAIL_PORT')),
+          secure: configService.get('MAIL_SECURE') === 'true',
           auth: {
             user: configService.get('MAIL_USER'),
             pass: configService.get('MAIL_PASSWORD'),
           },
         },
         defaults: {
-          from: `"고전산책" <${configService.get('MAIL_USER')}>`,
+          from: `"미역서점" <${configService.get('MAIL_USER')}>`,
         },
       }),
     }),

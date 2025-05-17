@@ -59,14 +59,15 @@ async function bootstrap() {
 
     logger.log(`${users.length}명의 사용자를 찾았습니다.`);
 
-    // 시스템 알림 생성
+    // 시스템 알림 생성 (모든 사용자에게 동일한 내용)
     for (const user of users) {
+      // 알림 1: 가입 환영 메시지
       await notificationService.create({
         userId: user.id,
         type: NotificationType.SYSTEM,
-        title: '고전산책에 오신 것을 환영합니다!',
+        title: '미역서점에 오신 것을 환영합니다!',
         content:
-          '고전산책에서 다양한 고전 도서를 발견하고 서재를 관리해보세요.',
+          '미역서점에서 다양한 고전 도서를 발견하고 서재를 관리해보세요.',
         action: 'system_welcome',
         linkUrl: '/discover',
       });
@@ -141,7 +142,7 @@ async function bootstrap() {
       const libraryId = i + 1; // 가상의 서재 ID
       const bookId = i + 10; // 가상의 책 ID
       const libraryName = `${libraryOwner.username || libraryOwner.email}의 서재`;
-      const bookTitle = `고전책 ${i + 1}`;
+      const bookTitle = `미역책 ${i + 1}`;
 
       await notificationService.create({
         userId: subscriber.id,
