@@ -9,6 +9,7 @@ import {
   Patch,
   Delete,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { BookService } from './book.service';
 import { Book } from './entities/book.entity';
@@ -299,20 +300,45 @@ export class BookController {
 
   @Post('discover/add')
   async addBookToDiscoverCategory(
-    @Body('bookId', ParseIntPipe) bookId: number,
-    @Body('discoverCategoryId', ParseIntPipe) discoverCategoryId: number,
-    @Body('discoverSubCategoryId', ParseIntPipe) discoverSubCategoryId?: number,
+    @Query('bookId', new ParseIntPipe({ optional: true })) bookId?: number,
+    @Query('discoverCategoryId', new ParseIntPipe({ optional: true }))
+    discoverCategoryId?: number,
+    @Query('discoverSubCategoryId', new ParseIntPipe({ optional: true }))
+    discoverSubCategoryId?: number,
+    @Query('isbn') isbn?: string,
   ): Promise<Book> {
+    console.log('discover/add 요청 파라미터:', {
+      bookId,
+      discoverCategoryId,
+      discoverSubCategoryId,
+      isbn,
+    });
+
+    // bookId가 없고 isbn이 있으면 임시 ID 할당 (실제 book 서비스에서 isbn으로 처리)
+    if (bookId === undefined && isbn) {
+      bookId = 0; // 임시 ID, 서비스에서 처리됨
+    }
+
+    // bookId가 정의되지 않았고 isbn도 없는 경우
+    if (bookId === undefined && !isbn) {
+      throw new BadRequestException('bookId 또는 isbn이 필요합니다.');
+    }
+
+    if (discoverCategoryId === undefined) {
+      throw new BadRequestException('discoverCategoryId가 필요합니다.');
+    }
+
     return this.bookService.addBookToDiscoverCategory(
       bookId,
       discoverCategoryId,
       discoverSubCategoryId,
+      isbn,
     );
   }
 
-  @Delete('discover/remove/:bookId')
+  @Post('discover/remove')
   async removeBookFromDiscoverCategory(
-    @Param('bookId', ParseIntPipe) bookId: number,
+    @Query('bookId', ParseIntPipe) bookId: number,
   ): Promise<Book> {
     return this.bookService.removeBookFromDiscoverCategory(bookId);
   }

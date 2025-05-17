@@ -722,14 +722,49 @@ export class BookService {
   }
 
   /**
-   * 도서를 DiscoverCategory에 추가
+   * 책을 발견하기 카테고리에 추가
    */
   async addBookToDiscoverCategory(
     bookId: number,
     discoverCategoryId: number,
     discoverSubCategoryId?: number,
+    isbn?: string,
   ): Promise<Book> {
-    const book = await this.findById(bookId);
+    let book: Book;
+
+    try {
+      // 1. 먼저 bookId로 책을 조회
+      book = await this.findById(bookId);
+    } catch (error) {
+      // bookId가 유효하지 않고 isbn이 제공된 경우, isbn으로 책을 가져옴
+      if (isbn) {
+        this.logger.log(
+          `책 ID ${bookId}가 존재하지 않아 ISBN ${isbn}으로 책 정보를 조회합니다.`,
+        );
+        try {
+          // isbn으로 책을 가져와 DB에 저장 (saveToDb=true)
+          book = await this.getBookDetailByIsbn(isbn, true);
+          this.logger.log(
+            `ISBN ${isbn}로 책을 가져와 DB에 저장했습니다. 책 ID: ${book.id}`,
+          );
+        } catch (isbnError) {
+          this.logger.error(
+            `ISBN ${isbn}로 책을 찾을 수 없습니다: ${isbnError.message}`,
+          );
+          throw new NotFoundException(
+            `bookId ${bookId}와 isbn ${isbn} 모두 유효한 책을 찾을 수 없습니다.`,
+          );
+        }
+      } else {
+        // bookId가 유효하지 않고 isbn도 제공되지 않은 경우
+        this.logger.error(
+          `책 ID ${bookId}가 존재하지 않습니다: ${error.message}`,
+        );
+        throw error;
+      }
+    }
+
+    // 발견하기 카테고리 조회
     const discoverCategory =
       await this.discoverCategoryService.findCategoryById(discoverCategoryId);
 
