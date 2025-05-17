@@ -39,4 +39,3 @@ export class Rating {
   @ManyToOne(() => Book, { onDelete: 'CASCADE' })
   book: Book;
 }
- 

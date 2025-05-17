@@ -44,7 +44,7 @@ async function bootstrap() {
       try {
         const user = await userService.findOne(id);
         users.push(user);
-      } catch (error) {
+      } catch {
         logger.error(`사용자 ID ${id}를 찾을 수 없습니다.`);
       }
     }

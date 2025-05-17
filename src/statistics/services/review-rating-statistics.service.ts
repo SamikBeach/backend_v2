@@ -115,16 +115,6 @@ export class ReviewRatingStatisticsService {
         parseFloat(avgLengthResult?.avgLength || '0'),
       );
 
-      // 요일별 리뷰 수 - 리뷰 타입 분포로 변환
-      const weekdayDistQuery = await this.reviewRepository
-        .createQueryBuilder('review')
-        .select('WEEKDAY(review.createdAt)', 'weekday')
-        .addSelect('COUNT(*)', 'count')
-        .where('review.authorId = :userId', { userId })
-        .groupBy('weekday')
-        .orderBy('weekday', 'ASC')
-        .getRawMany();
-
       // 리뷰 유형 분포 (길이별로 구분)
       const shortReviewsCount = await this.reviewRepository.count({
         where: {

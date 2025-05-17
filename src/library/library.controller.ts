@@ -77,13 +77,11 @@ export class LibraryController {
     @Param('userId', ParseIntPipe) userId: number,
     @Query('requestingUserId') requestingUserId?: string,
     @Query('sort') sort?: LibrarySortOption,
-    @Query('timeRange') timeRange?: TimeRangeOptions,
   ) {
     return this.libraryService.findAllByUser(
       userId,
       requestingUserId ? +requestingUserId : undefined,
       sort,
-      timeRange,
     );
   }
 

@@ -1,9 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, MoreThan, LessThan, Raw, Not } from 'typeorm';
+import { Repository, Not } from 'typeorm';
 import { UserStatisticsSetting } from '../entities/user-statistics-setting.entity';
 import { Review } from '../../review/entities/review.entity';
-import { Rating } from '../../rating/entities/rating.entity';
 import { User } from '../../user/entities/user.entity';
 import { UserFollower } from '../../user/entities/user-follower.entity';
 import { Comment } from '../../review/entities/comment.entity';

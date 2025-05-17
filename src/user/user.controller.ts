@@ -32,10 +32,9 @@ import {
   UpdateUserDto,
 } from './dto/user.dto';
 import { ReadingStatusType } from '../reading-status/entities/reading-status.entity';
-import { LibrarySortOption } from '../library/dto/library-response.dto';
 import { StatisticsService } from '../statistics/statistics.service';
 import { UpdateStatisticsSettingDto } from '../statistics/dto/statistics-setting.dto';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 @Controller('user')
 @UseInterceptors(ClassSerializerInterceptor)
@@ -117,15 +116,6 @@ export class UserController {
       filter || 'recent',
       user?.id,
     );
-  }
-
-  @Get(':id/stats')
-  getUserReadingStats(
-    @Param('id', ParseIntPipe) id: number,
-    @IsOwnProfile() isOwnProfile: boolean,
-  ) {
-    // This will be implemented later as per the requirements
-    return { message: 'This endpoint will be implemented later' };
   }
 
   // 팔로워 목록 조회 엔드포인트
@@ -238,10 +228,7 @@ export class UserController {
 
   @Get(':userId/ratings-by-score')
   @IsPublic()
-  async getUserRatingsByScore(
-    @Param('userId', ParseIntPipe) userId: number,
-    @GetUser() user?: User,
-  ) {
+  async getUserRatingsByScore(@Param('userId', ParseIntPipe) userId: number) {
     return this.userService.getUserRatingsByScore(userId);
   }
 
@@ -277,7 +264,6 @@ export class UserController {
     @Param('userId', ParseIntPipe) userId: number,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-    @Query('sort') sort?: LibrarySortOption,
   ) {
     return this.userService.getUserSubscribedLibraries(userId, page, limit);
   }

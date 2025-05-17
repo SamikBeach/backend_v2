@@ -313,7 +313,6 @@ export class LibraryService {
     userId: number,
     requestingUserId?: number,
     sortOption?: LibrarySortOption,
-    timeRange?: TimeRangeOptions,
   ): Promise<LibraryListResponseDto[]> {
     const user = await this.userService.findOne(userId);
 

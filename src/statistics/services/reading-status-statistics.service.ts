@@ -13,7 +13,6 @@ import {
   AuthorPublisherStatsResponseDto,
 } from '../dto/reading-status-statistics.dto';
 import { ReadingStatusType } from '../../reading-status/entities/reading-status.entity';
-import { In } from 'typeorm';
 
 @Injectable()
 export class ReadingStatusStatisticsService {
@@ -628,7 +627,7 @@ export class ReadingStatusStatisticsService {
           const year = pubDate.getFullYear().toString();
           const currentCount = yearCountMap.get(year) || 0;
           yearCountMap.set(year, currentCount + 1);
-        } catch (err) {
+        } catch {
           this.logger.warn(
             `Error processing publish date: ${book.publishDate} for book: ${book.title}`,
           );
@@ -796,9 +795,6 @@ export class ReadingStatusStatisticsService {
       this.logger.debug(
         `emptyMonthlyData: ${JSON.stringify(emptyMonthlyData)}`,
       );
-
-      const emptyWeeklyData = this.generateEmptyWeeklyData();
-      const emptyDailyData = this.generateEmptyDailyData();
 
       // 2. 기간 설정
       const fiveYearsAgo = new Date();

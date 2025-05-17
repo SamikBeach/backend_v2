@@ -14,9 +14,6 @@ import {
   NotificationResponseDto,
   NotificationPaginationResponseDto,
   UserInfoDto,
-  ReviewInfoDto,
-  CommentInfoDto,
-  LibraryInfoDto,
   BookInfoDto,
 } from './dto/notification-response.dto';
 import { UserService } from '../user/user.service';

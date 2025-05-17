@@ -190,7 +190,7 @@ export class MiscStatisticsService {
 
       const weeklyDataMap = new Map();
       // weeklyEmptyData 초기화
-      weeklyEmptyData.forEach((week, index) => {
+      weeklyEmptyData.forEach((week) => {
         weeklyDataMap.set(week.week, { week: week.week, count: 0 });
       });
 

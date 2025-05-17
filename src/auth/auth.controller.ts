@@ -9,7 +9,6 @@ import {
   VerifyResetTokenDto,
 } from './dto/reset-password.dto';
 import { VerifyCodeDto } from './dto/verify-code.dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { UpdateUserInfoDto } from './dto/update-user-info.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';

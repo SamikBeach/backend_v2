@@ -4,7 +4,6 @@ import { Logger } from '@nestjs/common';
 import { BookService } from '../book/book.service';
 import { LibraryService } from '../library/library.service';
 import { LibraryTagService } from '../library-tag/library-tag.service';
-import { AladinService } from '../common/services/aladin.service';
 import { CreateLibraryDto } from '../library/dto/create-library.dto';
 import { AddBookToLibraryDto } from '../library/dto/add-book-to-library.dto';
 import { AddTagToLibraryDto } from '../library/dto/add-tag-to-library.dto';

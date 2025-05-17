@@ -7,7 +7,6 @@ import {
   Inject,
   forwardRef,
   Logger,
-  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, FindOptionsWhere } from 'typeorm';
@@ -443,10 +442,7 @@ export class UserService {
     const ratingCount = await this.getRatingCount(id, currentUserId);
 
     // 중복 제거된 리뷰와 평점 수 계산
-    const reviewAndRatingCount = await this.getReviewAndRatingCount(
-      id,
-      currentUserId,
-    );
+    const reviewAndRatingCount = await this.getReviewAndRatingCount(id);
 
     // 팔로워, 팔로잉 수 계산
     const followerCount = await this.userFollowerRepository.count({
@@ -1911,10 +1907,7 @@ export class UserService {
   }
 
   // 중복 제거된 리뷰와 평점 수 계산
-  private async getReviewAndRatingCount(
-    userId: number,
-    currentUserId?: number,
-  ): Promise<number> {
+  private async getReviewAndRatingCount(userId: number): Promise<number> {
     try {
       // 리뷰 조회 - 리뷰 타입의 리뷰만 가져오기
       const reviewsResult = await this.getUserReviews(

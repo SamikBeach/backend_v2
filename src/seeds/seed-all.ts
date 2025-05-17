@@ -3,7 +3,6 @@ import { Logger } from '@nestjs/common';
 import { AppModule } from '../app.module';
 import { execSync } from 'child_process';
 import * as path from 'path';
-import { seedTags } from './library-tag.seed';
 
 async function bootstrap() {
   const logger = new Logger('SeedAll');

@@ -15,7 +15,6 @@ import {
   UpdateRatingDto,
   RatingResponseDto,
 } from './dto/rating.dto';
-import { Not, IsNull } from 'typeorm';
 import { BookService } from '../book/book.service';
 
 @Injectable()

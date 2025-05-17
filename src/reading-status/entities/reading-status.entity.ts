@@ -62,4 +62,3 @@ export class ReadingStatus {
   @JoinColumn({ name: 'bookId' })
   book: Book;
 }
- 
