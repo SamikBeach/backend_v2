@@ -1,5 +1,15 @@
 # 🚦 CHANGELOG
 
+## [1.0.1](https://github.com/SamikBeach/backend_v2/compare/1.0.0...1.0.1) (2025-05-18)
+
+
+### Bug Fixes
+
+* change port ([9e9dd41](https://github.com/SamikBeach/backend_v2/commit/9e9dd41e9636567814af4355dfc03df488aaaad5))
+* fix port ([3dc102f](https://github.com/SamikBeach/backend_v2/commit/3dc102f1d7ae5ae885f82615f79e9d15fea5b76e))
+* update package.json ([28728b0](https://github.com/SamikBeach/backend_v2/commit/28728b05d89b559d008f06ce6d6336e52ae3bd0d))
+* update package.json ([f5eadb8](https://github.com/SamikBeach/backend_v2/commit/f5eadb856bd1718f21972a74ba8e79f710234832))
+
 # 1.0.0 (2025-05-17)
 
 
