@@ -51,7 +51,7 @@ export class ReviewService {
     private readonly configService: ConfigService,
   ) {
     this.serverUrl =
-      this.configService.get<string>('BASE_URL') || 'http://localhost:3004';
+      this.configService.get<string>('BASE_URL') || 'http://localhost:3005';
   }
 
   /**
