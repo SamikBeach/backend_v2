@@ -91,7 +91,7 @@ export class UserService {
     private configService: ConfigService,
   ) {
     this.serverUrl =
-      this.configService.get<string>('BASE_URL') || 'http://localhost:3001';
+      this.configService.get<string>('BASE_URL') || 'http://localhost:3005';
   }
 
   // 이미지 URL이 상대 경로인 경우 전체 URL로 변환하는 유틸리티 메소드

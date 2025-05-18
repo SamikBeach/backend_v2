@@ -490,7 +490,7 @@ export class CommentService {
         : false;
 
       // BASE_URL 환경변수 가져오기
-      const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+      const baseUrl = process.env.BASE_URL || 'http://localhost:3005';
 
       // 프로필 이미지 URL 생성
       let profileImageUrl = null;

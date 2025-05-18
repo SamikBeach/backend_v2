@@ -537,7 +537,7 @@ export class LibraryService {
       : [];
 
     // BASE_URL 환경변수 가져오기
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3005';
 
     return {
       id: library.id,
@@ -1278,7 +1278,7 @@ export class LibraryService {
     }
 
     // BASE_URL 환경변수 가져오기
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3005';
 
     return library.subscriptions.map((subscription) => {
       // 구독자 프로필 이미지 URL 생성
@@ -1436,7 +1436,7 @@ export class LibraryService {
     library: Library,
   ): Promise<LibraryResponseDto> {
     // BASE_URL 환경변수 가져오기
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3005';
 
     // 프로필 이미지 URL 생성
     let profileImageUrl = null;
@@ -1740,7 +1740,7 @@ export class LibraryService {
       : [];
 
     // BASE_URL 환경변수 가져오기
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3005';
 
     // 프로필 이미지 URL 생성
     let profileImageUrl = null;

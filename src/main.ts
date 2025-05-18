@@ -19,7 +19,7 @@ async function bootstrap() {
   app.set('query parser', 'extended');
 
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT', 3001);
+  const port = configService.get<number>('PORT', 3005);
   const logger = new Logger('Bootstrap');
 
   // 정적 파일 서빙 설정 (업로드된 이미지)
