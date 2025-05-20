@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.1.0](https://github.com/SamikBeach/backend_v2/compare/1.0.1...1.1.0) (2025-05-20)
+
+
+### Features
+
+* 발견하기 홈 인기 도서 랜덤 선정 및 하루 단위 Redis 캐싱 적용 ([2f731f8](https://github.com/SamikBeach/backend_v2/commit/2f731f85b4fab123f03414256bf488603ca7948c))
+
 ## [1.0.1](https://github.com/SamikBeach/backend_v2/compare/1.0.0...1.0.1) (2025-05-18)
 
 
