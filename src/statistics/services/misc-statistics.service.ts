@@ -99,9 +99,9 @@ export class MiscStatisticsService {
       );
 
       // 디버깅용 로그 추가
-      this.logger.debug(
-        `frequentlySearchedTerms: ${JSON.stringify(frequentlySearchedTerms)}`,
-      );
+      // this.logger.debug(
+      //   `frequentlySearchedTerms: ${JSON.stringify(frequentlySearchedTerms)}`,
+      // );
 
       // 기간 설정
       const fiveYearsAgo = new Date();

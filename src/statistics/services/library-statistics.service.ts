@@ -302,10 +302,6 @@ export class LibraryStatisticsService {
         subscribers: parseInt(item.subscribers, 10),
       }));
 
-      this.logger.debug(
-        `서재별 구독자 수: ${JSON.stringify(subscribersPerLibrary)}`,
-      );
-
       // 가장 인기 있는 서재
       let mostPopularLibrary = '없음';
       if (
@@ -334,8 +330,6 @@ export class LibraryStatisticsService {
         );
       }
 
-      this.logger.debug(`상위 서재 목록: ${JSON.stringify(topLibraries)}`);
-
       // 서재 인기도 추이 (월별)
       const librariesPopularityData = await this.librarySubscriptionRepository
         .createQueryBuilder('subscription')
@@ -349,10 +343,6 @@ export class LibraryStatisticsService {
         .orderBy('library.name', 'ASC')
         .addOrderBy('date', 'ASC')
         .getRawMany();
-
-      this.logger.debug(
-        `서재 인기도 추이 데이터: ${JSON.stringify(librariesPopularityData)}`,
-      );
 
       // 결과를 서재별로 그룹화
       interface TrendItem {
@@ -388,14 +378,6 @@ export class LibraryStatisticsService {
       const emptyYearlyData = this.generateEmptyYearlySubscriptionData(5);
       const emptyMonthlyData = this.generateEmptyMonthlySubscriptionData(5);
       const emptyWeeklyData = this.generateEmptyWeeklySubscriptionData();
-      const emptyDailyData = this.generateEmptySubscriptionData(5);
-
-      this.logger.debug(`빈 데이터 템플릿:
-        연도별: ${JSON.stringify(emptyYearlyData)},
-        월별: ${JSON.stringify(emptyMonthlyData)},
-        주별: ${JSON.stringify(emptyWeeklyData)},
-        일별: ${JSON.stringify(emptyDailyData)}
-      `);
 
       // 2. 서재 ID와 이름 맵핑 생성
       const libraryMap = await this.libraryRepository
@@ -738,13 +720,6 @@ export class LibraryStatisticsService {
           };
         });
 
-      this.logger.debug(`최종 결과:
-        연도별: ${JSON.stringify(yearly)},
-        월별: ${JSON.stringify(monthly)},
-        주별: ${JSON.stringify(weekly)},
-        일별: ${JSON.stringify(daily)}
-      `);
-
       return {
         subscribersPerLibrary,
         mostPopularLibrary,
@@ -803,10 +778,6 @@ export class LibraryStatisticsService {
 
         // 월별 업데이트 횟수 계산 (최소 0.1 보장)
         const updatesPerMonth = totalUpdates / monthsSinceFirstUpdate;
-
-        this.logger.debug(
-          `서재(${item.library}) 업데이트 계산: 총 ${totalUpdates}회 / ${daysSinceFirstUpdate}일(${monthsSinceFirstUpdate.toFixed(2)}개월) = ${updatesPerMonth.toFixed(2)}회/월`,
-        );
 
         return {
           library: item.library,

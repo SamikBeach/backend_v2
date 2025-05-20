@@ -516,7 +516,6 @@ export class ReadingStatusStatisticsService {
       }[] = [];
 
       // 모든 책에서 저자 추출 및 집계
-      let validAuthorCount = 0;
       for (const book of readBooks) {
         // 디버깅을 위해 로그 추가
         if (!book.author) {
@@ -528,7 +527,6 @@ export class ReadingStatusStatisticsService {
 
         // 저자 문자열 파싱
         const authors = this.extractAuthors(book.author);
-        validAuthorCount += authors.length > 0 ? 1 : 0;
 
         // 디버깅용 추적 정보 저장
         authorExtractInfo.push({
@@ -546,16 +544,6 @@ export class ReadingStatusStatisticsService {
           }
         }
       }
-
-      this.logger.log(
-        `Books with valid authors: ${validAuthorCount} out of ${readBooks.length}`,
-      );
-
-      // 디버깅을 위해 extractAuthors 함수가 제대로 작동하는지 확인
-      this.logger.log(
-        `Author extraction results: ${JSON.stringify(authorExtractInfo.slice(0, 3))}`,
-      );
-      this.logger.log(`Total unique authors found: ${authorCountMap.size}`);
 
       // 저자 카운트를 내림차순으로 정렬하여 상위 5명 추출
       let topAuthors = Array.from(authorCountMap.entries())
@@ -791,11 +779,6 @@ export class ReadingStatusStatisticsService {
       const emptyYearlyData = this.generateEmptyYearlyData(5);
       const emptyMonthlyData = this.generateEmptyMonthlyData(5);
 
-      // 디버깅: 빈 월별 데이터 로깅
-      this.logger.debug(
-        `emptyMonthlyData: ${JSON.stringify(emptyMonthlyData)}`,
-      );
-
       // 2. 기간 설정
       const fiveYearsAgo = new Date();
       fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
@@ -893,11 +876,6 @@ export class ReadingStatusStatisticsService {
         }
       });
 
-      // 디버깅: 실제 월별 데이터 로깅
-      this.logger.debug(
-        `monthlyMap: ${JSON.stringify(Array.from(monthlyMap.entries()))}`,
-      );
-
       // 2-3. 월별 결과 생성 - 중복 제거 후 정렬
       const monthlyResult = this.mergeAndSortData(
         emptyMonthlyData,
@@ -905,9 +883,6 @@ export class ReadingStatusStatisticsService {
         'month',
         5,
       );
-
-      // 디버깅: 최종 월별 결과 로깅
-      this.logger.debug(`monthlyResult: ${JSON.stringify(monthlyResult)}`);
 
       // 3. 주간별 독서 상태 통계 (최근 5주)
       const koreanMonths = [
