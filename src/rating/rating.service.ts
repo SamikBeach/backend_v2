@@ -164,26 +164,26 @@ export class RatingService {
   ): Promise<RatingResponseDto | null> {
     try {
       if (!userId || !bookId) {
-        this.logger.debug(
-          `Invalid parameters: userId=${userId}, bookId=${bookId}`,
-        );
+        // this.logger.debug(
+        //   `Invalid parameters: userId=${userId}, bookId=${bookId}`,
+        // );
         return null;
       }
 
-      this.logger.debug(`Finding rating for user ${userId} and book ${bookId}`);
+      // this.logger.debug(`Finding rating for user ${userId} and book ${bookId}`);
       const rating = await this.ratingRepository.findOne({
         where: { userId, bookId },
       });
 
       if (!rating) {
-        this.logger.debug(
-          `No rating found for user ${userId} and book ${bookId}`,
-        );
+        // this.logger.debug(
+        //   `No rating found for user ${userId} and book ${bookId}`,
+        // );
         return null;
       }
 
       const result = this.mapToResponseDto(rating);
-      this.logger.debug(`Found rating: ${JSON.stringify(result)}`);
+      // this.logger.debug(`Found rating: ${JSON.stringify(result)}`);
       return result;
     } catch (error) {
       this.logger.error(

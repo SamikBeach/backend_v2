@@ -413,17 +413,11 @@ export class LibraryService {
         isSubscribed = library.subscriptions.some(
           (sub) => sub.subscriberId === userId,
         );
-        this.logger.debug(
-          `구독 관계에서 직접 확인: ${isSubscribed ? '구독 중' : '미구독'}`,
-        );
       }
 
       // 2. 관계에서 찾지 못한 경우 레포지토리를 통해 다시 확인
       if (!isSubscribed) {
         isSubscribed = await this.isUserSubscribed(userId, id);
-        this.logger.debug(
-          `isUserSubscribed 메서드 호출 결과: ${isSubscribed ? '구독 중' : '미구독'}`,
-        );
       }
 
       // 3. 사용자가 라이브러리 소유자를 팔로우하는지 확인
@@ -431,9 +425,6 @@ export class LibraryService {
         isFollowingOwner = await this.userService.isFollowing(
           userId,
           library.ownerId,
-        );
-        this.logger.debug(
-          `사용자(${userId})는 라이브러리 소유자(${library.ownerId})를 ${isFollowingOwner ? '팔로우 중' : '팔로우하지 않음'}`,
         );
       }
     }

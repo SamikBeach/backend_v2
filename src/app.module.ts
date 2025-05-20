@@ -43,12 +43,18 @@ import { StatisticsModule } from './statistics/statistics.module';
 import { UserStatisticsSetting } from './statistics/entities/user-statistics-setting.entity';
 import { FeedbackModule } from './feedback/feedback.module';
 import { Feedback } from './feedback/entities/feedback.entity';
+import { CacheModule } from '@nestjs/cache-manager';
+import { CacheConfigService } from './common/services/cache-config.service';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: `.env.${process.env.NODE_ENV}`,
+    }),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      useClass: CacheConfigService,
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -109,6 +115,7 @@ import { Feedback } from './feedback/entities/feedback.entity';
     StatisticsModule,
     FeedbackModule,
   ],
+  providers: [CacheConfigService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
