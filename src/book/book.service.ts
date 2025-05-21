@@ -919,30 +919,41 @@ export class BookService {
     limit: number = 4,
   ): Promise<BookSearchResponse> {
     try {
-      // 오늘 날짜 기준 설정
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // 날짜 범위를 단계적으로 확장하며 충분한 책을 찾을 때까지 시도
+      const dateRanges = [
+        { days: 1, label: '오늘' }, // 오늘
+        { days: 3, label: '최근 3일' }, // 최근 3일
+        { days: 7, label: '최근 1주일' }, // 최근 1주일
+        { days: 30, label: '최근 1개월' }, // 최근 1개월
+      ];
 
       let activeBookIds: number[] = [];
+      let usedDateRange = dateRanges[0].label;
 
-      try {
-        // 1. 오늘 서재에 담긴 책 ID
+      for (const range of dateRanges) {
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - (range.days - 1)); // 1일이면 오늘, 3일이면 2일 전부터
+        startDate.setHours(0, 0, 0, 0);
+
+        this.logger.log(`${range.label} 활동 기준으로 인기 도서 조회 시도`);
+
+        // 1. 해당 기간 동안 서재에 담긴 책 ID
         const libraryBookIds =
-          await this.libraryService.getBookIdsAddedInPeriod(today);
+          await this.libraryService.getBookIdsAddedInPeriod(startDate);
 
-        // 2. 오늘 평점이 등록된 책 ID
+        // 2. 해당 기간 동안 평점이 등록된 책 ID
         const ratingBookIds =
-          await this.ratingService.getBookIdsRatedInPeriod(today);
+          await this.ratingService.getBookIdsRatedInPeriod(startDate);
 
-        // 3. 오늘 독서 상태가 변경된 책 ID
+        // 3. 해당 기간 동안 독서 상태가 변경된 책 ID
         const readingStatusBookIds =
           await this.readingStatusService.getBookIdsStatusChangedInPeriod(
-            today,
+            startDate,
           );
 
-        // 4. 오늘 리뷰가 작성된 책 ID
+        // 4. 해당 기간 동안 리뷰가 작성된 책 ID
         const reviewBookIds =
-          await this.reviewService.getBookIdsReviewedInPeriod(today);
+          await this.reviewService.getBookIdsReviewedInPeriod(startDate);
 
         // 모든 ID를 합치고 중복 제거
         activeBookIds = [
@@ -954,10 +965,15 @@ export class BookService {
           ]),
         ];
 
-        this.logger.log(`오늘 활동이 있는 책: ${activeBookIds.length}개`);
-      } catch (error) {
-        this.logger.error(`활성 도서 ID 조회 중 오류 발생: ${error.message}`);
-        activeBookIds = [];
+        this.logger.log(
+          `${range.label} 활동이 있는 책: ${activeBookIds.length}개`,
+        );
+
+        // 충분한 책이 있으면 루프 종료
+        if (activeBookIds.length >= limit) {
+          usedDateRange = range.label;
+          break;
+        }
       }
 
       // 활성 도서가 있는 경우 해당 도서들을 반환
@@ -975,7 +991,7 @@ export class BookService {
 
           if (activeBooks.length > 0) {
             this.logger.log(
-              `오늘의 인기 도서 ${activeBooks.length}개를 반환합니다.`,
+              `${usedDateRange} 기준 인기 도서 ${activeBooks.length}개를 반환합니다.`,
             );
 
             // 사용자별 데이터로 책 정보 보강
