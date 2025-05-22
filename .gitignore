@@ -26,3 +26,5 @@ node_modules
 
 # AuthKey
 AuthKey_B87FH5JM49.p8
+
+*.p8
