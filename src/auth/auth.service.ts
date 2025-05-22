@@ -334,10 +334,10 @@ export class AuthService {
         throw new BadRequestException('지원하지 않는 인증 제공자입니다.');
       }
 
-      // providerId 체크
+      // providerId 확인
       const userProviderId = providerId || `${provider}_${Date.now()}`;
 
-      // providerId로 사용자 검색
+      // 먼저 해당 providerId로 가입된 사용자가 있는지 확인
       let user = await this.userService.findByProviderId(
         userProviderId,
         authProvider,
@@ -345,15 +345,15 @@ export class AuthService {
 
       // 이메일로도 검색 (Apple의 경우 providerId가 매번 변경될 수 있음)
       if (!user && authProvider === AuthProvider.APPLE) {
-        const usersByEmail = await this.userService.findByEmail(email);
-        if (usersByEmail && usersByEmail.provider === AuthProvider.APPLE) {
-          user = usersByEmail;
+        const userByEmail = await this.userService.findByEmail(email);
+        if (userByEmail && userByEmail.provider === AuthProvider.APPLE) {
+          user = userByEmail;
         }
       }
 
-      // 기존 사용자가 없는 경우
+      // 기존 사용자가 없는 경우 새로 생성
       if (!user) {
-        // 같은 이메일로 가입한 사용자가 있는지 확인
+        // 같은 이메일로 가입한 다른 방식의 사용자가 있는지 확인
         const existingUser = await this.userService.findByEmail(email);
 
         if (existingUser) {
@@ -364,6 +364,13 @@ export class AuthService {
         }
 
         // 새 사용자 생성
+        console.log('새 사용자 생성:', {
+          email,
+          username: fullName || email.split('@')[0],
+          provider: authProvider,
+          providerId: userProviderId,
+        });
+
         user = await this.userService.createSocialUser({
           email,
           username: fullName || email.split('@')[0], // 이름이 없으면 이메일 아이디 부분 사용
@@ -371,10 +378,13 @@ export class AuthService {
           providerId: userProviderId,
           marketingConsent: false,
         });
+
+        console.log('생성된 사용자:', user);
       }
 
       return user;
     } catch (error) {
+      console.error('OAuth 사용자 검증 오류:', error);
       throw error;
     }
   }

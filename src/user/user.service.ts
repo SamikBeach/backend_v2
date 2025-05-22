@@ -173,21 +173,38 @@ export class UserService {
   }
 
   async createSocialUser(createUserDto: CreateUserDto): Promise<User> {
-    const { email, username, provider, providerId, marketingConsent } =
-      createUserDto;
+    try {
+      const { email, username, provider, providerId, marketingConsent } =
+        createUserDto;
 
-    // Create new user
-    const user = this.userRepository.create({
-      email,
-      username,
-      provider,
-      providerId,
-      status: UserStatus.ACTIVE,
-      isEmailVerified: true,
-      marketingConsent: marketingConsent || false,
-    });
+      this.logger.log(
+        `소셜 사용자 생성 시작: ${email}, ${provider}, ${providerId}`,
+      );
 
-    return this.userRepository.save(user);
+      // Create new user
+      const user = this.userRepository.create({
+        email,
+        username,
+        provider,
+        providerId,
+        status: UserStatus.ACTIVE,
+        isEmailVerified: true,
+        marketingConsent: marketingConsent || false,
+      });
+
+      this.logger.log(`사용자 객체 생성됨: ${JSON.stringify(user)}`);
+
+      // DB에 저장
+      const savedUser = await this.userRepository.save(user);
+
+      this.logger.log(`사용자가 DB에 저장됨: ${JSON.stringify(savedUser)}`);
+
+      return savedUser;
+    } catch (error) {
+      this.logger.error(`소셜 사용자 생성 오류: ${error.message}`);
+      this.logger.error(error.stack);
+      throw error;
+    }
   }
 
   async verifyEmail(email: string, code: string): Promise<User> {
