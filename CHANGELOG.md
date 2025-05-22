@@ -1,5 +1,13 @@
 # 🚦 CHANGELOG
 
+# [1.2.0](https://github.com/SamikBeach/backend_v2/compare/1.1.0...1.2.0) (2025-05-22)
+
+
+### Features
+
+* OAuth 로그인 시 벤더 제공 화면으로 직접 이동하는 방식 확인 ([d9810ae](https://github.com/SamikBeach/backend_v2/commit/d9810ae5ed9df749c0cd5eaeb359615ba2c22fe9))
+* 인기 도서 조회 날짜 범위 확장 로직 추가 ([5b95808](https://github.com/SamikBeach/backend_v2/commit/5b95808d0672515ca2a7fa6d13ff58d191b1efce))
+
 # [1.1.0](https://github.com/SamikBeach/backend_v2/compare/1.0.1...1.1.0) (2025-05-20)
 
 
