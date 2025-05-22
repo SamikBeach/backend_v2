@@ -7,6 +7,7 @@ import {
   Res,
   All,
   Version,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
@@ -36,6 +37,8 @@ import { IsPublic } from './decorators/is-public.decorator';
 
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly userService: UserService,
@@ -191,16 +194,51 @@ export class AuthController {
   @IsPublic()
   @UseGuards(AuthGuard('apple'))
   async appleAuthCallback(@GetUser() user: User, @Res() res: Response) {
-    const result = await this.authService.socialLogin({
-      provider: AuthProvider.APPLE,
-      user,
-    });
+    try {
+      this.logger.log('Apple 로그인 콜백 호출됨 (기본 라우트)');
+      const result = await this.authService.socialLogin({
+        provider: AuthProvider.APPLE,
+        user,
+      });
 
-    // 프론트엔드로 리다이렉트 (토큰과 함께)
-    const frontendUrl = this.configService.get<string>('SERVICE_URL');
-    res.redirect(
-      `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
-    );
+      // 프론트엔드로 리다이렉트 (토큰과 함께)
+      const frontendUrl = this.configService.get<string>('SERVICE_URL');
+      this.logger.log(`리다이렉트 URL: ${frontendUrl}/auth/social-callback`);
+      res.redirect(
+        `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
+      );
+    } catch (error) {
+      this.logger.error(`Apple 콜백 오류: ${error.message}`);
+      this.logger.error(error.stack);
+      throw error;
+    }
+  }
+
+  @Version('2')
+  @Post('apple/callback')
+  @IsPublic()
+  @UseGuards(AuthGuard('apple'))
+  async appleAuthCallbackV2(@GetUser() user: User, @Res() res: Response) {
+    try {
+      this.logger.log('Apple 로그인 콜백 호출됨 (v2 라우트)');
+      this.logger.log(`사용자 정보: ${JSON.stringify(user)}`);
+
+      const result = await this.authService.socialLogin({
+        provider: AuthProvider.APPLE,
+        user,
+      });
+
+      // 프론트엔드로 리다이렉트 (토큰과 함께)
+      const frontendUrl = this.configService.get<string>('SERVICE_URL');
+      this.logger.log(`리다이렉트 URL: ${frontendUrl}/auth/social-callback`);
+      res.redirect(
+        `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
+      );
+    } catch (error) {
+      this.logger.error(`Apple v2 콜백 오류: ${error.message}`);
+      this.logger.error(error.stack);
+      throw error;
+    }
   }
 
   @Get('naver')
