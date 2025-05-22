@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.4.0](https://github.com/SamikBeach/backend_v2/compare/1.3.0...1.4.0) (2025-05-22)
+
+
+### Features
+
+* Apple OAuth 로그인 처리 개선 및 오류 해결 ([e700d91](https://github.com/SamikBeach/backend_v2/commit/e700d91dfdc403cd32a2b742092caa30f3bcc7cc))
+
 # [1.3.0](https://github.com/SamikBeach/backend_v2/compare/1.2.1...1.3.0) (2025-05-22)
 
 
