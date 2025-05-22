@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+## [1.2.1](https://github.com/SamikBeach/backend_v2/compare/1.2.0...1.2.1) (2025-05-22)
+
+
+### Bug Fixes
+
+* 엔드포인트 수정 ([291ebbe](https://github.com/SamikBeach/backend_v2/commit/291ebbe0b6920c59655284d04187accd8d6cc88d))
+
 # [1.2.0](https://github.com/SamikBeach/backend_v2/compare/1.1.0...1.2.0) (2025-05-22)
 
 
