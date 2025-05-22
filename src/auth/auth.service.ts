@@ -93,25 +93,19 @@ export class AuthService {
 
       // Apple 인증 코드가 있는 경우 (Apple 로그인 전용)
       if (provider === AuthProvider.APPLE && code) {
-        // 임시 사용자 정보 생성
-        // 실제로는 Apple의 인증 코드로부터 사용자 정보를 가져와야 함
-        // 여기서는 간단히 임시 사용자를 생성하여 처리
+        // 임시 사용자 식별자 생성
+        const tempId = Math.random().toString(36).substring(2, 15);
+
+        // 사용자 정보 생성
         const tempUser = {
-          email: `apple_user_${Date.now()}@example.com`,
-          fullName: `Apple User ${Date.now()}`,
+          email: `apple_user_${tempId}@example.com`,
+          fullName: `Apple User ${tempId}`,
           providerId: `apple_${Date.now()}`,
+          accessToken: code, // code를 accessToken으로 사용
         };
 
-        // 임시 사용자로 OAuth 인증 처리
-        const user = await this.validateOAuthUser(
-          {
-            email: tempUser.email,
-            fullName: tempUser.fullName,
-            providerId: tempUser.providerId,
-            accessToken: code, // code를 accessToken으로 사용
-          },
-          'apple',
-        );
+        // OAuth 인증 처리
+        const user = await this.validateOAuthUser(tempUser, 'apple');
 
         return this.generateAuthResponseWithRefresh(user);
       }
@@ -340,11 +334,22 @@ export class AuthService {
         throw new BadRequestException('지원하지 않는 인증 제공자입니다.');
       }
 
+      // providerId 체크
+      const userProviderId = providerId || `${provider}_${Date.now()}`;
+
       // providerId로 사용자 검색
       let user = await this.userService.findByProviderId(
-        providerId,
+        userProviderId,
         authProvider,
       );
+
+      // 이메일로도 검색 (Apple의 경우 providerId가 매번 변경될 수 있음)
+      if (!user && authProvider === AuthProvider.APPLE) {
+        const usersByEmail = await this.userService.findByEmail(email);
+        if (usersByEmail && usersByEmail.provider === AuthProvider.APPLE) {
+          user = usersByEmail;
+        }
+      }
 
       // 기존 사용자가 없는 경우
       if (!user) {
@@ -363,7 +368,7 @@ export class AuthService {
           email,
           username: fullName || email.split('@')[0], // 이름이 없으면 이메일 아이디 부분 사용
           provider: authProvider,
-          providerId,
+          providerId: userProviderId,
           marketingConsent: false,
         });
       }

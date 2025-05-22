@@ -130,7 +130,7 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
       // 이메일이 없으면 기본 이메일 생성 (임시방편)
       if (!email) {
         this.logger.warn('이메일을 찾을 수 없어 임시 이메일을 생성합니다');
-        // 임의의 고유 ID 생성 (실제로는 더 나은 방법 필요)
+        // 임의의 고유 ID 생성
         const tempId = Math.random().toString(36).substring(2, 15);
         email = `apple_user_${tempId}@example.com`;
       }
@@ -159,29 +159,39 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
         email,
         fullName,
         providerId,
-        accessToken,
+        accessToken: accessToken || code, // accessToken이 없으면 code를 사용
       };
 
       this.logger.log(`생성된 사용자 객체: ${JSON.stringify(user)}`);
 
-      // done 함수 확인 및 처리
-      if (typeof done !== 'function') {
-        this.logger.error('done이 함수가 아닙니다');
-        // 에러 처리 로직 (done이 함수가 아닌 경우)
-        return user; // 또는 다른 방식으로 처리
-      }
-
+      // 사용자 인증 처리
       const result = await this.authService.validateOAuthUser(user, 'apple');
       this.logger.log('사용자 인증 완료');
-      done(null, result);
-      return result;
+
+      // done 함수 호출 문제 해결
+      if (typeof done === 'function') {
+        try {
+          return done(null, result);
+        } catch (doneError) {
+          this.logger.error(`done 함수 호출 오류: ${doneError.message}`);
+          // done 함수 오류가 발생하더라도 결과 반환
+          return result;
+        }
+      } else {
+        this.logger.warn('done이 함수가 아니므로 결과만 반환합니다');
+        return result;
+      }
     } catch (error) {
       this.logger.error(`Apple 로그인 검증 오류: ${error.message}`);
       this.logger.error(error.stack);
 
-      // done 함수 확인 및 처리
+      // done 함수 처리
       if (typeof done === 'function') {
-        done(error, null);
+        try {
+          done(error, null);
+        } catch (doneError) {
+          this.logger.error(`done 함수 호출 오류: ${doneError.message}`);
+        }
       }
 
       throw error; // 오류를 상위로 전파
