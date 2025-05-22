@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.6.0](https://github.com/SamikBeach/backend_v2/compare/1.5.0...1.6.0) (2025-05-22)
+
+
+### Features
+
+* strategy 추가 ([c930e12](https://github.com/SamikBeach/backend_v2/commit/c930e123b32f492fb1d439e4c02b5c3414a242d0))
+
 # [1.5.0](https://github.com/SamikBeach/backend_v2/compare/1.4.0...1.5.0) (2025-05-22)
 
 
