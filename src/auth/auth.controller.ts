@@ -245,8 +245,7 @@ export class AuthController {
       this.logger.log('Apple 로그인 콜백 호출됨 (v2 라우트)');
       this.logger.log(`요청 본문: ${JSON.stringify(body)}`);
 
-      // AuthGuard를 직접 적용하지 않고 수동으로 처리
-      // Apple 인증 코드로부터 사용자 정보 추출
+      // 인증 코드 확인
       const code = body.code;
 
       if (!code) {
@@ -256,35 +255,18 @@ export class AuthController {
         );
       }
 
-      // 수동으로 Apple 인증 처리
-      try {
-        // 인증 코드를 사용하여 사용자 정보 생성
-        // 이메일 정보가 없을 수 있으므로 임시 이메일 생성
-        const tempEmail = `apple_${Date.now()}@example.com`;
-        const tempUser = {
-          email: tempEmail,
-          fullName: tempEmail.split('@')[0],
-          providerId: `apple_${Date.now()}`,
-        };
+      // 인증 코드로 소셜 로그인 처리
+      const result = await this.authService.socialLogin({
+        provider: AuthProvider.APPLE,
+        code,
+      });
 
-        const result = await this.authService.socialLogin({
-          provider: AuthProvider.APPLE,
-          user: tempUser as any,
-          code,
-        });
-
-        // 프론트엔드로 리다이렉트 (토큰과 함께)
-        const frontendUrl = this.configService.get<string>('SERVICE_URL');
-        this.logger.log(`리다이렉트 URL: ${frontendUrl}/auth/social-callback`);
-        return res.redirect(
-          `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
-        );
-      } catch (authError) {
-        this.logger.error(`인증 처리 오류: ${authError.message}`);
-        return res.redirect(
-          `${this.configService.get<string>('SERVICE_URL')}/auth/error?message=인증 처리 중 오류가 발생했습니다`,
-        );
-      }
+      // 프론트엔드로 리다이렉트 (토큰과 함께)
+      const frontendUrl = this.configService.get<string>('SERVICE_URL');
+      this.logger.log(`리다이렉트 URL: ${frontendUrl}/auth/social-callback`);
+      return res.redirect(
+        `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
+      );
     } catch (error) {
       this.logger.error(`Apple v2 콜백 오류: ${error.message}`);
       this.logger.error(error.stack);
