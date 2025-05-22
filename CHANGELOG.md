@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.5.0](https://github.com/SamikBeach/backend_v2/compare/1.4.0...1.5.0) (2025-05-22)
+
+
+### Features
+
+* Apple 로그인 과정 개선 및 버그 수정 ([87dbd2c](https://github.com/SamikBeach/backend_v2/commit/87dbd2c0b9d10015de2eed784ad504959fb1cd30))
+
 # [1.4.0](https://github.com/SamikBeach/backend_v2/compare/1.3.0...1.4.0) (2025-05-22)
 
 
