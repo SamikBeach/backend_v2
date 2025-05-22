@@ -353,6 +353,10 @@ export class AuthService {
         return AuthProvider.GOOGLE;
       case 'apple':
         return AuthProvider.APPLE;
+      case 'naver':
+        return AuthProvider.NAVER;
+      case 'kakao':
+        return AuthProvider.KAKAO;
       default:
         return null;
     }

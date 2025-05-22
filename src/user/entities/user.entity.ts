@@ -21,6 +21,8 @@ export enum AuthProvider {
   LOCAL = 'local',
   GOOGLE = 'google',
   APPLE = 'apple',
+  NAVER = 'naver',
+  KAKAO = 'kakao',
 }
 
 @Entity('user')
