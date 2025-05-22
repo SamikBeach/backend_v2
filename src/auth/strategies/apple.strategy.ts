@@ -138,8 +138,7 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
       // providerId가 없으면 요청 본문이나 다른 데이터에서 시도
       if (!providerId) {
         this.logger.warn('providerId를 찾을 수 없어 대체값을 사용합니다');
-        providerId =
-          request.body?.user || request.body?.id || `apple_${Date.now()}`;
+        providerId = `apple_${Date.now()}`;
       }
 
       // 이름 정보 처리
@@ -166,26 +165,24 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
 
       // 사용자 인증 처리
       const result = await this.authService.validateOAuthUser(user, 'apple');
-      this.logger.log('사용자 인증 완료');
+      this.logger.log(`인증 완료된 사용자: ${JSON.stringify(result)}`);
 
-      // done 함수 호출 문제 해결
       if (typeof done === 'function') {
         try {
-          return done(null, result);
+          this.logger.log('done 함수 호출');
+          done(null, result);
         } catch (doneError) {
           this.logger.error(`done 함수 호출 오류: ${doneError.message}`);
-          // done 함수 오류가 발생하더라도 결과 반환
-          return result;
         }
       } else {
         this.logger.warn('done이 함수가 아니므로 결과만 반환합니다');
-        return result;
       }
+
+      return result;
     } catch (error) {
       this.logger.error(`Apple 로그인 검증 오류: ${error.message}`);
       this.logger.error(error.stack);
 
-      // done 함수 처리
       if (typeof done === 'function') {
         try {
           done(error, null);
@@ -194,7 +191,7 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
         }
       }
 
-      throw error; // 오류를 상위로 전파
+      throw error;
     }
   }
 }

@@ -212,10 +212,16 @@ export class AuthController {
 
       this.logger.log(`인증된 사용자: ${JSON.stringify(user)}`);
 
+      // 사용자가 저장되었는지 확인
+      this.logger.log(`사용자 ID: ${user.id}`);
+
+      // 인증 응답 생성
       const result = await this.authService.socialLogin({
         provider: AuthProvider.APPLE,
         user,
       });
+
+      this.logger.log(`생성된 토큰: ${JSON.stringify(result)}`);
 
       // 프론트엔드로 리다이렉트 (토큰과 함께)
       const frontendUrl = this.configService.get<string>('SERVICE_URL');
@@ -256,10 +262,14 @@ export class AuthController {
       }
 
       // 인증 코드로 소셜 로그인 처리
+      this.logger.log(`인증 코드 처리 시작: ${code}`);
+
       const result = await this.authService.socialLogin({
         provider: AuthProvider.APPLE,
         code,
       });
+
+      this.logger.log(`소셜 로그인 결과: ${JSON.stringify(result)}`);
 
       // 프론트엔드로 리다이렉트 (토큰과 함께)
       const frontendUrl = this.configService.get<string>('SERVICE_URL');
