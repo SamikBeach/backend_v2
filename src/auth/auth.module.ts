@@ -9,6 +9,8 @@ import { UserModule } from '../user/user.module';
 import { CommonModule } from '../common/common.module';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { AppleStrategy } from './strategies/apple.strategy';
+import { NaverStrategy } from './strategies/naver.strategy';
+import { KakaoStrategy } from './strategies/kakao.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Module({
@@ -33,6 +35,8 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
     JwtStrategy,
     GoogleStrategy,
     AppleStrategy,
+    NaverStrategy,
+    KakaoStrategy,
     JwtAuthGuard,
   ],
   exports: [AuthService, JwtStrategy, JwtAuthGuard],
