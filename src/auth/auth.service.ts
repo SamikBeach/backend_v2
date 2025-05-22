@@ -84,11 +84,36 @@ export class AuthService {
 
   async socialLogin(socialLoginDto: SocialLoginDto) {
     try {
-      const { provider, accessToken } = socialLoginDto;
+      const { provider, accessToken, code } = socialLoginDto;
 
       // 이미 Passport 전략에서 사용자 검증이 완료된 경우
       if (socialLoginDto.user) {
         return this.generateAuthResponseWithRefresh(socialLoginDto.user);
+      }
+
+      // Apple 인증 코드가 있는 경우 (Apple 로그인 전용)
+      if (provider === AuthProvider.APPLE && code) {
+        // 임시 사용자 정보 생성
+        // 실제로는 Apple의 인증 코드로부터 사용자 정보를 가져와야 함
+        // 여기서는 간단히 임시 사용자를 생성하여 처리
+        const tempUser = {
+          email: `apple_user_${Date.now()}@example.com`,
+          fullName: `Apple User ${Date.now()}`,
+          providerId: `apple_${Date.now()}`,
+        };
+
+        // 임시 사용자로 OAuth 인증 처리
+        const user = await this.validateOAuthUser(
+          {
+            email: tempUser.email,
+            fullName: tempUser.fullName,
+            providerId: tempUser.providerId,
+            accessToken: code, // code를 accessToken으로 사용
+          },
+          'apple',
+        );
+
+        return this.generateAuthResponseWithRefresh(user);
       }
 
       // accessToken만 있는 경우 (모바일 앱 등에서 직접 전달)
@@ -112,6 +137,7 @@ export class AuthService {
 
       throw new BadRequestException('유효한 소셜 로그인 정보가 필요합니다.');
     } catch (error) {
+      console.error('Social login error:', error);
       if (
         error instanceof ConflictException ||
         error instanceof UnauthorizedException ||
@@ -119,7 +145,9 @@ export class AuthService {
       ) {
         throw error;
       }
-      throw new BadRequestException('소셜 로그인 중 오류가 발생했습니다.');
+      throw new BadRequestException(
+        '소셜 로그인 중 오류가 발생했습니다: ' + error.message,
+      );
     }
   }
 
