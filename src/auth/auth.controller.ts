@@ -322,4 +322,17 @@ export class AuthController {
       `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
     );
   }
+
+  @Get('token-test')
+  async tokenTest(@GetUser() user: User) {
+    return {
+      success: true,
+      message: '토큰이 유효합니다.',
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+      },
+    };
+  }
 }
