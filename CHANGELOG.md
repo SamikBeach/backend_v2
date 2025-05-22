@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.3.0](https://github.com/SamikBeach/backend_v2/compare/1.2.1...1.3.0) (2025-05-22)
+
+
+### Features
+
+* Apple 로그인 500 에러 디버깅을 위한 로깅 개선 및 오류 처리 강화 ([5c85047](https://github.com/SamikBeach/backend_v2/commit/5c85047802ebef4e1b6abd3b6735362bf422fa4c))
+
 ## [1.2.1](https://github.com/SamikBeach/backend_v2/compare/1.2.0...1.2.1) (2025-05-22)
 
 
