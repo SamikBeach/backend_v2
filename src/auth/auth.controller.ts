@@ -222,14 +222,13 @@ export class AuthController {
   @IsPublic()
   @UseGuards(AuthGuard('apple'))
   async appleAuthCallback(@GetUser() user: User, @Res() res: Response) {
-    // The AppleStrategy should have populated 'user' by calling authService.validateOAuthUser
-    // Now, we just need to generate tokens and redirect.
-    // However, authService.socialLogin is designed to take a SocialLoginDto.
-    // Let's call the token generation part directly if possible, or adapt socialLogin.
-    // For consistency with google/kakao, we can call socialLogin, which will re-validate and generate tokens.
+    // AppleStrategy가 authService.validateOAuthUser를 호출하여 'user' 객체를 생성했을 것입니다.
+    // 이제 토큰을 생성하고 리디렉션하면 됩니다.
+    // authService.socialLogin은 SocialLoginDto를 받도록 설계되어 있습니다.
+    // google/kakao와의 일관성을 위해 socialLogin을 호출하여 토큰을 (재)검증하고 생성할 수 있습니다.
     const result = await this.authService.socialLogin({
       provider: AuthProvider.APPLE,
-      user, // This user object comes from AppleStrategy -> authService.validateOAuthUser
+      user, // 이 user 객체는 AppleStrategy -> authService.validateOAuthUser를 통해 전달됩니다.
     });
 
     const frontendUrl = this.configService.get<string>('SERVICE_URL');
