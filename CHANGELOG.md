@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.9.0](https://github.com/SamikBeach/backend_v2/compare/1.8.1...1.9.0) (2025-05-23)
+
+
+### Features
+
+* Apple 로그인 사용자 고유성 보장 및 이메일 변경 대응 ([c0675e7](https://github.com/SamikBeach/backend_v2/commit/c0675e70aec748c318d14f153a4226aedfda2d50))
+
 ## [1.8.1](https://github.com/SamikBeach/backend_v2/compare/1.8.0...1.8.1) (2025-05-23)
 
 
