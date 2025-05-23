@@ -294,10 +294,7 @@ export class UserService {
     }
 
     // 소셜 로그인 계정이 아니면 일반 비밀번호 재설정 프로세스로 전환
-    if (
-      user.provider !== AuthProvider.GOOGLE &&
-      user.provider !== AuthProvider.APPLE
-    ) {
+    if (user.provider !== AuthProvider.GOOGLE) {
       return this.resetPassword(email, token, newPassword);
     }
 
@@ -2136,53 +2133,5 @@ export class UserService {
       );
       throw new BadRequestException('계정 삭제 중 오류가 발생했습니다.');
     }
-  }
-
-  /**
-   * Apple ID 또는 이메일로 사용자 찾기
-   */
-  async findUserByAppleIdOrEmail(
-    appleId: string,
-    email?: string,
-  ): Promise<User | null> {
-    const whereConditions: FindOptionsWhere<User>[] = [{ appleId }];
-
-    if (email) {
-      whereConditions.push({ email });
-    }
-
-    return this.userRepository.findOne({
-      where: whereConditions,
-    });
-  }
-
-  /**
-   * Apple 사용자 생성
-   */
-  async createAppleUser(userData: {
-    email: string | null;
-    appleId: string;
-    username: string;
-  }): Promise<User> {
-    const user = this.userRepository.create({
-      email: userData.email,
-      appleId: userData.appleId,
-      username: userData.username,
-      provider: AuthProvider.APPLE,
-      status: UserStatus.ACTIVE,
-      isEmailVerified: true, // Apple 로그인은 이메일 인증 완료로 간주
-      marketingConsent: false,
-    });
-
-    return this.userRepository.save(user);
-  }
-
-  /**
-   * 기존 사용자에 Apple ID 연결
-   */
-  async updateUserAppleId(userId: number, appleId: string): Promise<User> {
-    const user = await this.findOne(userId);
-    user.appleId = appleId;
-    return this.userRepository.save(user);
   }
 }

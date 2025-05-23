@@ -35,7 +35,6 @@ import { User } from '../user/entities/user.entity';
 import { SignupDto } from './dto/signup.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { IsPublic } from './decorators/is-public.decorator';
-import { AppleLoginDto } from './dto/apple-login.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -162,12 +161,6 @@ export class AuthController {
     return this.authService.deleteAccount(user.id, deleteAccountDto);
   }
 
-  @Post('apple-login')
-  @IsPublic()
-  async appleLogin(@Body() appleLoginDto: AppleLoginDto) {
-    return this.authService.appleLogin(appleLoginDto.idToken);
-  }
-
   @Get('google')
   @IsPublic()
   @UseGuards(AuthGuard('google'))
@@ -191,130 +184,11 @@ export class AuthController {
     );
   }
 
-  @Get('apple')
-  @IsPublic()
-  @UseGuards(AuthGuard('apple'))
-  appleAuth() {
-    // Apple 인증 페이지로 리다이렉트 (Passport가 처리)
-  }
-
-  @Post('apple/callback')
-  @IsPublic()
-  @UseGuards(AuthGuard('apple'))
-  async appleAuthCallback(
-    @Body() body: any,
-    @GetUser() user: User,
-    @Res() res: Response,
-  ) {
-    try {
-      this.logger.log('Apple 로그인 콜백 호출됨 (기본 라우트)');
-      this.logger.log(`요청 본문: ${JSON.stringify(body)}`);
-
-      if (!user) {
-        this.logger.error('사용자 정보가 없습니다');
-        return res.redirect(
-          `${this.configService.get<string>('SERVICE_URL')}/auth/error?message=인증에 실패했습니다`,
-        );
-      }
-
-      this.logger.log(`인증된 사용자: ${JSON.stringify(user)}`);
-
-      // 사용자가 저장되었는지 확인
-      this.logger.log(`사용자 ID: ${user.id}`);
-
-      // 인증 응답 생성
-      const result = await this.authService.socialLogin({
-        provider: AuthProvider.APPLE,
-        user,
-      });
-
-      this.logger.log(`생성된 토큰: ${JSON.stringify(result)}`);
-
-      // 프론트엔드로 리다이렉트 (토큰과 함께)
-      const frontendUrl = this.configService.get<string>('SERVICE_URL');
-      this.logger.log(`리다이렉트 URL: ${frontendUrl}/auth/social-callback`);
-      return res.redirect(
-        `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
-      );
-    } catch (error) {
-      this.logger.error(`Apple 콜백 오류: ${error.message}`);
-      this.logger.error(error.stack);
-      // 오류 발생 시 에러 페이지로 리다이렉트
-      return res.redirect(
-        `${this.configService.get<string>('SERVICE_URL')}/auth/error?message=${encodeURIComponent(error.message)}`,
-      );
-    }
-  }
-
-  @Version('2')
-  @Post('apple/callback')
-  @IsPublic()
-  async appleAuthCallbackV2(
-    @Body() body: any,
-    @Req() req: any,
-    @Res() res: Response,
-  ) {
-    try {
-      this.logger.log('Apple 로그인 콜백 호출됨 (v2 라우트)');
-      this.logger.log(`요청 본문: ${JSON.stringify(body)}`);
-
-      // 인증 코드 확인
-      const code = body.code;
-
-      if (!code) {
-        this.logger.error('인증 코드가 없습니다');
-        return res.redirect(
-          `${this.configService.get<string>('SERVICE_URL')}/auth/error?message=인증 코드가 없습니다`,
-        );
-      }
-
-      // 인증 코드로 소셜 로그인 처리
-      this.logger.log(`인증 코드 처리 시작: ${code}`);
-
-      const result = await this.authService.socialLogin({
-        provider: AuthProvider.APPLE,
-        code,
-      });
-
-      this.logger.log(`소셜 로그인 결과: ${JSON.stringify(result)}`);
-
-      // 프론트엔드로 리다이렉트 (토큰과 함께)
-      const frontendUrl = this.configService.get<string>('SERVICE_URL');
-      this.logger.log(`리다이렉트 URL: ${frontendUrl}/auth/social-callback`);
-      return res.redirect(
-        `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
-      );
-    } catch (error) {
-      this.logger.error(`Apple v2 콜백 오류: ${error.message}`);
-      this.logger.error(error.stack);
-      // 오류 발생 시 에러 페이지로 리다이렉트
-      return res.redirect(
-        `${this.configService.get<string>('SERVICE_URL')}/auth/error?message=${encodeURIComponent('인증 중 오류가 발생했습니다')}`,
-      );
-    }
-  }
-
   @Get('naver')
   @IsPublic()
   @UseGuards(AuthGuard('naver'))
   naverAuth() {
-    // 네이버 인증 페이지로 리다이렉트 (Passport가 처리)
-  }
-
-  @Get('naver/callback')
-  @IsPublic()
-  @UseGuards(AuthGuard('naver'))
-  async naverAuthCallback(@GetUser() user: User, @Res() res: Response) {
-    const result = await this.authService.socialLogin({
-      provider: AuthProvider.NAVER,
-      user,
-    });
-
-    // 프론트엔드로 리다이렉트 (토큰과 함께)
-    const frontendUrl = this.configService.get<string>('SERVICE_URL');
-    res.redirect(
-      `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
-    );
+    // Naver 인증 페이지로 리다이렉트 (Passport가 처리)
   }
 
   @Get('kakao')

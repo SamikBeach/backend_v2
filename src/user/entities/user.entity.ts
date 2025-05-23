@@ -21,9 +21,9 @@ export enum UserStatus {
 export enum AuthProvider {
   LOCAL = 'local',
   GOOGLE = 'google',
-  APPLE = 'apple',
   NAVER = 'naver',
   KAKAO = 'kakao',
+  APPLE = 'apple',
 }
 
 @Entity('user')
@@ -63,9 +63,6 @@ export class User {
 
   @Column({ nullable: true })
   providerId: string;
-
-  @Column({ nullable: true })
-  appleId: string;
 
   @Column({
     type: 'enum',
