@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.13.0](https://github.com/SamikBeach/backend_v2/compare/1.12.0...1.13.0) (2025-05-23)
+
+
+### Features
+
+* passport-naver-v2로 네이버 OAuth 구현 개선 ([da3a206](https://github.com/SamikBeach/backend_v2/commit/da3a20610aefea10fafb339f23f9a0cd8a915e48))
+
 # [1.12.0](https://github.com/SamikBeach/backend_v2/compare/1.11.0...1.12.0) (2025-05-23)
 
 
