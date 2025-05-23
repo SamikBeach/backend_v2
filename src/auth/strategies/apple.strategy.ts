@@ -16,14 +16,20 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
     const appleClientId = configService.get<string>('APPLE_CLIENT_ID');
     const appleTeamId = configService.get<string>('APPLE_TEAM_ID');
     const appleKeyId = configService.get<string>('APPLE_KEY_ID');
-    const applePrivateKey = configService.get<string>('APPLE_PRIVATE_KEY_PATH');
+    const applePrivateKeyRaw = configService.get<string>(
+      'APPLE_PRIVATE_KEY_PATH',
+    );
     const appleCallbackUrl = configService.get<string>('APPLE_CALLBACK_URL');
+    const privateKeyStringForStrategy = applePrivateKeyRaw?.replace(
+      /\\n/g,
+      '\n',
+    );
 
     super({
       clientID: appleClientId,
       teamID: appleTeamId,
       keyID: appleKeyId,
-      privateKeyString: applePrivateKey,
+      privateKeyString: privateKeyStringForStrategy,
       callbackURL: appleCallbackUrl,
       scope: ['name', 'email'],
       passReqToCallback: false,
