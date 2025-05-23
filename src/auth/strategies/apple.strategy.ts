@@ -16,7 +16,7 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
     const appleClientId = configService.get<string>('APPLE_CLIENT_ID');
     const appleTeamId = configService.get<string>('APPLE_TEAM_ID');
     const appleKeyId = configService.get<string>('APPLE_KEY_ID');
-    const applePrivateKey = configService.get<string>('APPLE_PRIVATE_KEY');
+    const applePrivateKey = configService.get<string>('APPLE_PRIVATE_KEY_PATH');
     const appleCallbackUrl = configService.get<string>('APPLE_CALLBACK_URL');
 
     super({
