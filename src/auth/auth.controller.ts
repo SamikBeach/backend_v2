@@ -214,9 +214,39 @@ export class AuthController {
 
   @Get('apple')
   @IsPublic()
-  @UseGuards(AuthGuard('apple'))
-  appleAuth() {
-    // Apple 인증 페이지로 리다이렉트 (Passport가 처리)
+  async appleAuth(@Res() res: Response) {
+    try {
+      const clientId = this.configService.get<string>('APPLE_CLIENT_ID');
+      const callbackUrl = this.configService.get<string>('APPLE_CALLBACK_URL');
+
+      if (!clientId || !callbackUrl) {
+        throw new BadRequestException('Apple 로그인 설정이 완전하지 않습니다.');
+      }
+
+      // Apple 인증 URL 생성
+      const state = Math.random().toString(36).substring(2, 15);
+      const appleAuthUrl = new URL('https://appleid.apple.com/auth/authorize');
+
+      appleAuthUrl.searchParams.append('client_id', clientId);
+      appleAuthUrl.searchParams.append('redirect_uri', callbackUrl);
+      appleAuthUrl.searchParams.append('response_type', 'code');
+      appleAuthUrl.searchParams.append('scope', 'name email');
+      appleAuthUrl.searchParams.append('response_mode', 'form_post');
+      appleAuthUrl.searchParams.append('state', state);
+
+      this.logger.log(
+        'Redirecting to Apple auth URL:',
+        appleAuthUrl.toString(),
+      );
+
+      // Apple 인증 페이지로 리다이렉트
+      res.redirect(appleAuthUrl.toString());
+    } catch (error) {
+      this.logger.error('Apple auth redirect error:', error);
+      throw new BadRequestException(
+        'Apple 로그인 초기화 중 오류가 발생했습니다.',
+      );
+    }
   }
 
   @Post('apple/callback')
