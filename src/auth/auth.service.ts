@@ -24,6 +24,7 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import * as crypto from 'crypto';
 import { Logger } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
+import verifyAppleToken from 'verify-apple-id-token';
 
 // OAuth 사용자 정보 인터페이스
 interface OAuthUser {
@@ -31,7 +32,7 @@ interface OAuthUser {
   fullName?: string;
   profilePhoto?: string;
   providerId: string;
-  accessToken: string;
+  accessToken: string; // For Apple, this will likely be an identityToken
 }
 
 @Injectable()
@@ -107,6 +108,28 @@ export class AuthService {
             throw new BadRequestException(
               '소셜 로그인은 웹 경로를 통해 인증해야 합니다.',
             );
+          case AuthProvider.APPLE:
+            try {
+              const appleUser =
+                await this.verifyAppleTokenAndExtractUser(accessToken);
+              const user = await this.validateOAuthUser(appleUser, provider);
+              return this.generateAuthResponseWithRefresh(user);
+            } catch (error) {
+              this.logger.error(
+                `Apple login error: ${error.message}`,
+                error.stack,
+              );
+              if (
+                error instanceof UnauthorizedException ||
+                error instanceof BadRequestException ||
+                error instanceof ConflictException
+              ) {
+                throw error;
+              }
+              throw new BadRequestException(
+                'Apple 로그인 중 오류가 발생했습니다.',
+              );
+            }
           default:
             throw new BadRequestException('지원하지 않는 인증 제공자입니다.');
         }
@@ -406,6 +429,8 @@ export class AuthService {
         return AuthProvider.NAVER;
       case 'kakao':
         return AuthProvider.KAKAO;
+      case 'apple':
+        return AuthProvider.APPLE;
       default:
         return null;
     }
@@ -753,6 +778,73 @@ export class AuthService {
     }
 
     // 3. 이메일이 없는 경우 기본 이름 생성
+    if (
+      provider === AuthProvider.APPLE &&
+      (!fullName || !fullName.trim()) &&
+      !email
+    ) {
+      // Apple의 경우, 첫 로그인 이후 이름/이메일 제공 안 할 수 있음
+      // providerId 기반으로 고유한 이름을 생성하거나, 기본값을 더 구체화할 수 있음.
+      // 여기서는 일단 기존 로직을 따르되, Apple임을 명시
+      return 'Apple User';
+    }
     return `${provider.charAt(0).toUpperCase() + provider.slice(1)} User`;
+  }
+
+  // Apple identityToken 검증 및 사용자 정보 추출
+  private async verifyAppleTokenAndExtractUser(
+    identityToken: string,
+  ): Promise<OAuthUser> {
+    try {
+      const clientId = this.configService.get<string>('APPLE_CLIENT_ID');
+      if (!clientId) {
+        this.logger.error(
+          'Apple Client ID (APPLE_CLIENT_ID) is not configured.',
+        );
+        throw new BadRequestException('Apple 로그인 설정을 확인해주세요.');
+      }
+
+      const decodedToken = await verifyAppleToken({
+        idToken: identityToken,
+        clientId: clientId,
+        // nonce: 'OPTIONAL_NONCE_IF_USED_DURING_CLIENT_AUTH' // 클라이언트에서 nonce를 사용했다면 여기서도 동일한 값으로 검증 필요
+      });
+
+      if (!decodedToken || !decodedToken.sub || !decodedToken.email) {
+        this.logger.error(
+          'Invalid Apple token or missing required claims (sub, email).',
+          decodedToken,
+        );
+        throw new UnauthorizedException(
+          '제공된 Apple 토큰이 유효하지 않거나 필수 정보가 부족합니다.',
+        );
+      }
+
+      // Apple은 첫 로그인 시에만 이름 정보를 제공할 수 있습니다.
+      // verify-apple-id-token 라이브러리는 이름 정보를 직접 파싱해주지 않으므로,
+      // 이름이 필요하다면 클라이언트에서 identityToken과 함께 전달받거나, identityToken을 직접 디코딩하여 추출해야 합니다.
+      // 여기서는 우선 이름 없이 진행합니다.
+      return {
+        providerId: decodedToken.sub, // Apple User ID
+        email: decodedToken.email,
+        // fullName: undefined, // 이름 정보는 클라이언트에서 받거나 추가 처리 필요
+        accessToken: identityToken, // 원본 토큰을 전달하여 validateOAuthUser에서 사용 가능하도록
+      };
+    } catch (error) {
+      this.logger.error(
+        `Apple token verification failed: ${error.message}`,
+        error.stack,
+      );
+      // verify-apple-id-token 에러 메시지를 좀 더 사용자 친화적으로 변경할 수 있음
+      if (error.message && error.message.includes('is expired')) {
+        throw new UnauthorizedException('Apple 토큰이 만료되었습니다.');
+      }
+      if (error.message && error.message.includes('audience invalid')) {
+        throw new UnauthorizedException(
+          'Apple 토큰의 대상(audience)이 잘못되었습니다. 설정(APPLE_CLIENT_ID)을 확인해주세요.',
+        );
+      }
+      throw new UnauthorizedException('Apple 토큰을 검증하는데 실패했습니다.');
+    }
   }
 }
