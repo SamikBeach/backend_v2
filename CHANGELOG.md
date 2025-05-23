@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.14.0](https://github.com/SamikBeach/backend_v2/compare/1.13.0...1.14.0) (2025-05-23)
+
+
+### Features
+
+* 카카오 OAuth 구현 개선 ([721d436](https://github.com/SamikBeach/backend_v2/commit/721d4360fa32d4b88b50f9f920b2d70701d84e59))
+
 # [1.13.0](https://github.com/SamikBeach/backend_v2/compare/1.12.0...1.13.0) (2025-05-23)
 
 
