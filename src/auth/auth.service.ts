@@ -330,7 +330,6 @@ export class AuthService {
         `🔍 OAuth 사용자 검증 시작: provider=${provider}, email=${email}, providerId=${providerId}`,
       );
 
-      // 올바른 제공자 체크
       const authProvider = this.getAuthProviderFromString(provider);
       if (!authProvider) {
         this.logger.error(
@@ -339,7 +338,6 @@ export class AuthService {
         throw new BadRequestException('지원하지 않는 인증 제공자입니다.');
       }
 
-      // providerId 확인 (Apple의 경우 sub 값이 실제 고유 식별자)
       if (!providerId) {
         this.logger.error('❌ OAuth 인증 실패: providerId 없음');
         throw new UnauthorizedException(
@@ -793,7 +791,7 @@ export class AuthService {
   // 소셜 로그인 사용자를 위한 사용자 이름 생성
   private generateUsername(
     fullName: string | undefined,
-    email: string,
+    email: string | null,
     provider: AuthProvider,
   ): string {
     // 1. 이름이 제공된 경우 우선 사용
@@ -801,11 +799,14 @@ export class AuthService {
       return fullName.trim();
     }
 
-    // 2. 이메일 아이디 부분 사용
-    const emailUsername = email.split('@')[0];
+    // 2. 이메일이 있는 경우 이메일 아이디 부분 사용
+    if (email) {
+      const emailUsername = email.split('@')[0];
+      return emailUsername;
+    }
 
-    // 3. 이메일에서 추출한 사용자 이름 반환
-    return emailUsername;
+    // 3. 이메일이 없는 경우 (Apple 사용자) 기본 이름 생성
+    return `${provider.charAt(0).toUpperCase() + provider.slice(1)} User`;
   }
 
   /**
