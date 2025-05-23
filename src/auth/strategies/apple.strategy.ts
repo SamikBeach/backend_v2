@@ -5,7 +5,6 @@ import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth.service';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as crypto from 'crypto';
 import * as jwt from 'jsonwebtoken';
 
 @Injectable()
@@ -16,45 +15,18 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
     private configService: ConfigService,
     private authService: AuthService,
   ) {
-    // 필요한 환경 변수를 가져옵니다
     const keyPath = configService.get<string>('APPLE_PRIVATE_KEY_PATH');
     const privateKeyPath = path.resolve(process.cwd(), keyPath);
-    const fileExists = fs.existsSync(privateKeyPath);
-    const privateKey = fileExists
-      ? fs.readFileSync(privateKeyPath, 'utf8')
-      : '';
-    const clientID = configService.get<string>('APPLE_CLIENT_ID');
-    const teamID = configService.get<string>('APPLE_TEAM_ID');
-    const keyID = configService.get<string>('APPLE_KEY_ID');
-    const callbackURL = configService.get<string>('APPLE_CALLBACK_URL');
+    const privateKey = fs.readFileSync(privateKeyPath, 'utf8');
 
-    // super 호출 전에 로깅하지 않고 옵션만 설정
     super({
-      clientID,
-      teamID,
-      keyID,
+      clientID: configService.get<string>('APPLE_CLIENT_ID'),
+      teamID: configService.get<string>('APPLE_TEAM_ID'),
+      keyID: configService.get<string>('APPLE_KEY_ID'),
       privateKeyString: privateKey,
-      callbackURL,
+      callbackURL: configService.get<string>('APPLE_CALLBACK_URL'),
       passReqToCallback: true,
-      scope: ['email', 'name'],
     });
-
-    // super 호출 후 로그 출력
-    this.logger.log(`Apple 인증 키 경로: ${privateKeyPath}`);
-    this.logger.log(`Apple 키 파일 존재 여부: ${fileExists}`);
-
-    if (!privateKey) {
-      this.logger.error('Apple 인증 키를 로드할 수 없습니다.');
-    } else {
-      this.logger.log('Apple 인증 키가 성공적으로 로드되었습니다.');
-    }
-
-    this.logger.log(`Apple 설정 정보: 
-      clientID: ${clientID},
-      teamID: ${teamID},
-      keyID: ${keyID},
-      callbackURL: ${callbackURL}
-    `);
   }
 
   async validate(
@@ -65,17 +37,6 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
     profile: any,
     done: any,
   ): Promise<any> {
-    this.logger.log('Apple 로그인 검증 시작');
-    this.logger.log(`요청 본문: ${JSON.stringify(request.body, null, 2)}`);
-    this.logger.log(`요청 쿼리: ${JSON.stringify(request.query, null, 2)}`);
-    this.logger.log(`accessToken: ${accessToken ? 'present' : 'not present'}`);
-    this.logger.log(
-      `refreshToken: ${refreshToken ? 'present' : 'not present'}`,
-    );
-    this.logger.log(`idToken 유형: ${typeof idToken}`);
-    this.logger.log(`profile 유형: ${typeof profile}`);
-    this.logger.log(`profile 내용: ${JSON.stringify(profile, null, 2)}`);
-
     try {
       let email = '';
       let providerId = ''; // Apple의 sub 값 (가장 중요한 고유 식별자)
@@ -181,32 +142,15 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
 
       // 3. 첫 번째 로그인 시 req.body.user에서 사용자 정보 추출
       if (request.body && request.body.user) {
-        this.logger.log('첫 번째 로그인: req.body.user에서 사용자 정보 추출');
-        try {
-          let userData;
-          if (typeof request.body.user === 'string') {
-            userData = JSON.parse(request.body.user);
-          } else {
-            userData = request.body.user;
-          }
+        const userData =
+          typeof request.body.user === 'string'
+            ? JSON.parse(request.body.user)
+            : request.body.user;
 
-          this.logger.log(
-            `사용자 데이터: ${JSON.stringify(userData, null, 2)}`,
-          );
-
-          if (userData.email && !email) {
-            email = userData.email;
-            this.logger.log(`req.body.user에서 이메일 추출: ${email}`);
-          }
-
-          if (userData.name && !fullName) {
-            const firstName = userData.name.firstName || '';
-            const lastName = userData.name.lastName || '';
-            fullName = `${firstName} ${lastName}`.trim();
-            this.logger.log(`req.body.user에서 이름 추출: ${fullName}`);
-          }
-        } catch (parseError) {
-          this.logger.error(`req.body.user 파싱 오류: ${parseError.message}`);
+        if (userData.name) {
+          const firstName = userData.name.firstName || '';
+          const lastName = userData.name.lastName || '';
+          fullName = `${firstName} ${lastName}`.trim();
         }
       }
 
@@ -267,9 +211,9 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
 
       // 사용자 객체 생성
       const user = {
-        email,
-        fullName,
-        providerId, // Apple의 sub 값 (고유 사용자 식별자)
+        email: email, // Apple에서 제공하지 않으면 null
+        fullName: fullName || `Apple User`,
+        providerId,
         accessToken: accessToken || 'apple_token',
       };
 
@@ -293,6 +237,7 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
         this.logger.warn('done이 함수가 아니므로 결과만 반환합니다');
       }
 
+      done(null, result);
       return result;
     } catch (error) {
       this.logger.error(`❌ Apple 로그인 검증 오류: ${error.message}`);
