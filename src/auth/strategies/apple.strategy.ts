@@ -4,6 +4,8 @@ import { Strategy, Profile, VerifyCallback } from 'passport-apple';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth.service';
 import { AuthProvider } from '../../user/entities/user.entity';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
@@ -16,24 +18,62 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
     const appleClientId = configService.get<string>('APPLE_CLIENT_ID');
     const appleTeamId = configService.get<string>('APPLE_TEAM_ID');
     const appleKeyId = configService.get<string>('APPLE_KEY_ID');
-    const applePrivateKeyRaw = configService.get<string>(
-      'APPLE_PRIVATE_KEY_PATH',
-    );
     const appleCallbackUrl = configService.get<string>('APPLE_CALLBACK_URL');
-    const privateKeyStringForStrategy = applePrivateKeyRaw?.replace(
-      /\\n/g,
-      '\n',
-    );
+
+    // Private key 로딩
+    const privateKeyString = AppleStrategy.loadPrivateKey(configService);
 
     super({
       clientID: appleClientId,
       teamID: appleTeamId,
       keyID: appleKeyId,
-      privateKeyString: privateKeyStringForStrategy,
+      privateKeyString: privateKeyString,
       callbackURL: appleCallbackUrl,
       scope: ['name', 'email'],
       passReqToCallback: false,
     });
+
+    this.logger.log('Apple Strategy initialized successfully', {
+      clientID: appleClientId,
+      teamID: appleTeamId,
+      keyID: appleKeyId,
+      callbackURL: appleCallbackUrl,
+      privateKeyLoaded: !!privateKeyString,
+    });
+  }
+
+  private static loadPrivateKey(configService: ConfigService): string {
+    // Private key를 환경 변수에서 직접 가져오거나 파일에서 읽기
+    let privateKeyString = configService.get<string>('APPLE_PRIVATE_KEY');
+
+    if (!privateKeyString) {
+      const privateKeyPath = configService.get<string>(
+        'APPLE_PRIVATE_KEY_PATH',
+      );
+      try {
+        const fullPath = path.resolve(process.cwd(), privateKeyPath);
+        privateKeyString = fs.readFileSync(fullPath, 'utf8');
+        console.log(`Apple private key loaded from file: ${fullPath}`);
+      } catch (error) {
+        console.error(
+          `Failed to read Apple private key from file: ${privateKeyPath}`,
+          error,
+        );
+        throw new Error(
+          `Apple private key file not found or unreadable: ${privateKeyPath}`,
+        );
+      }
+    } else {
+      // 환경 변수에서 가져온 경우 \n을 실제 개행으로 변환
+      privateKeyString = privateKeyString.replace(/\\n/g, '\n');
+      console.log('Apple private key loaded from environment variable');
+    }
+
+    if (!privateKeyString || !privateKeyString.includes('BEGIN PRIVATE KEY')) {
+      throw new Error('Invalid Apple private key format');
+    }
+
+    return privateKeyString;
   }
 
   async validate(
