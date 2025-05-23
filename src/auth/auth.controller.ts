@@ -253,9 +253,22 @@ export class AuthController {
   @IsPublic()
   async appleAuthCallback(@Body() body: any, @Res() res: Response) {
     try {
-      this.logger.log('Apple callback received:', body);
+      this.logger.log(
+        'Apple callback received - Raw body:',
+        JSON.stringify(body, null, 2),
+      );
 
-      const { code, id_token, user } = body;
+      const { code, id_token, user, state } = body;
+
+      // Apple에서 전달받은 모든 데이터 로깅
+      this.logger.log('Apple callback data:', {
+        hasCode: !!code,
+        hasIdToken: !!id_token,
+        hasUser: !!user,
+        state: state,
+        userType: typeof user,
+        userContent: user,
+      });
 
       if (!code && !id_token) {
         throw new BadRequestException(
@@ -264,22 +277,38 @@ export class AuthController {
       }
 
       let result;
+      let userInfo = null;
+
+      // user 데이터가 문자열인 경우 파싱
+      if (user) {
+        try {
+          userInfo = typeof user === 'string' ? JSON.parse(user) : user;
+          this.logger.log('Parsed user info:', userInfo);
+        } catch (parseError) {
+          this.logger.warn('Failed to parse user data:', parseError);
+          userInfo = null;
+        }
+      }
 
       if (id_token) {
         // ID 토큰이 직접 제공된 경우 (모바일 앱에서)
+        this.logger.log('Processing with id_token');
         result = await this.authService.socialLogin({
           provider: AuthProvider.APPLE,
           accessToken: id_token,
-          user: user ? JSON.parse(user) : undefined,
+          user: userInfo,
         });
       } else if (code) {
         // Authorization code가 제공된 경우 (웹에서)
+        this.logger.log('Processing with authorization code');
         result = await this.authService.socialLogin({
           provider: AuthProvider.APPLE,
           code: code,
-          user: user ? JSON.parse(user) : undefined,
+          user: userInfo,
         });
       }
+
+      this.logger.log('Apple login successful, redirecting to frontend');
 
       // 프론트엔드로 리다이렉트 (토큰과 함께)
       const frontendUrl = this.configService.get<string>('SERVICE_URL');
@@ -287,7 +316,8 @@ export class AuthController {
         `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
       );
     } catch (error) {
-      this.logger.error('Apple callback error:', error);
+      this.logger.error('Apple callback error:', error.message);
+      this.logger.error('Error stack:', error.stack);
       const frontendUrl = this.configService.get<string>('SERVICE_URL');
       res.redirect(
         `${frontendUrl}/auth/social-callback?error=${encodeURIComponent(error.message)}`,
