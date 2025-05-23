@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.7.0](https://github.com/SamikBeach/backend_v2/compare/1.6.1...1.7.0) (2025-05-23)
+
+
+### Features
+
+* Apple 로그인 기능 개선 및 사용자명 생성 방식 변경 ([9ab2333](https://github.com/SamikBeach/backend_v2/commit/9ab2333cf2517e2ac1e63d495b1f505ecbbd828d))
+
 ## [1.6.1](https://github.com/SamikBeach/backend_v2/compare/1.6.0...1.6.1) (2025-05-23)
 
 
