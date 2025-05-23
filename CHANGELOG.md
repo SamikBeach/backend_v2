@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+## [1.6.1](https://github.com/SamikBeach/backend_v2/compare/1.6.0...1.6.1) (2025-05-23)
+
+
+### Bug Fixes
+
+* 애플 로그인 사용자 계정 중복 생성 문제 해결 및 랜덤 닉네임 생성 방식 개선 ([819be75](https://github.com/SamikBeach/backend_v2/commit/819be753d32c430004c72e3c42b7cefa7cee862f))
+
 # [1.6.0](https://github.com/SamikBeach/backend_v2/compare/1.5.0...1.6.0) (2025-05-22)
 
 
