@@ -129,7 +129,21 @@ export class UserService {
     providerId: string,
     provider: AuthProvider,
   ): Promise<User | null> {
-    return this.userRepository.findOneBy({ providerId, provider });
+    this.logger.log(
+      `findByProviderId: 검색 중 - providerId=${providerId}, provider=${provider}`,
+    );
+
+    const user = await this.userRepository.findOneBy({ providerId, provider });
+
+    if (user) {
+      this.logger.log(
+        `findByProviderId: 사용자 찾음 - userId=${user.id}, email=${user.email}`,
+      );
+    } else {
+      this.logger.log(`findByProviderId: 사용자를 찾을 수 없음`);
+    }
+
+    return user;
   }
 
   async createLocalUser(createUserDto: CreateUserDto): Promise<User> {
