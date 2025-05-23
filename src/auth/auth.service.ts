@@ -822,6 +822,13 @@ export class AuthService {
     identityToken: string,
   ): Promise<OAuthUser> {
     try {
+      this.logger.log('Starting Apple token verification');
+      this.logger.log('Token length:', identityToken?.length);
+      this.logger.log(
+        'Token preview:',
+        identityToken?.substring(0, 50) + '...',
+      );
+
       const clientId = this.configService.get<string>('APPLE_CLIENT_ID');
       if (!clientId) {
         this.logger.error(
@@ -830,10 +837,27 @@ export class AuthService {
         throw new BadRequestException('Apple 로그인 설정을 확인해주세요.');
       }
 
+      this.logger.log('Using Apple Client ID:', clientId);
+
+      // 토큰이 JWT 형식인지 확인
+      if (!identityToken || !identityToken.includes('.')) {
+        this.logger.error('Invalid token format - not a JWT:', identityToken);
+        throw new UnauthorizedException('유효하지 않은 Apple 토큰 형식입니다.');
+      }
+
       const decodedToken = await verifyAppleToken({
         idToken: identityToken,
         clientId: clientId,
         // nonce: 'OPTIONAL_NONCE_IF_USED_DURING_CLIENT_AUTH' // 클라이언트에서 nonce를 사용했다면 여기서도 동일한 값으로 검증 필요
+      });
+
+      this.logger.log('Apple token decoded successfully:', {
+        sub: decodedToken?.sub,
+        email: decodedToken?.email,
+        aud: decodedToken?.aud,
+        iss: decodedToken?.iss,
+        exp: decodedToken?.exp,
+        iat: decodedToken?.iat,
       });
 
       if (!decodedToken || !decodedToken.sub || !decodedToken.email) {
@@ -850,12 +874,19 @@ export class AuthService {
       // verify-apple-id-token 라이브러리는 이름 정보를 직접 파싱해주지 않으므로,
       // 이름이 필요하다면 클라이언트에서 identityToken과 함께 전달받거나, identityToken을 직접 디코딩하여 추출해야 합니다.
       // 여기서는 우선 이름 없이 진행합니다.
-      return {
+      const result = {
         providerId: decodedToken.sub, // Apple User ID
         email: decodedToken.email,
         // fullName: undefined, // 이름 정보는 클라이언트에서 받거나 추가 처리 필요
         accessToken: identityToken, // 원본 토큰을 전달하여 validateOAuthUser에서 사용 가능하도록
       };
+
+      this.logger.log('Apple user extracted successfully:', {
+        providerId: result.providerId,
+        email: result.email,
+      });
+
+      return result;
     } catch (error) {
       this.logger.error(
         `Apple token verification failed: ${error.message}`,
@@ -877,6 +908,9 @@ export class AuthService {
   // Apple authorization code를 ID 토큰으로 교환
   private async exchangeAppleCodeForToken(code: string): Promise<string> {
     try {
+      this.logger.log('Starting Apple code exchange for token');
+      this.logger.log('Authorization code:', code);
+
       const clientId = this.configService.get<string>('APPLE_CLIENT_ID');
       const teamId = this.configService.get<string>('APPLE_TEAM_ID');
       const keyId = this.configService.get<string>('APPLE_KEY_ID');
@@ -891,6 +925,7 @@ export class AuthService {
           try {
             const fullPath = path.resolve(process.cwd(), privateKeyPath);
             privateKey = fs.readFileSync(fullPath, 'utf8');
+            this.logger.log('Private key loaded from file:', fullPath);
           } catch (error) {
             this.logger.error(
               `Failed to read Apple private key from file: ${privateKeyPath}`,
@@ -901,11 +936,25 @@ export class AuthService {
             );
           }
         }
+      } else {
+        this.logger.log('Private key loaded from environment variable');
       }
 
       if (!clientId || !teamId || !keyId || !privateKey) {
+        this.logger.error('Missing Apple configuration:', {
+          hasClientId: !!clientId,
+          hasTeamId: !!teamId,
+          hasKeyId: !!keyId,
+          hasPrivateKey: !!privateKey,
+        });
         throw new BadRequestException('Apple 로그인 설정이 완전하지 않습니다.');
       }
+
+      this.logger.log('Apple configuration loaded:', {
+        clientId,
+        teamId,
+        keyId,
+      });
 
       // Client secret 생성 (JWT)
       const clientSecret = jwt.sign(
@@ -923,35 +972,56 @@ export class AuthService {
         },
       );
 
+      this.logger.log('Client secret generated successfully');
+
       // Apple 토큰 엔드포인트로 요청
+      const requestBody = new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: code,
+        grant_type: 'authorization_code',
+      });
+
+      this.logger.log('Sending request to Apple token endpoint');
+
       const response = await fetch('https://appleid.apple.com/auth/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          code: code,
-          grant_type: 'authorization_code',
-        }),
+        body: requestBody,
       });
+
+      this.logger.log('Apple token response status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        this.logger.error('Apple token exchange failed:', errorText);
+        this.logger.error('Apple token exchange failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+        });
         throw new UnauthorizedException('Apple 토큰 교환에 실패했습니다.');
       }
 
       const tokenData = await response.json();
+      this.logger.log('Apple token response received:', {
+        hasIdToken: !!tokenData.id_token,
+        hasAccessToken: !!tokenData.access_token,
+        hasRefreshToken: !!tokenData.refresh_token,
+        tokenType: tokenData.token_type,
+      });
 
       if (!tokenData.id_token) {
+        this.logger.error('No id_token in Apple response:', tokenData);
         throw new UnauthorizedException('Apple에서 ID 토큰을 받지 못했습니다.');
       }
 
+      this.logger.log('Apple code exchange successful');
       return tokenData.id_token;
     } catch (error) {
-      this.logger.error('Apple code exchange error:', error);
+      this.logger.error('Apple code exchange error:', error.message);
+      this.logger.error('Error stack:', error.stack);
       if (
         error instanceof UnauthorizedException ||
         error instanceof BadRequestException
