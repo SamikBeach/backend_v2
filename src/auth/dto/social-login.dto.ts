@@ -15,10 +15,6 @@ export class SocialLoginDto {
   @IsOptional()
   authorizationCode?: string;
 
-  /**
-   * Apple에서 제공하는 인증 코드
-   * @example "code.123456"
-   */
   @IsString()
   @IsOptional()
   code?: string;

@@ -2163,16 +2163,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/passport-apple@npm:^2.0.3":
-  version: 2.0.3
-  resolution: "@types/passport-apple@npm:2.0.3"
-  dependencies:
-    "@types/express": "npm:*"
-    "@types/passport-oauth2": "npm:*"
-  checksum: 10c0/8901dff3ddd23c8a9bb3d4588fd5ec3d77f479a88ee16d377236fd0d28207245cf5671798f46abef6bdb19c327b26dcea2ba5067d941ff1275d66088d267c4f6
-  languageName: node
-  linkType: hard
-
 "@types/passport-google-oauth20@npm:^2.0.16":
   version: 2.0.16
   resolution: "@types/passport-google-oauth20@npm:2.0.16"
@@ -3018,7 +3008,6 @@ __metadata:
     "@types/node": "npm:^22.14.0"
     "@types/nodemailer": "npm:^6.4.17"
     "@types/passport": "npm:^0"
-    "@types/passport-apple": "npm:^2.0.3"
     "@types/passport-google-oauth20": "npm:^2.0.16"
     "@types/passport-jwt": "npm:^4.0.1"
     "@types/passport-kakao": "npm:^1"
@@ -3043,7 +3032,6 @@ __metadata:
     mysql2: "npm:^3.14.0"
     nodemailer: "npm:^6.9.13"
     passport: "npm:^0.7.0"
-    passport-apple: "npm:^2.0.2"
     passport-google-oauth20: "npm:^2.0.0"
     passport-jwt: "npm:^4.0.1"
     passport-kakao: "npm:^1.0.1"
@@ -8660,16 +8648,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"passport-apple@npm:^2.0.2":
-  version: 2.0.2
-  resolution: "passport-apple@npm:2.0.2"
-  dependencies:
-    jsonwebtoken: "npm:^9.0.0"
-    passport-oauth2: "npm:^1.6.1"
-  checksum: 10c0/823ebfa190f9b6fb0cbcc7bbf3f8055c4f32ae333bb7e82c0414badf53692bc0b7f7950b496545829f2b7cbe18b4b185c1e90a85d3b3e9c0c421359c4d340bfe
-  languageName: node
-  linkType: hard
-
 "passport-google-oauth20@npm:^2.0.0":
   version: 2.0.0
   resolution: "passport-google-oauth20@npm:2.0.0"
@@ -8729,7 +8707,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"passport-oauth2@npm:1.x.x, passport-oauth2@npm:^1.6.1":
+"passport-oauth2@npm:1.x.x":
   version: 1.8.0
   resolution: "passport-oauth2@npm:1.8.0"
   dependencies:

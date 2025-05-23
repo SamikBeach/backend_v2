@@ -98,35 +98,12 @@ export class AuthService {
         return this.generateAuthResponseWithRefresh(socialLoginDto.user);
       }
 
-      // Apple 인증 코드가 있는 경우 (Apple 로그인 전용)
-      if (provider === AuthProvider.APPLE && code) {
-        this.logger.log('Apple 인증 코드로 로그인 시도');
-
-        // 실제 인증 처리는 Apple 전략에서 처리하도록 함
-        // 여기서는 코드만 전달하고 실제 이메일과 providerId는 전략에서 얻음
-        const tempUser = {
-          email: '', // 빈 값으로 설정하여 전략에서 실제 이메일을 사용하도록 함
-          providerId: '', // 빈 값으로 설정하여 전략에서 실제 providerId를 사용하도록 함
-          accessToken: code, // code를 accessToken으로 사용
-        };
-
-        // OAuth 인증 처리
-        const user = await this.validateOAuthUser(tempUser, 'apple');
-
-        return this.generateAuthResponseWithRefresh(user);
-      }
-
       // accessToken만 있는 경우 (모바일 앱 등에서 직접 전달)
       if (!socialLoginDto.user && accessToken) {
         // provider별 처리
         switch (provider) {
           case AuthProvider.GOOGLE:
             // 모바일에서 직접 Google OAuth 처리 후 서버에 토큰 전달 시
-            throw new BadRequestException(
-              '소셜 로그인은 웹 경로를 통해 인증해야 합니다.',
-            );
-          case AuthProvider.APPLE:
-            // 모바일에서 직접 Apple OAuth 처리 후 서버에 토큰 전달 시
             throw new BadRequestException(
               '소셜 로그인은 웹 경로를 통해 인증해야 합니다.',
             );
@@ -215,9 +192,7 @@ export class AuthService {
     await this.emailService.sendPasswordResetEmail(email, resetToken);
 
     // 소셜 로그인 계정인지 확인
-    const isSocialAccount =
-      user.provider === AuthProvider.GOOGLE ||
-      user.provider === AuthProvider.APPLE;
+    const isSocialAccount = user.provider === AuthProvider.GOOGLE;
 
     return {
       message: '비밀번호 재설정 안내가 이메일로 발송되었습니다.',
@@ -237,10 +212,7 @@ export class AuthService {
     }
 
     // 소셜 로그인 계정인 경우 로컬 인증 방식 추가
-    if (
-      user.provider === AuthProvider.GOOGLE ||
-      user.provider === AuthProvider.APPLE
-    ) {
+    if (user.provider === AuthProvider.GOOGLE) {
       // 비밀번호 재설정과 함께 로컬 인증 방식 추가
       await this.userService.resetPasswordAndAddLocalProvider(
         email,
@@ -284,9 +256,7 @@ export class AuthService {
       }
 
       // 소셜 로그인 계정인지 확인
-      const isSocialAccount =
-        user.provider === AuthProvider.GOOGLE ||
-        user.provider === AuthProvider.APPLE;
+      const isSocialAccount = user.provider === AuthProvider.GOOGLE;
 
       return {
         isValid: true,
@@ -360,23 +330,6 @@ export class AuthService {
           `✅ 기존 사용자 발견: userId=${user.id}, 기존 이메일=${user.email}, 새 이메일=${email}`,
         );
 
-        // Apple 사용자의 경우 이메일이 바뀔 수 있으므로 기존 사용자 이메일 업데이트
-        if (authProvider === AuthProvider.APPLE) {
-          // 이메일이 다르고, 새 이메일이 유효한 경우에만 업데이트
-          // 우리가 생성한 임시 이메일이나 fallback 이메일은 업데이트하지 않음
-          if (
-            user.email !== email &&
-            email &&
-            !email.includes('apple_fallback') &&
-            !email.includes('@temp.booklog.app')
-          ) {
-            this.logger.log(
-              `🍎 Apple 사용자 이메일 업데이트: ${user.email} -> ${email}`,
-            );
-            user = await this.userService.updateUserEmail(user.id, email);
-          }
-        }
-
         this.logger.log(
           `🎉 기존 사용자 로그인 성공: userId=${user.id}, providerId=${user.providerId}`,
         );
@@ -388,8 +341,8 @@ export class AuthService {
         `👤 새 사용자 생성 필요: provider=${provider}, providerId=${providerId}`,
       );
 
-      // Apple이 아닌 경우에만 이메일 필수 체크
-      if (!email && authProvider !== AuthProvider.APPLE) {
+      // 이메일 필수 체크
+      if (!email) {
         this.logger.error('❌ OAuth 인증 실패: 이메일 정보 없음');
         throw new UnauthorizedException(
           '소셜 로그인에 필요한 이메일 정보를 획득하지 못했습니다.',
@@ -398,13 +351,9 @@ export class AuthService {
 
       // 최종 이메일 결정
       let finalEmail = email;
-      if (!finalEmail && authProvider === AuthProvider.APPLE) {
-        finalEmail = `apple_user_${providerId}@temp.booklog.app`;
-        this.logger.log(`🍎 Apple 임시 이메일 생성: ${finalEmail}`);
-      }
 
-      // Apple이 아닌 경우에만 이메일 중복 체크
-      if (authProvider !== AuthProvider.APPLE && finalEmail) {
+      // 이메일 중복 체크
+      if (finalEmail) {
         const existingUser = await this.userService.findByEmail(finalEmail);
         if (existingUser) {
           this.logger.warn(
@@ -453,8 +402,6 @@ export class AuthService {
     switch (provider.toLowerCase()) {
       case 'google':
         return AuthProvider.GOOGLE;
-      case 'apple':
-        return AuthProvider.APPLE;
       case 'naver':
         return AuthProvider.NAVER;
       case 'kakao':
@@ -805,75 +752,7 @@ export class AuthService {
       return emailUsername;
     }
 
-    // 3. 이메일이 없는 경우 (Apple 사용자) 기본 이름 생성
+    // 3. 이메일이 없는 경우 기본 이름 생성
     return `${provider.charAt(0).toUpperCase() + provider.slice(1)} User`;
-  }
-
-  /**
-   * Apple 로그인 처리 (참고 코드 방식)
-   */
-  async appleLogin(idToken: string) {
-    try {
-      this.logger.log('🍎 Apple 로그인 시작');
-
-      // Apple ID 토큰 디코딩 (검증 없이 payload만 추출)
-      const decoded = jwt.decode(idToken, { json: true }) as any;
-
-      if (!decoded || !decoded.sub) {
-        this.logger.error('❌ 유효하지 않은 Apple 토큰');
-        throw new UnauthorizedException('유효하지 않은 Apple 토큰입니다.');
-      }
-
-      const { sub: appleId, email } = decoded;
-      this.logger.log(`🔑 Apple ID: ${appleId}, 이메일: ${email || '없음'}`);
-
-      // 이미 가입된 사용자인지 확인 (appleId 또는 이메일로 검색)
-      let user = await this.userService.findUserByAppleIdOrEmail(
-        appleId,
-        email,
-      );
-
-      if (!user) {
-        this.logger.log('👤 새로운 Apple 사용자 생성');
-        // 새로운 사용자 생성
-        const nickname = email
-          ? email.split('@')[0]
-          : `user${Math.random().toString(36).substring(2, 8)}`;
-
-        user = await this.userService.createAppleUser({
-          email: email || null,
-          appleId,
-          username: nickname,
-        });
-
-        this.logger.log(`✅ Apple 사용자 생성 완료: ID=${user.id}`);
-      } else if (!user.appleId) {
-        this.logger.log('🔗 기존 사용자에 Apple ID 연결');
-        // 기존 이메일 사용자가 Apple 로그인을 시도하는 경우
-        user = await this.userService.updateUserAppleId(user.id, appleId);
-      } else {
-        this.logger.log(`🎉 기존 Apple 사용자 로그인: ID=${user.id}`);
-      }
-
-      // 토큰 생성 및 반환
-      const tokens = await this.generateTokens(user);
-      await this.updateRefreshToken(user.id, tokens.refreshToken);
-
-      return {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        user: {
-          id: user.id,
-          email: user.email,
-          username: user.username,
-        },
-      };
-    } catch (error) {
-      this.logger.error(`❌ Apple 로그인 실패: ${error.message}`);
-      if (error instanceof UnauthorizedException) {
-        throw error;
-      }
-      throw new UnauthorizedException('Apple 로그인에 실패했습니다.');
-    }
   }
 }
