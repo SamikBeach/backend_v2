@@ -234,20 +234,29 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
         `Apple 로그인 최종 정보: 이메일=${email}, 이름=${fullName}, providerId=${providerId}`,
       );
 
+      // providerId가 Apple의 sub 값인지 확인
+      if (!providerId || providerId.length < 10) {
+        this.logger.error(`Apple providerId가 유효하지 않음: ${providerId}`);
+        throw new Error(
+          'Apple 로그인에서 유효한 사용자 식별자를 받지 못했습니다.',
+        );
+      }
+
       // 사용자 객체 생성
       const user = {
         email,
         fullName,
-        providerId,
+        providerId, // Apple의 sub 값 (고유 사용자 식별자)
         accessToken: accessToken || 'apple_token',
       };
 
       this.logger.log(`생성된 사용자 객체: ${JSON.stringify(user, null, 2)}`);
+      this.logger.log(`Apple 사용자 고유 식별자(sub): ${providerId}`);
 
       // 사용자 인증 처리
       const result = await this.authService.validateOAuthUser(user, 'apple');
       this.logger.log(
-        `인증 완료된 사용자: ID=${result.id}, 이메일=${result.email}`,
+        `인증 완료된 사용자: ID=${result.id}, 이메일=${result.email}, providerId=${result.providerId}`,
       );
 
       if (typeof done === 'function') {

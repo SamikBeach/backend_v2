@@ -329,14 +329,6 @@ export class AuthService {
         `OAuth 사용자 검증 시작: provider=${provider}, email=${email}, providerId=${providerId}`,
       );
 
-      // 이메일 필수 체크
-      if (!email) {
-        this.logger.error('OAuth 인증 실패: 이메일 정보 없음');
-        throw new UnauthorizedException(
-          '소셜 로그인에 필요한 이메일 정보를 획득하지 못했습니다.',
-        );
-      }
-
       // 올바른 제공자 체크
       const authProvider = this.getAuthProviderFromString(provider);
       if (!authProvider) {
@@ -346,60 +338,82 @@ export class AuthService {
         throw new BadRequestException('지원하지 않는 인증 제공자입니다.');
       }
 
-      // providerId 확인
-      const userProviderId = providerId || `${provider}_${Date.now()}`;
+      // providerId 확인 (Apple의 경우 sub 값이 실제 고유 식별자)
+      if (!providerId) {
+        this.logger.error('OAuth 인증 실패: providerId 없음');
+        throw new UnauthorizedException(
+          '소셜 로그인에 필요한 고유 식별자를 획득하지 못했습니다.',
+        );
+      }
 
       // 먼저 해당 providerId로 가입된 사용자가 있는지 확인
       let user = await this.userService.findByProviderId(
-        userProviderId,
+        providerId,
         authProvider,
       );
 
-      // 이메일로도 검색 (Apple의 경우 providerId가 매번 변경될 수 있음)
-      if (!user && authProvider === AuthProvider.APPLE) {
-        const userByEmail = await this.userService.findByEmail(email);
-        if (userByEmail && userByEmail.provider === AuthProvider.APPLE) {
-          // 기존 사용자의 providerId 업데이트
+      // Apple 사용자의 경우 이메일이 바뀔 수 있으므로 기존 사용자 이메일 업데이트
+      if (user && authProvider === AuthProvider.APPLE) {
+        this.logger.log(
+          `Apple 사용자 찾음: userId=${user.id}, 기존 이메일=${user.email}, 새 이메일=${email}`,
+        );
+
+        // 이메일이 다르면 업데이트 (Apple Private Relay 이메일 변경 대응)
+        if (user.email !== email && email) {
           this.logger.log(
-            `Apple 사용자를 이메일로 찾음: ${email}, providerId 업데이트`,
+            `Apple 사용자 이메일 업데이트: ${user.email} -> ${email}`,
           );
-          userByEmail.providerId = userProviderId;
-          user = await this.userService.updateProviderInfo(
-            userByEmail.id,
-            userProviderId,
-          );
+          user = await this.userService.updateUserEmail(user.id, email);
         }
+
+        return user;
       }
 
       // 기존 사용자가 없는 경우 새로 생성
       if (!user) {
-        // 같은 이메일로 가입한 다른 방식의 사용자가 있는지 확인
-        const existingUser = await this.userService.findByEmail(email);
+        // 이메일 필수 체크 (Apple 제외)
+        if (!email && authProvider !== AuthProvider.APPLE) {
+          this.logger.error('OAuth 인증 실패: 이메일 정보 없음');
+          throw new UnauthorizedException(
+            '소셜 로그인에 필요한 이메일 정보를 획득하지 못했습니다.',
+          );
+        }
 
-        if (existingUser) {
-          this.logger.warn(
-            `이메일로 찾은 기존 사용자 발견: userId=${existingUser.id}, provider=${existingUser.provider}`,
-          );
-          // 같은 이메일로 다른 방식(로컬 또는 다른 소셜)으로 가입한 경우
-          throw new ConflictException(
-            '이미 다른 방식으로 가입된 이메일입니다. 다른 로그인 방식을 이용해주세요.',
-          );
+        // Apple의 경우 이메일이 없으면 임시 이메일 생성
+        let finalEmail = email;
+        if (!finalEmail && authProvider === AuthProvider.APPLE) {
+          finalEmail = `apple_${providerId}@privaterelay.appleid.com`;
+          this.logger.log(`Apple 임시 이메일 생성: ${finalEmail}`);
+        }
+
+        // 같은 이메일로 가입한 다른 방식의 사용자가 있는지 확인 (Apple 제외)
+        if (finalEmail && authProvider !== AuthProvider.APPLE) {
+          const existingUser = await this.userService.findByEmail(finalEmail);
+          if (existingUser) {
+            this.logger.warn(
+              `이메일로 찾은 기존 사용자 발견: userId=${existingUser.id}, provider=${existingUser.provider}`,
+            );
+            // 같은 이메일로 다른 방식(로컬 또는 다른 소셜)으로 가입한 경우
+            throw new ConflictException(
+              '이미 다른 방식으로 가입된 이메일입니다. 다른 로그인 방식을 이용해주세요.',
+            );
+          }
         }
 
         this.logger.log('새 사용자 생성 중...');
         // 새 사용자 생성
         console.log('새 사용자 생성:', {
-          email,
-          username: fullName || email.split('@')[0],
+          email: finalEmail,
+          username: fullName || finalEmail.split('@')[0],
           provider: authProvider,
-          providerId: userProviderId,
+          providerId: providerId,
         });
 
         user = await this.userService.createSocialUser({
-          email,
-          username: this.generateUsername(fullName, email, authProvider),
+          email: finalEmail,
+          username: this.generateUsername(fullName, finalEmail, authProvider),
           provider: authProvider,
-          providerId: userProviderId,
+          providerId: providerId,
           marketingConsent: false,
         });
 

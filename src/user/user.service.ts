@@ -2105,6 +2105,12 @@ export class UserService {
     return this.userRepository.save(user);
   }
 
+  async updateUserEmail(userId: number, email: string): Promise<User> {
+    const user = await this.findOne(userId);
+    user.email = email;
+    return this.userRepository.save(user);
+  }
+
   async deleteAccount(userId: number): Promise<void> {
     const user = await this.findOne(userId);
 
