@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { Strategy } from 'passport-kakao';
+import { Strategy, Profile } from 'passport-kakao';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth.service';
 import { AuthProvider } from '../../user/entities/user.entity';
@@ -13,7 +13,6 @@ export class KakaoStrategy extends PassportStrategy(Strategy, 'kakao') {
   ) {
     super({
       clientID: configService.get<string>('KAKAO_CLIENT_ID'),
-      clientSecret: configService.get<string>('KAKAO_CLIENT_SECRET'),
       callbackURL: configService.get<string>('KAKAO_CALLBACK_URL'),
     });
   }
@@ -21,26 +20,35 @@ export class KakaoStrategy extends PassportStrategy(Strategy, 'kakao') {
   async validate(
     accessToken: string,
     refreshToken: string,
-    profile: any,
+    profile: Profile,
     done: any,
   ) {
-    const { email } = profile._json.kakao_account;
-    const displayName = profile._json.properties.nickname;
-    const profilePhoto = profile._json.properties.profile_image;
-    const providerId = profile.id.toString();
+    try {
+      // 카카오 프로필 데이터 추출
+      const kakaoAccount = profile._json?.kakao_account;
+      const properties = profile._json?.properties;
 
-    const oauthUser = {
-      email,
-      fullName: displayName,
-      profilePhoto,
-      providerId,
-      accessToken,
-    };
+      const email = kakaoAccount?.email || '';
+      const displayName = properties?.nickname || '';
+      const profilePhoto =
+        properties?.profile_image || properties?.thumbnail_image || '';
+      const providerId = profile.id?.toString() || '';
 
-    const user = await this.authService.validateOAuthUser(
-      oauthUser,
-      AuthProvider.KAKAO,
-    );
-    done(null, user);
+      const oauthUser = {
+        email,
+        fullName: displayName,
+        profilePhoto,
+        providerId,
+        accessToken,
+      };
+
+      const user = await this.authService.validateOAuthUser(
+        oauthUser,
+        AuthProvider.KAKAO,
+      );
+      done(null, user);
+    } catch (error) {
+      done(error, null);
+    }
   }
 }

@@ -2218,7 +2218,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/passport-kakao@npm:^1":
+"@types/passport-kakao@npm:^1.0.3":
   version: 1.0.3
   resolution: "@types/passport-kakao@npm:1.0.3"
   dependencies:
@@ -3035,7 +3035,7 @@ __metadata:
     "@types/passport-apple": "npm:^2.0.3"
     "@types/passport-google-oauth20": "npm:^2.0.16"
     "@types/passport-jwt": "npm:^4.0.1"
-    "@types/passport-kakao": "npm:^1"
+    "@types/passport-kakao": "npm:^1.0.3"
     "@types/passport-local": "npm:^1.0.38"
     "@typescript-eslint/eslint-plugin": "npm:^8.29.0"
     "@typescript-eslint/parser": "npm:^8.29.0"
