@@ -15,9 +15,13 @@ export class SocialLoginDto {
   @IsOptional()
   authorizationCode?: string;
 
+  /**
+   * Apple에서 제공하는 인증 코드
+   * @example "code.123456"
+   */
   @IsString()
   @IsOptional()
-  code?: string; // Apple에서 제공하는 인증 코드
+  code?: string;
 
   // Passport 전략에서 유효성 검증 후 설정되는 사용자 정보
   @IsOptional()

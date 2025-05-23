@@ -104,9 +104,27 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
           }
 
           if (tokenPayload) {
-            this.logger.log(`토큰 페이로드: ${JSON.stringify(tokenPayload)}`);
-            email = tokenPayload.email || '';
-            providerId = tokenPayload.sub || '';
+            // 토큰이 너무 길면 로그 출력을 위해 일부만 출력
+            const tokenPayloadString = JSON.stringify(tokenPayload);
+            const logPayload =
+              tokenPayloadString.length > 500
+                ? tokenPayloadString.substring(0, 500) + '...'
+                : tokenPayloadString;
+
+            this.logger.log(`토큰 페이로드: ${logPayload}`);
+
+            // 가장 중요한 정보: SUB(사용자 고유 ID)와 EMAIL
+            if (tokenPayload.sub) {
+              providerId = tokenPayload.sub;
+              this.logger.log(
+                `ID 토큰의 sub 값을 providerId로 사용: ${providerId}`,
+              );
+            }
+
+            if (tokenPayload.email) {
+              email = tokenPayload.email;
+              this.logger.log(`ID 토큰의 email 값 사용: ${email}`);
+            }
           }
         } catch (tokenError) {
           this.logger.error(`토큰 처리 오류: ${tokenError.message}`);
@@ -136,6 +154,7 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
         email = `user_${tempId}@example.com`;
         this.logger.log(`생성된 임시 이메일: ${email}`);
       } else {
+        // Apple의 privaterelay.appleid.com 이메일은 유니크한 식별자이므로 그대로 사용
         this.logger.log(`Apple에서 제공한 실제 이메일 사용: ${email}`);
       }
 
@@ -147,16 +166,34 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
 
         // 이메일 기반 고유 ID 생성 - 항상 동일한 이메일에 대해 동일한 ID 반환
         if (email && !email.includes('@example.com')) {
-          // 실제 이메일인 경우 해당 이메일로 일관된 providerId 생성
-          const emailHash = crypto
-            .createHash('sha256')
-            .update(email)
-            .digest('hex')
-            .substring(0, 24);
-          providerId = emailHash;
+          // 이메일이 privaterelay.appleid.com으로 끝나는 경우 특별 처리
+          if (email.includes('@privaterelay.appleid.com')) {
+            // privaterelay 이메일은 Apple에서 고유하게 생성된 이메일이므로
+            // 이메일 자체를 hash로 변환하여 providerId로 사용
+            const emailHash = crypto
+              .createHash('sha256')
+              .update(email)
+              .digest('hex')
+              .substring(0, 24);
+
+            providerId = `apple_${emailHash}`;
+            this.logger.log(
+              `Apple privaterelay 이메일 기반 providerId 생성: ${providerId}`,
+            );
+          } else {
+            // 일반 이메일인 경우 해당 이메일로 일관된 providerId 생성
+            const emailHash = crypto
+              .createHash('sha256')
+              .update(email)
+              .digest('hex')
+              .substring(0, 24);
+            providerId = emailHash;
+            this.logger.log(`이메일 기반 providerId 생성: ${providerId}`);
+          }
         } else {
           // 임시 이메일인 경우 timestamp 기반 ID 생성
           providerId = `id_${Date.now()}`;
+          this.logger.log(`시간 기반 providerId 생성: ${providerId}`);
         }
 
         this.logger.log(`생성된 providerId: ${providerId}`);

@@ -22,6 +22,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import * as crypto from 'crypto';
+import { Logger } from '@nestjs/common';
 
 // OAuth 사용자 정보 인터페이스
 interface OAuthUser {
@@ -34,6 +35,8 @@ interface OAuthUser {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private userService: UserService,
     private jwtService: JwtService,
@@ -321,9 +324,13 @@ export class AuthService {
   ): Promise<User> {
     try {
       const { email, fullName, providerId } = oauthUser;
+      this.logger.log(
+        `OAuth 사용자 검증 시작: provider=${provider}, email=${email}, providerId=${providerId}`,
+      );
 
       // 이메일 필수 체크
       if (!email) {
+        this.logger.error('OAuth 인증 실패: 이메일 정보 없음');
         throw new UnauthorizedException(
           '소셜 로그인에 필요한 이메일 정보를 획득하지 못했습니다.',
         );
@@ -332,6 +339,9 @@ export class AuthService {
       // 올바른 제공자 체크
       const authProvider = this.getAuthProviderFromString(provider);
       if (!authProvider) {
+        this.logger.error(
+          `OAuth 인증 실패: 지원하지 않는 제공자 - ${provider}`,
+        );
         throw new BadRequestException('지원하지 않는 인증 제공자입니다.');
       }
 
@@ -358,12 +368,16 @@ export class AuthService {
         const existingUser = await this.userService.findByEmail(email);
 
         if (existingUser) {
+          this.logger.warn(
+            `이메일로 찾은 기존 사용자 발견: userId=${existingUser.id}, provider=${existingUser.provider}`,
+          );
           // 같은 이메일로 다른 방식(로컬 또는 다른 소셜)으로 가입한 경우
           throw new ConflictException(
             '이미 다른 방식으로 가입된 이메일입니다. 다른 로그인 방식을 이용해주세요.',
           );
         }
 
+        this.logger.log('새 사용자 생성 중...');
         // 새 사용자 생성
         console.log('새 사용자 생성:', {
           email,
@@ -746,35 +760,11 @@ export class AuthService {
 
     // 자동 생성된 이메일인 경우 완전 랜덤 이름 생성
     if (email.includes('@example.com')) {
-      // 랜덤 단어 조합으로 사용자 이름 생성
-      const adjectives = [
-        'Avid',
-        'Curious',
-        'Eager',
-        'Happy',
-        'Keen',
-        'Quiet',
-        'Swift',
-        'Vibrant',
-      ];
-      const nouns = [
-        'Reader',
-        'Explorer',
-        'Thinker',
-        'Voyager',
-        'Seeker',
-        'Scholar',
-        'Nomad',
-        'Mind',
-      ];
+      // 6자리 랜덤 숫자 생성 (100000-999999)
+      const randomNumber = crypto.randomInt(100000, 999999);
 
-      // 완전 랜덤 조합으로 이름 생성
-      const randomNumber = crypto.randomInt(100, 999);
-      const randomAdj = adjectives[crypto.randomInt(0, adjectives.length)];
-      const randomNoun = nouns[crypto.randomInt(0, nouns.length)];
-
-      // 형식: Adjective + Noun + Number (예: HappyReader123)
-      return `${randomAdj}${randomNoun}${randomNumber}`;
+      // 숫자만 반환
+      return `${randomNumber}`;
     }
 
     // 3. 이메일에서 추출한 사용자 이름 반환
