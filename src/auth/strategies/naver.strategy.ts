@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { Strategy } from 'passport-naver';
+import { Strategy, Profile as NaverProfile } from 'passport-naver-v2';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth.service';
 import { AuthProvider } from '../../user/entities/user.entity';
@@ -21,18 +21,18 @@ export class NaverStrategy extends PassportStrategy(Strategy, 'naver') {
   async validate(
     accessToken: string,
     refreshToken: string,
-    profile: any,
+    profile: NaverProfile,
     done: any,
   ) {
-    const { email, nickname } = profile._json.response;
-    const profilePhoto = profile._json.response.profile_image;
-    const providerId = profile.id;
+    const { email, nickname, profileImage, id, name } = profile;
+
+    const fullName = name || nickname || '';
 
     const oauthUser = {
-      email,
-      fullName: nickname,
-      profilePhoto,
-      providerId,
+      email: email || '',
+      fullName,
+      profilePhoto: profileImage || '',
+      providerId: id,
       accessToken,
     };
 
