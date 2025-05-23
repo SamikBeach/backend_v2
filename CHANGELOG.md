@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+## [1.8.1](https://github.com/SamikBeach/backend_v2/compare/1.8.0...1.8.1) (2025-05-23)
+
+
+### Bug Fixes
+
+* Apple OAuth 전략 개선 - profile 객체 우선 처리 및 정보 추출 로직 최적화 ([d81eb3e](https://github.com/SamikBeach/backend_v2/commit/d81eb3e350c0931c4e5d22a008d1cdaebdfe55df))
+
 # [1.8.0](https://github.com/SamikBeach/backend_v2/compare/1.7.0...1.8.0) (2025-05-23)
 
 
