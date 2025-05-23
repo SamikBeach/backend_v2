@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.10.0](https://github.com/SamikBeach/backend_v2/compare/1.9.0...1.10.0) (2025-05-23)
+
+
+### Features
+
+* Apple 로그인 구현을 참고 코드 방식으로 단순화 ([76a559d](https://github.com/SamikBeach/backend_v2/commit/76a559d4849ed31269aebb9df5f045d999d362f9))
+
 # [1.9.0](https://github.com/SamikBeach/backend_v2/compare/1.8.1...1.9.0) (2025-05-23)
 
 
