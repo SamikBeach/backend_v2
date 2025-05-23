@@ -189,6 +189,22 @@ export class AuthController {
     // Naver 인증 페이지로 리다이렉트 (Passport가 처리)
   }
 
+  @Get('naver/callback')
+  @IsPublic()
+  @UseGuards(AuthGuard('naver'))
+  async naverAuthCallback(@GetUser() user: User, @Res() res: Response) {
+    const result = await this.authService.socialLogin({
+      provider: AuthProvider.NAVER,
+      user,
+    });
+
+    // 프론트엔드로 리다이렉트 (토큰과 함께)
+    const frontendUrl = this.configService.get<string>('SERVICE_URL');
+    res.redirect(
+      `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
+    );
+  }
+
   @Get('kakao')
   @IsPublic()
   @UseGuards(AuthGuard('kakao'))
