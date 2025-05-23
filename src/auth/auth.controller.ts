@@ -218,7 +218,7 @@ export class AuthController {
     // Apple 인증 페이지로 리다이렉트 (Passport가 처리)
   }
 
-  @Get('apple/callback')
+  @Post('apple/callback')
   @IsPublic()
   @UseGuards(AuthGuard('apple'))
   async appleAuthCallback(@GetUser() user: User, @Res() res: Response) {
