@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+## [1.15.1](https://github.com/SamikBeach/backend_v2/compare/1.15.0...1.15.1) (2025-05-23)
+
+
+### Bug Fixes
+
+* JWT 검증 시 소셜 로그인 사용자를 providerId로 조회하도록 개선 ([c1cd3af](https://github.com/SamikBeach/backend_v2/commit/c1cd3af2dd3a8123ee0688a075d9402c975eb474))
+
 # [1.15.0](https://github.com/SamikBeach/backend_v2/compare/1.14.0...1.15.0) (2025-05-23)
 
 
