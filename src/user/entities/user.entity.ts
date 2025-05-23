@@ -5,6 +5,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { Library } from '../../library/entities/library.entity';
 import { Review } from '../../review/entities/review.entity';
@@ -26,11 +27,19 @@ export enum AuthProvider {
 }
 
 @Entity('user')
+@Index(['provider', 'providerId'], {
+  unique: true,
+  where: 'provider != \'local\' AND "providerId" IS NOT NULL',
+})
+@Index(['email'], {
+  unique: true,
+  where: "provider = 'local' OR provider = 'google'",
+})
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ unique: true })
+  @Column()
   email: string;
 
   @Column({ nullable: true })
