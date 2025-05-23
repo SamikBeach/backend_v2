@@ -324,34 +324,17 @@ export class AuthService {
   }
 
   async validateJwtPayload(payload: JwtPayload): Promise<User> {
-    this.logger.log(
-      '🔍 JWT 페이로드 검증 시작:',
-      JSON.stringify(payload, null, 2),
-    );
-
     // sub 필드가 숫자가 아닌 경우 처리
     if (typeof payload.sub !== 'number') {
-      this.logger.error('❌ JWT 페이로드 검증 실패: sub 필드가 숫자가 아님', {
-        sub: payload.sub,
-        type: typeof payload.sub,
-      });
       throw new UnauthorizedException('Invalid token payload');
     }
-
-    this.logger.log(
-      `🔑 사용자 검색 중: email=${payload.email}, userId=${payload.sub}`,
-    );
 
     const user = await this.userService.findByEmail(payload.email);
 
     if (!user) {
-      this.logger.error(`❌ 사용자를 찾을 수 없음: email=${payload.email}`);
       throw new UnauthorizedException('User not found');
     }
 
-    this.logger.log(
-      `✅ 사용자 검증 성공: userId=${user.id}, email=${user.email}`,
-    );
     return user;
   }
 
@@ -550,12 +533,6 @@ export class AuthService {
       email: user.email,
     };
 
-    this.logger.log('🔑 JWT 토큰 생성 시작:', {
-      userId: user.id,
-      email: user.email,
-      payload: JSON.stringify(payload, null, 2),
-    });
-
     // 액세스 토큰 생성 (짧은 유효기간)
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: '1h',
@@ -568,12 +545,6 @@ export class AuthService {
         this.configService.get<string>('JWT_SECRET'),
       ),
       expiresIn: '7d',
-    });
-
-    this.logger.log('✅ JWT 토큰 생성 완료:', {
-      accessTokenLength: accessToken.length,
-      refreshTokenLength: refreshToken.length,
-      accessTokenPreview: accessToken.substring(0, 50) + '...',
     });
 
     return {
