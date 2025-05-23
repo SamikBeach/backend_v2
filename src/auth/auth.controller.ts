@@ -6,6 +6,7 @@ import {
   Get,
   Res,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
@@ -220,21 +221,48 @@ export class AuthController {
 
   @Post('apple/callback')
   @IsPublic()
-  @UseGuards(AuthGuard('apple'))
-  async appleAuthCallback(@GetUser() user: User, @Res() res: Response) {
-    // AppleStrategy가 authService.validateOAuthUser를 호출하여 'user' 객체를 생성했을 것입니다.
-    // 이제 토큰을 생성하고 리디렉션하면 됩니다.
-    // authService.socialLogin은 SocialLoginDto를 받도록 설계되어 있습니다.
-    // google/kakao와의 일관성을 위해 socialLogin을 호출하여 토큰을 (재)검증하고 생성할 수 있습니다.
-    const result = await this.authService.socialLogin({
-      provider: AuthProvider.APPLE,
-      user, // 이 user 객체는 AppleStrategy -> authService.validateOAuthUser를 통해 전달됩니다.
-    });
+  async appleAuthCallback(@Body() body: any, @Res() res: Response) {
+    try {
+      this.logger.log('Apple callback received:', body);
 
-    const frontendUrl = this.configService.get<string>('SERVICE_URL');
-    res.redirect(
-      `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
-    );
+      const { code, id_token, user } = body;
+
+      if (!code && !id_token) {
+        throw new BadRequestException(
+          'Apple 인증 코드 또는 ID 토큰이 필요합니다.',
+        );
+      }
+
+      let result;
+
+      if (id_token) {
+        // ID 토큰이 직접 제공된 경우 (모바일 앱에서)
+        result = await this.authService.socialLogin({
+          provider: AuthProvider.APPLE,
+          accessToken: id_token,
+          user: user ? JSON.parse(user) : undefined,
+        });
+      } else if (code) {
+        // Authorization code가 제공된 경우 (웹에서)
+        result = await this.authService.socialLogin({
+          provider: AuthProvider.APPLE,
+          code: code,
+          user: user ? JSON.parse(user) : undefined,
+        });
+      }
+
+      // 프론트엔드로 리다이렉트 (토큰과 함께)
+      const frontendUrl = this.configService.get<string>('SERVICE_URL');
+      res.redirect(
+        `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
+      );
+    } catch (error) {
+      this.logger.error('Apple callback error:', error);
+      const frontendUrl = this.configService.get<string>('SERVICE_URL');
+      res.redirect(
+        `${frontendUrl}/auth/social-callback?error=${encodeURIComponent(error.message)}`,
+      );
+    }
   }
 
   @Get('token-test')
