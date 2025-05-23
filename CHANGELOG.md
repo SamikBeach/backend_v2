@@ -1,5 +1,21 @@
 # 🚦 CHANGELOG
 
+# [1.12.0](https://github.com/SamikBeach/backend_v2/compare/1.11.0...1.12.0) (2025-05-23)
+
+
+### Bug Fixes
+
+* AppleStrategy 생성자 린트 오류 수정 및 디버깅 로그 개선 ([d79e725](https://github.com/SamikBeach/backend_v2/commit/d79e725968dde2c1f194bf83e760677550ad04e4))
+* 엔드포인트 수정 ([4c07e71](https://github.com/SamikBeach/backend_v2/commit/4c07e717c1d62cb17967fd02d7186bb7652b94b7))
+
+
+### Features
+
+* Apple 로그인 디버깅 및 로깅 강화 ([94a8375](https://github.com/SamikBeach/backend_v2/commit/94a83758b67ef252239ef8367a644ae79deea876))
+* Apple 로그인 서버사이드 OAuth 엔드포인트 구현 ([0d7c050](https://github.com/SamikBeach/backend_v2/commit/0d7c05088fa533c518d287d9cc3779e6e096e160))
+* Apple 로그인 직접 구현으로 변경 ([eb2f722](https://github.com/SamikBeach/backend_v2/commit/eb2f722446876c0145100f836f62681ce1b2f073))
+* 네이버 OAuth 로그인 구현 ([6319b94](https://github.com/SamikBeach/backend_v2/commit/6319b94d7741db78b432971a48074589eb921e64))
+
 # [1.11.0](https://github.com/SamikBeach/backend_v2/compare/1.10.0...1.11.0) (2025-05-23)
 
 
