@@ -5,10 +5,7 @@ import {
   UseGuards,
   Get,
   Res,
-  All,
-  Version,
   Logger,
-  Req,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
@@ -208,6 +205,32 @@ export class AuthController {
     });
 
     // 프론트엔드로 리다이렉트 (토큰과 함께)
+    const frontendUrl = this.configService.get<string>('SERVICE_URL');
+    res.redirect(
+      `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
+    );
+  }
+
+  @Get('apple')
+  @IsPublic()
+  @UseGuards(AuthGuard('apple'))
+  appleAuth() {
+    // Apple 인증 페이지로 리다이렉트 (Passport가 처리)
+  }
+
+  @Post('apple/callback')
+  @IsPublic()
+  @UseGuards(AuthGuard('apple'))
+  async appleAuthCallback(@GetUser() user: User, @Res() res: Response) {
+    // AppleStrategy가 authService.validateOAuthUser를 호출하여 'user' 객체를 생성했을 것입니다.
+    // 이제 토큰을 생성하고 리디렉션하면 됩니다.
+    // authService.socialLogin은 SocialLoginDto를 받도록 설계되어 있습니다.
+    // google/kakao와의 일관성을 위해 socialLogin을 호출하여 토큰을 (재)검증하고 생성할 수 있습니다.
+    const result = await this.authService.socialLogin({
+      provider: AuthProvider.APPLE,
+      user, // 이 user 객체는 AppleStrategy -> authService.validateOAuthUser를 통해 전달됩니다.
+    });
+
     const frontendUrl = this.configService.get<string>('SERVICE_URL');
     res.redirect(
       `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
