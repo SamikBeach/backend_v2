@@ -21,10 +21,11 @@ import { UpdateUserInfoDto } from './dto/update-user-info.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
-import * as crypto from 'crypto';
 import { Logger } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import verifyAppleToken from 'verify-apple-id-token';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // OAuth 사용자 정보 인터페이스
 interface OAuthUser {
@@ -132,6 +133,31 @@ export class AuthService {
             }
           default:
             throw new BadRequestException('지원하지 않는 인증 제공자입니다.');
+        }
+      }
+
+      // Apple authorization code 처리
+      if (!socialLoginDto.user && code && provider === AuthProvider.APPLE) {
+        try {
+          const idToken = await this.exchangeAppleCodeForToken(code);
+          const appleUser = await this.verifyAppleTokenAndExtractUser(idToken);
+          const user = await this.validateOAuthUser(appleUser, provider);
+          return this.generateAuthResponseWithRefresh(user);
+        } catch (error) {
+          this.logger.error(
+            `Apple code exchange error: ${error.message}`,
+            error.stack,
+          );
+          if (
+            error instanceof UnauthorizedException ||
+            error instanceof BadRequestException ||
+            error instanceof ConflictException
+          ) {
+            throw error;
+          }
+          throw new BadRequestException(
+            'Apple 인증 코드 처리 중 오류가 발생했습니다.',
+          );
         }
       }
 
@@ -845,6 +871,96 @@ export class AuthService {
         );
       }
       throw new UnauthorizedException('Apple 토큰을 검증하는데 실패했습니다.');
+    }
+  }
+
+  // Apple authorization code를 ID 토큰으로 교환
+  private async exchangeAppleCodeForToken(code: string): Promise<string> {
+    try {
+      const clientId = this.configService.get<string>('APPLE_CLIENT_ID');
+      const teamId = this.configService.get<string>('APPLE_TEAM_ID');
+      const keyId = this.configService.get<string>('APPLE_KEY_ID');
+      let privateKey = this.configService.get<string>('APPLE_PRIVATE_KEY');
+
+      // Private key가 환경 변수에 없으면 파일에서 읽기
+      if (!privateKey) {
+        const privateKeyPath = this.configService.get<string>(
+          'APPLE_PRIVATE_KEY_PATH',
+        );
+        if (privateKeyPath) {
+          try {
+            const fullPath = path.resolve(process.cwd(), privateKeyPath);
+            privateKey = fs.readFileSync(fullPath, 'utf8');
+          } catch (error) {
+            this.logger.error(
+              `Failed to read Apple private key from file: ${privateKeyPath}`,
+              error,
+            );
+            throw new BadRequestException(
+              'Apple private key 파일을 읽을 수 없습니다.',
+            );
+          }
+        }
+      }
+
+      if (!clientId || !teamId || !keyId || !privateKey) {
+        throw new BadRequestException('Apple 로그인 설정이 완전하지 않습니다.');
+      }
+
+      // Client secret 생성 (JWT)
+      const clientSecret = jwt.sign(
+        {
+          iss: teamId,
+          iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + 86400 * 180, // 6개월
+          aud: 'https://appleid.apple.com',
+          sub: clientId,
+        },
+        privateKey.replace(/\\n/g, '\n'),
+        {
+          algorithm: 'ES256',
+          keyid: keyId,
+        },
+      );
+
+      // Apple 토큰 엔드포인트로 요청
+      const response = await fetch('https://appleid.apple.com/auth/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          code: code,
+          grant_type: 'authorization_code',
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error('Apple token exchange failed:', errorText);
+        throw new UnauthorizedException('Apple 토큰 교환에 실패했습니다.');
+      }
+
+      const tokenData = await response.json();
+
+      if (!tokenData.id_token) {
+        throw new UnauthorizedException('Apple에서 ID 토큰을 받지 못했습니다.');
+      }
+
+      return tokenData.id_token;
+    } catch (error) {
+      this.logger.error('Apple code exchange error:', error);
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new BadRequestException(
+        'Apple 인증 코드 교환 중 오류가 발생했습니다.',
+      );
     }
   }
 }
