@@ -64,6 +64,9 @@ export class User {
   @Column({ nullable: true })
   providerId: string;
 
+  @Column({ nullable: true })
+  appleId: string;
+
   @Column({
     type: 'enum',
     enum: UserStatus,

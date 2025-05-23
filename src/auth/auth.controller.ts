@@ -35,6 +35,7 @@ import { User } from '../user/entities/user.entity';
 import { SignupDto } from './dto/signup.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { IsPublic } from './decorators/is-public.decorator';
+import { AppleLoginDto } from './dto/apple-login.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -159,6 +160,12 @@ export class AuthController {
     @Body() deleteAccountDto: DeleteAccountDto,
   ) {
     return this.authService.deleteAccount(user.id, deleteAccountDto);
+  }
+
+  @Post('apple-login')
+  @IsPublic()
+  async appleLogin(@Body() appleLoginDto: AppleLoginDto) {
+    return this.authService.appleLogin(appleLoginDto.idToken);
   }
 
   @Get('google')
