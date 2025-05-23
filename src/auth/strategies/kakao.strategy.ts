@@ -28,11 +28,16 @@ export class KakaoStrategy extends PassportStrategy(Strategy, 'kakao') {
       const kakaoAccount = profile._json?.kakao_account;
       const properties = profile._json?.properties;
 
-      const email = kakaoAccount?.email || '';
+      // 이메일이 제공되지 않을 수 있음 (사용자가 동의하지 않은 경우)
+      const email = kakaoAccount?.email || null;
       const displayName = properties?.nickname || '';
       const profilePhoto =
         properties?.profile_image || properties?.thumbnail_image || '';
       const providerId = profile.id?.toString() || '';
+
+      if (!providerId) {
+        throw new Error('카카오 사용자 ID를 가져올 수 없습니다.');
+      }
 
       const oauthUser = {
         email,

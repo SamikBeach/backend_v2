@@ -29,7 +29,7 @@ import * as path from 'path';
 
 // OAuth 사용자 정보 인터페이스
 interface OAuthUser {
-  email: string;
+  email?: string; // 카카오는 이메일을 제공하지 않을 수 있음
   fullName?: string;
   profilePhoto?: string;
   providerId: string;
@@ -390,18 +390,10 @@ export class AuthService {
         `👤 새 사용자 생성 필요: provider=${provider}, providerId=${providerId}`,
       );
 
-      // 이메일 필수 체크
-      if (!email) {
-        this.logger.error('❌ OAuth 인증 실패: 이메일 정보 없음');
-        throw new UnauthorizedException(
-          '소셜 로그인에 필요한 이메일 정보를 획득하지 못했습니다.',
-        );
-      }
+      // 이메일이 없는 경우 처리 (카카오 등)
+      let finalEmail = email || null;
 
-      // 최종 이메일 결정
-      let finalEmail = email;
-
-      // 이메일 중복 체크
+      // 이메일이 있는 경우에만 중복 체크
       if (finalEmail) {
         const existingUser = await this.userService.findByEmail(finalEmail);
         if (existingUser) {
@@ -416,7 +408,7 @@ export class AuthService {
       }
 
       this.logger.log(
-        `🆕 새 사용자 생성 중: email=${finalEmail}, providerId=${providerId}`,
+        `🆕 새 사용자 생성 중: email=${finalEmail || '없음'}, providerId=${providerId}`,
       );
 
       // 새 사용자 생성
