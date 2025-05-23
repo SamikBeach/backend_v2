@@ -2098,6 +2098,13 @@ export class UserService {
     return this.userRepository.save(user);
   }
 
+  // providerId 업데이트 메서드
+  async updateProviderInfo(userId: number, providerId: string): Promise<User> {
+    const user = await this.findOne(userId);
+    user.providerId = providerId;
+    return this.userRepository.save(user);
+  }
+
   async deleteAccount(userId: number): Promise<void> {
     const user = await this.findOne(userId);
 

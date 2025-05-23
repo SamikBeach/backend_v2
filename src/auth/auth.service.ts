@@ -88,7 +88,9 @@ export class AuthService {
 
   async socialLogin(socialLoginDto: SocialLoginDto) {
     try {
-      const { provider, accessToken, code } = socialLoginDto;
+      const { provider, accessToken } = socialLoginDto;
+      // code 속성 별도로 추출
+      const code = socialLoginDto.code;
 
       // 이미 Passport 전략에서 사용자 검증이 완료된 경우
       if (socialLoginDto.user) {
@@ -97,14 +99,13 @@ export class AuthService {
 
       // Apple 인증 코드가 있는 경우 (Apple 로그인 전용)
       if (provider === AuthProvider.APPLE && code) {
-        // 임시 사용자 식별자 생성
-        const tempId = Math.random().toString(36).substring(2, 15);
+        this.logger.log('Apple 인증 코드로 로그인 시도');
 
-        // 사용자 정보 생성
+        // 실제 인증 처리는 Apple 전략에서 처리하도록 함
+        // 여기서는 코드만 전달하고 실제 이메일과 providerId는 전략에서 얻음
         const tempUser = {
-          email: `apple_user_${tempId}@example.com`,
-          fullName: `Apple User ${tempId}`,
-          providerId: `apple_${Date.now()}`,
+          email: '', // 빈 값으로 설정하여 전략에서 실제 이메일을 사용하도록 함
+          providerId: '', // 빈 값으로 설정하여 전략에서 실제 providerId를 사용하도록 함
           accessToken: code, // code를 accessToken으로 사용
         };
 
@@ -358,7 +359,15 @@ export class AuthService {
       if (!user && authProvider === AuthProvider.APPLE) {
         const userByEmail = await this.userService.findByEmail(email);
         if (userByEmail && userByEmail.provider === AuthProvider.APPLE) {
-          user = userByEmail;
+          // 기존 사용자의 providerId 업데이트
+          this.logger.log(
+            `Apple 사용자를 이메일로 찾음: ${email}, providerId 업데이트`,
+          );
+          userByEmail.providerId = userProviderId;
+          user = await this.userService.updateProviderInfo(
+            userByEmail.id,
+            userProviderId,
+          );
         }
       }
 
@@ -757,15 +766,6 @@ export class AuthService {
 
     // 2. 이메일 아이디 부분 사용
     const emailUsername = email.split('@')[0];
-
-    // 자동 생성된 이메일인 경우 완전 랜덤 이름 생성
-    if (email.includes('@example.com')) {
-      // 6자리 랜덤 숫자 생성 (100000-999999)
-      const randomNumber = crypto.randomInt(100000, 999999);
-
-      // 숫자만 반환
-      return `${randomNumber}`;
-    }
 
     // 3. 이메일에서 추출한 사용자 이름 반환
     return emailUsername;

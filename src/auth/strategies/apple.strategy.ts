@@ -124,6 +124,12 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
             if (tokenPayload.email) {
               email = tokenPayload.email;
               this.logger.log(`ID 토큰의 email 값 사용: ${email}`);
+              // 이메일 검증 상태 확인
+              if (tokenPayload.email_verified !== undefined) {
+                this.logger.log(
+                  `이메일 검증 상태: ${tokenPayload.email_verified}`,
+                );
+              }
             }
           }
         } catch (tokenError) {
@@ -146,15 +152,16 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
         }
       }
 
-      // 이메일이 없으면 기본 이메일 생성 (임시방편)
+      // 이메일이 없는 경우 처리
       if (!email) {
-        this.logger.warn('이메일을 찾을 수 없어 임시 이메일을 생성합니다');
-        // 임의의 고유 ID 생성
-        const tempId = crypto.randomBytes(8).toString('hex');
-        email = `user_${tempId}@example.com`;
-        this.logger.log(`생성된 임시 이메일: ${email}`);
+        this.logger.warn(
+          '이메일을 찾을 수 없습니다. Apple 로그인에는 이메일이 필요합니다.',
+        );
+        throw new Error(
+          '이메일 정보가 없어 Apple 로그인을 진행할 수 없습니다.',
+        );
       } else {
-        // Apple의 privaterelay.appleid.com 이메일은 유니크한 식별자이므로 그대로 사용
+        // Apple에서 제공한 이메일 그대로 사용
         this.logger.log(`Apple에서 제공한 실제 이메일 사용: ${email}`);
       }
 
@@ -164,8 +171,8 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
           'providerId를 찾을 수 없어 이메일 기반 ID를 생성합니다',
         );
 
-        // 이메일 기반 고유 ID 생성 - 항상 동일한 이메일에 대해 동일한 ID 반환
-        if (email && !email.includes('@example.com')) {
+        // 이메일 기반 고유 ID 생성
+        if (email) {
           // 이메일이 privaterelay.appleid.com으로 끝나는 경우 특별 처리
           if (email.includes('@privaterelay.appleid.com')) {
             // privaterelay 이메일은 Apple에서 고유하게 생성된 이메일이므로
@@ -176,7 +183,7 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
               .digest('hex')
               .substring(0, 24);
 
-            providerId = `apple_${emailHash}`;
+            providerId = emailHash;
             this.logger.log(
               `Apple privaterelay 이메일 기반 providerId 생성: ${providerId}`,
             );
@@ -191,9 +198,10 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
             this.logger.log(`이메일 기반 providerId 생성: ${providerId}`);
           }
         } else {
-          // 임시 이메일인 경우 timestamp 기반 ID 생성
-          providerId = `id_${Date.now()}`;
-          this.logger.log(`시간 기반 providerId 생성: ${providerId}`);
+          this.logger.error('이메일이 없어 providerId를 생성할 수 없습니다.');
+          throw new Error(
+            '이메일 정보가 없어 Apple 로그인을 진행할 수 없습니다.',
+          );
         }
 
         this.logger.log(`생성된 providerId: ${providerId}`);
