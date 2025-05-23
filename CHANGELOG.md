@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.15.0](https://github.com/SamikBeach/backend_v2/compare/1.14.0...1.15.0) (2025-05-23)
+
+
+### Features
+
+* 카카오 OAuth에서 이메일 없이도 로그인 가능하도록 개선 ([09750bc](https://github.com/SamikBeach/backend_v2/commit/09750bca1fd4195c54edf4d7f4eff97e3a88d546))
+
 # [1.14.0](https://github.com/SamikBeach/backend_v2/compare/1.13.0...1.14.0) (2025-05-23)
 
 
