@@ -1,5 +1,13 @@
 # 🚦 CHANGELOG
 
+# [1.11.0](https://github.com/SamikBeach/backend_v2/compare/1.10.0...1.11.0) (2025-05-23)
+
+
+### Features
+
+* Apple 로그인 기능 구현 ([6d325ab](https://github.com/SamikBeach/backend_v2/commit/6d325ab13e3ad2bc3ca6d6120f2269e2ebf90da1))
+* Apple 로그인 시 이메일 없는 경우 처리 개선 ([04e6204](https://github.com/SamikBeach/backend_v2/commit/04e62046e0ff1e2a4fe0c087f63f27624b57016f))
+
 # [1.10.0](https://github.com/SamikBeach/backend_v2/compare/1.9.0...1.10.0) (2025-05-23)
 
 
