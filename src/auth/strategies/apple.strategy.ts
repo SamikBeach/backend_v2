@@ -66,58 +66,63 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
     done: any,
   ): Promise<any> {
     this.logger.log('Apple 로그인 검증 시작');
-    this.logger.log(`요청 본문: ${JSON.stringify(request.body)}`);
+    this.logger.log(`요청 본문: ${JSON.stringify(request.body, null, 2)}`);
+    this.logger.log(`요청 쿼리: ${JSON.stringify(request.query, null, 2)}`);
     this.logger.log(`accessToken: ${accessToken ? 'present' : 'not present'}`);
+    this.logger.log(
+      `refreshToken: ${refreshToken ? 'present' : 'not present'}`,
+    );
     this.logger.log(`idToken 유형: ${typeof idToken}`);
+    this.logger.log(`profile 유형: ${typeof profile}`);
+    this.logger.log(`profile 내용: ${JSON.stringify(profile, null, 2)}`);
 
     try {
       let email = '';
       let providerId = '';
       let fullName = '';
 
-      // 1. 첫 번째 로그인 시 req.body.user에서 사용자 정보 추출
-      if (request.body && request.body.user) {
-        this.logger.log('첫 번째 로그인: req.body.user에서 사용자 정보 추출');
-        const userData = JSON.parse(request.body.user);
-        this.logger.log(`사용자 데이터: ${JSON.stringify(userData)}`);
+      // 1. profile에서 기본 정보 추출 (passport-apple이 이미 처리한 정보)
+      if (profile) {
+        this.logger.log(`profile 정보: ${JSON.stringify(profile, null, 2)}`);
 
-        if (userData.email) {
-          email = userData.email;
-          this.logger.log(`req.body.user에서 이메일 추출: ${email}`);
+        // providerId는 profile.id에서 가져옴
+        if (profile.id) {
+          providerId = profile.id;
+          this.logger.log(`profile에서 providerId 추출: ${providerId}`);
         }
 
-        if (userData.name) {
-          const firstName = userData.name.firstName || '';
-          const lastName = userData.name.lastName || '';
+        // 이메일 추출
+        if (profile.email) {
+          email = profile.email;
+          this.logger.log(`profile에서 이메일 추출: ${email}`);
+        }
+
+        // 이름 추출
+        if (profile.name) {
+          const firstName = profile.name.firstName || '';
+          const lastName = profile.name.lastName || '';
           fullName = `${firstName} ${lastName}`.trim();
-          this.logger.log(`req.body.user에서 이름 추출: ${fullName}`);
+          this.logger.log(`profile에서 이름 추출: ${fullName}`);
         }
       }
 
-      // 2. idToken에서 정보 추출 (JWT 디코딩)
-      if (idToken) {
+      // 2. idToken에서 추가 정보 추출 (JWT 디코딩)
+      if (idToken && typeof idToken === 'string') {
         try {
-          let decodedToken;
-
-          // idToken이 문자열인 경우 JWT 디코딩
-          if (typeof idToken === 'string') {
-            this.logger.log('idToken을 JWT로 디코딩 중...');
-            decodedToken = jwt.decode(idToken) as any;
-          } else if (typeof idToken === 'object') {
-            this.logger.log('idToken이 이미 객체 형태로 제공됨');
-            decodedToken = idToken;
-          }
+          this.logger.log('idToken을 JWT로 디코딩 중...');
+          const decodedToken = jwt.decode(idToken, { json: true }) as any;
+          this.logger.log(
+            `JWT 디코딩 결과: ${JSON.stringify(decodedToken, null, 2)}`,
+          );
 
           if (decodedToken) {
-            this.logger.log(`디코딩된 토큰: ${JSON.stringify(decodedToken)}`);
-
-            // providerId는 sub 필드에서 가져옴 (Apple 사용자 고유 ID)
-            if (decodedToken.sub) {
+            // providerId가 없으면 sub에서 가져옴
+            if (!providerId && decodedToken.sub) {
               providerId = decodedToken.sub;
               this.logger.log(`idToken에서 providerId 추출: ${providerId}`);
             }
 
-            // 이메일이 없으면 idToken에서 시도
+            // 이메일이 없으면 idToken에서 가져옴
             if (!email && decodedToken.email) {
               email = decodedToken.email;
               this.logger.log(`idToken에서 이메일 추출: ${email}`);
@@ -136,19 +141,73 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
             }
           }
         } catch (tokenError) {
-          this.logger.error(`idToken 처리 오류: ${tokenError.message}`);
+          this.logger.error(`idToken JWT 디코딩 오류: ${tokenError.message}`);
         }
       }
 
-      // 3. 여전히 이메일이 없으면 에러
-      if (!email) {
-        this.logger.error('이메일 정보를 찾을 수 없습니다.');
-        throw new Error(
-          'Apple 로그인에서 이메일 정보를 가져올 수 없습니다. 이메일 공유를 허용해주세요.',
-        );
+      // 3. 첫 번째 로그인 시 req.body.user에서 사용자 정보 추출
+      if (request.body && request.body.user) {
+        this.logger.log('첫 번째 로그인: req.body.user에서 사용자 정보 추출');
+        try {
+          let userData;
+          if (typeof request.body.user === 'string') {
+            userData = JSON.parse(request.body.user);
+          } else {
+            userData = request.body.user;
+          }
+
+          this.logger.log(
+            `사용자 데이터: ${JSON.stringify(userData, null, 2)}`,
+          );
+
+          if (userData.email && !email) {
+            email = userData.email;
+            this.logger.log(`req.body.user에서 이메일 추출: ${email}`);
+          }
+
+          if (userData.name && !fullName) {
+            const firstName = userData.name.firstName || '';
+            const lastName = userData.name.lastName || '';
+            fullName = `${firstName} ${lastName}`.trim();
+            this.logger.log(`req.body.user에서 이름 추출: ${fullName}`);
+          }
+        } catch (parseError) {
+          this.logger.error(`req.body.user 파싱 오류: ${parseError.message}`);
+        }
       }
 
-      // 4. providerId가 없으면 이메일 기반으로 생성
+      // 4. 여전히 이메일이 없으면 임시 이메일 생성
+      if (!email) {
+        this.logger.warn(
+          '이메일 정보를 찾을 수 없음 - providerId 기반 임시 이메일 생성',
+        );
+
+        if (providerId) {
+          // providerId를 기반으로 임시 이메일 생성
+          email = `apple_${providerId}@privaterelay.appleid.com`;
+          this.logger.log(`providerId 기반 임시 이메일 생성: ${email}`);
+        } else {
+          // Apple에서 제공하는 code나 다른 정보로 임시 이메일 생성
+          const code = request.body?.code;
+          if (code) {
+            // code를 기반으로 임시 이메일 생성
+            const codeHash = crypto
+              .createHash('sha256')
+              .update(code)
+              .digest('hex')
+              .substring(0, 12);
+            email = `apple_${codeHash}@privaterelay.appleid.com`;
+            this.logger.log(`code 기반 임시 이메일 생성: ${email}`);
+          } else {
+            // 완전히 랜덤한 임시 이메일 생성
+            const randomId = crypto.randomBytes(8).toString('hex');
+            email = `apple_${randomId}@privaterelay.appleid.com`;
+            this.logger.log(`랜덤 임시 이메일 생성: ${email}`);
+          }
+        }
+      }
+
+      // 5. providerId가 없으면 이메일 기반으로 생성
       if (!providerId) {
         this.logger.warn(
           'providerId를 찾을 수 없어 이메일 기반 ID를 생성합니다',
@@ -165,7 +224,7 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
         this.logger.log(`이메일 기반 providerId 생성: ${providerId}`);
       }
 
-      // 5. 이름이 없으면 이메일에서 추출
+      // 6. 이름이 없으면 이메일에서 추출
       if (!fullName) {
         fullName = email.split('@')[0];
         this.logger.log(`이메일에서 사용자명 생성: ${fullName}`);
@@ -183,7 +242,7 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
         accessToken: accessToken || 'apple_token',
       };
 
-      this.logger.log(`생성된 사용자 객체: ${JSON.stringify(user)}`);
+      this.logger.log(`생성된 사용자 객체: ${JSON.stringify(user, null, 2)}`);
 
       // 사용자 인증 처리
       const result = await this.authService.validateOAuthUser(user, 'apple');
