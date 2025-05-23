@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth.service';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
@@ -131,14 +132,34 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
       if (!email) {
         this.logger.warn('이메일을 찾을 수 없어 임시 이메일을 생성합니다');
         // 임의의 고유 ID 생성
-        const tempId = Math.random().toString(36).substring(2, 15);
-        email = `apple_user_${tempId}@example.com`;
+        const tempId = crypto.randomBytes(8).toString('hex');
+        email = `user_${tempId}@example.com`;
+        this.logger.log(`생성된 임시 이메일: ${email}`);
+      } else {
+        this.logger.log(`Apple에서 제공한 실제 이메일 사용: ${email}`);
       }
 
       // providerId가 없으면 요청 본문이나 다른 데이터에서 시도
       if (!providerId) {
-        this.logger.warn('providerId를 찾을 수 없어 대체값을 사용합니다');
-        providerId = `apple_${Date.now()}`;
+        this.logger.warn(
+          'providerId를 찾을 수 없어 이메일 기반 ID를 생성합니다',
+        );
+
+        // 이메일 기반 고유 ID 생성 - 항상 동일한 이메일에 대해 동일한 ID 반환
+        if (email && !email.includes('@example.com')) {
+          // 실제 이메일인 경우 해당 이메일로 일관된 providerId 생성
+          const emailHash = crypto
+            .createHash('sha256')
+            .update(email)
+            .digest('hex')
+            .substring(0, 24);
+          providerId = emailHash;
+        } else {
+          // 임시 이메일인 경우 timestamp 기반 ID 생성
+          providerId = `id_${Date.now()}`;
+        }
+
+        this.logger.log(`생성된 providerId: ${providerId}`);
       }
 
       // 이름 정보 처리

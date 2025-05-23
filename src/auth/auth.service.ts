@@ -21,6 +21,7 @@ import { UpdateUserInfoDto } from './dto/update-user-info.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import * as crypto from 'crypto';
 
 // OAuth 사용자 정보 인터페이스
 interface OAuthUser {
@@ -333,7 +334,7 @@ export class AuthService {
         // 새 사용자 생성
         user = await this.userService.createSocialUser({
           email,
-          username: fullName || email.split('@')[0], // 이름이 없으면 이메일 아이디 부분 사용
+          username: this.generateUsername(fullName, email, authProvider),
           provider: authProvider,
           providerId,
           marketingConsent: false,
@@ -680,5 +681,56 @@ export class AuthService {
     await this.userService.deleteAccount(userId);
 
     return { message: '계정이 성공적으로 삭제되었습니다.' };
+  }
+
+  // 소셜 로그인 사용자를 위한 사용자 이름 생성
+  private generateUsername(
+    fullName: string | undefined,
+    email: string,
+    provider: AuthProvider,
+  ): string {
+    // 1. 이름이 제공된 경우 우선 사용
+    if (fullName && fullName.trim()) {
+      return fullName.trim();
+    }
+
+    // 2. 이메일 아이디 부분 사용
+    const emailUsername = email.split('@')[0];
+
+    // 자동 생성된 이메일인 경우 완전 랜덤 이름 생성
+    if (email.includes('@example.com')) {
+      // 랜덤 단어 조합으로 사용자 이름 생성
+      const adjectives = [
+        'Avid',
+        'Curious',
+        'Eager',
+        'Happy',
+        'Keen',
+        'Quiet',
+        'Swift',
+        'Vibrant',
+      ];
+      const nouns = [
+        'Reader',
+        'Explorer',
+        'Thinker',
+        'Voyager',
+        'Seeker',
+        'Scholar',
+        'Nomad',
+        'Mind',
+      ];
+
+      // 완전 랜덤 조합으로 이름 생성
+      const randomNumber = crypto.randomInt(100, 999);
+      const randomAdj = adjectives[crypto.randomInt(0, adjectives.length)];
+      const randomNoun = nouns[crypto.randomInt(0, nouns.length)];
+
+      // 형식: Adjective + Noun + Number (예: HappyReader123)
+      return `${randomAdj}${randomNoun}${randomNumber}`;
+    }
+
+    // 3. 이메일에서 추출한 사용자 이름 반환
+    return emailUsername;
   }
 }
