@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.8.0](https://github.com/SamikBeach/backend_v2/compare/1.7.0...1.8.0) (2025-05-23)
+
+
+### Features
+
+* Apple OAuth 인증 로직 개선 및 JWT 토큰 처리 추가 ([42a4cb1](https://github.com/SamikBeach/backend_v2/commit/42a4cb1aeb1e251030722ade354915493cb4fbb5))
+
 # [1.7.0](https://github.com/SamikBeach/backend_v2/compare/1.6.1...1.7.0) (2025-05-23)
 
 
