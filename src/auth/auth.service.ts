@@ -329,7 +329,30 @@ export class AuthService {
       throw new UnauthorizedException('Invalid token payload');
     }
 
-    const user = await this.userService.findByEmail(payload.email);
+    let user: User | null = null;
+
+    // 소셜 로그인 사용자의 경우 providerId로 조회 (더 정확함)
+    if (
+      payload.provider &&
+      payload.provider !== AuthProvider.LOCAL &&
+      payload.providerId
+    ) {
+      user = await this.userService.findByProviderId(
+        payload.providerId,
+        payload.provider,
+      );
+
+      if (!user) {
+        this.logger.warn(
+          `JWT 검증: providerId로 사용자를 찾을 수 없음 - providerId: ${payload.providerId}, provider: ${payload.provider}`,
+        );
+        // providerId로 찾지 못한 경우 fallback으로 사용자 ID로 조회
+        user = await this.userService.findOne(payload.sub);
+      }
+    } else {
+      // 로컬 사용자 또는 provider 정보가 없는 경우 사용자 ID로 조회
+      user = await this.userService.findOne(payload.sub);
+    }
 
     if (!user) {
       throw new UnauthorizedException('User not found');
@@ -376,11 +399,21 @@ export class AuthService {
 
       if (user) {
         this.logger.log(
-          `✅ 기존 사용자 발견: userId=${user.id}, 기존 이메일=${user.email}, 새 이메일=${email}`,
+          `✅ 기존 사용자 발견: userId=${user.id}, 기존 이메일=${user.email}, 새 이메일=${email}, provider=${user.provider}, providerId=${user.providerId}`,
         );
 
+        // 🚨 중요: 반환되는 사용자의 provider가 요청한 provider와 일치하는지 확인
+        if (user.provider !== authProvider) {
+          this.logger.error(
+            `🚨 심각한 오류: 요청한 provider(${authProvider})와 DB의 provider(${user.provider})가 다릅니다!`,
+          );
+          throw new BadRequestException(
+            '인증 제공자 정보가 일치하지 않습니다. 관리자에게 문의하세요.',
+          );
+        }
+
         this.logger.log(
-          `🎉 기존 사용자 로그인 성공: userId=${user.id}, providerId=${user.providerId}`,
+          `🎉 기존 사용자 로그인 성공: userId=${user.id}, provider=${user.provider}, providerId=${user.providerId}`,
         );
         return user;
       }
@@ -523,6 +556,8 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
+      provider: user.provider,
+      providerId: user.providerId,
     };
 
     // 액세스 토큰 생성 (짧은 유효기간)
