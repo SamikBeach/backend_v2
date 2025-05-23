@@ -2239,7 +2239,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/passport-naver@npm:^1":
+"@types/passport-naver@npm:^1.0.4":
   version: 1.0.4
   resolution: "@types/passport-naver@npm:1.0.4"
   dependencies:
@@ -2901,16 +2901,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"apple-signin-auth@npm:^2.0.0":
-  version: 2.0.0
-  resolution: "apple-signin-auth@npm:2.0.0"
-  dependencies:
-    jsonwebtoken: "npm:^9.0.0"
-    node-rsa: "npm:^1.1.1"
-  checksum: 10c0/819238a41eb132eab32905ca7c7d87261fbdd4f34ada145800a5115400fe28c45aa6951751a4406bcde11f1e1125b214371d8fe340d2c68890256c1ebaf41916
-  languageName: node
-  linkType: hard
-
 "aproba@npm:^1.0.3 || ^2.0.0, aproba@npm:^2.0.0":
   version: 2.0.0
   resolution: "aproba@npm:2.0.0"
@@ -2974,15 +2964,6 @@ __metadata:
   version: 2.0.6
   resolution: "asap@npm:2.0.6"
   checksum: 10c0/c6d5e39fe1f15e4b87677460bd66b66050cd14c772269cee6688824c1410a08ab20254bb6784f9afb75af9144a9f9a7692d49547f4d19d715aeb7c0318f3136d
-  languageName: node
-  linkType: hard
-
-"asn1@npm:^0.2.4":
-  version: 0.2.6
-  resolution: "asn1@npm:0.2.6"
-  dependencies:
-    safer-buffer: "npm:~2.1.0"
-  checksum: 10c0/00c8a06c37e548762306bcb1488388d2f76c74c36f70c803f0c081a01d3bdf26090fc088cd812afc5e56a6d49e33765d451a5f8a68ab9c2b087eba65d2e980e0
   languageName: node
   linkType: hard
 
@@ -3066,10 +3047,9 @@ __metadata:
     "@types/passport-jwt": "npm:^4.0.1"
     "@types/passport-kakao": "npm:^1"
     "@types/passport-local": "npm:^1.0.38"
-    "@types/passport-naver": "npm:^1"
+    "@types/passport-naver": "npm:^1.0.4"
     "@typescript-eslint/eslint-plugin": "npm:^8.29.0"
     "@typescript-eslint/parser": "npm:^8.29.0"
-    apple-signin-auth: "npm:^2.0.0"
     axios: "npm:^1.9.0"
     bcrypt: "npm:^5.1.1"
     cache-manager: "npm:^6.4.3"
@@ -8010,15 +7990,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"node-rsa@npm:^1.1.1":
-  version: 1.1.1
-  resolution: "node-rsa@npm:1.1.1"
-  dependencies:
-    asn1: "npm:^0.2.4"
-  checksum: 10c0/af3b6534844dfeaa8290a7bc20d5e4d1a134f05d456725e56d75b7661d4d63cd63914ce335ee8889adc2458112b996d4ba8a83ba105bde744a26e61d9160f639
-  languageName: node
-  linkType: hard
-
 "nodemailer@npm:6.9.16":
   version: 6.9.16
   resolution: "nodemailer@npm:6.9.16"
@@ -9698,7 +9669,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"safer-buffer@npm:>= 2.1.2 < 3, safer-buffer@npm:>= 2.1.2 < 3.0.0, safer-buffer@npm:~2.1.0":
+"safer-buffer@npm:>= 2.1.2 < 3, safer-buffer@npm:>= 2.1.2 < 3.0.0":
   version: 2.1.2
   resolution: "safer-buffer@npm:2.1.2"
   checksum: 10c0/7e3c8b2e88a1841c9671094bbaeebd94448111dd90a81a1f606f3f67708a6ec57763b3b47f06da09fc6054193e0e6709e77325415dc8422b04497a8070fa02d4
