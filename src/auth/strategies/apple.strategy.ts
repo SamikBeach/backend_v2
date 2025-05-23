@@ -13,17 +13,37 @@ export class AppleStrategy extends PassportStrategy(Strategy, 'apple') {
     private readonly configService: ConfigService,
     private readonly authService: AuthService,
   ) {
+    const appleClientId = configService.get<string>('APPLE_CLIENT_ID');
+    const appleTeamId = configService.get<string>('APPLE_TEAM_ID');
+    const appleKeyId = configService.get<string>('APPLE_KEY_ID');
+    const applePrivateKeyRaw = configService.get<string>('APPLE_PRIVATE_KEY');
+    const appleCallbackUrl = configService.get<string>('APPLE_CALLBACK_URL');
+    const privateKeyStringForStrategy = applePrivateKeyRaw?.replace(
+      /\\n/g,
+      '\n',
+    );
+
     super({
-      clientID: configService.get<string>('APPLE_CLIENT_ID'), // 앱의 번들 ID 또는 서비스 ID
-      teamID: configService.get<string>('APPLE_TEAM_ID'), // Apple 개발자 팀 ID
-      keyID: configService.get<string>('APPLE_KEY_ID'), // p8 파일의 키 ID
-      privateKeyString: configService
-        .get<string>('APPLE_PRIVATE_KEY')
-        ?.replace(/\\n/g, '\n'), // p8 파일의 내용
-      callbackURL: configService.get<string>('APPLE_CALLBACK_URL'), // 예: https://yourdomain.com/auth/apple/callback
-      scope: ['name', 'email'], // 이름과 이메일 요청
-      passReqToCallback: false, // 검증 콜백에서 요청 객체에 접근해야 하는 경우 true로 설정
+      clientID: appleClientId,
+      teamID: appleTeamId,
+      keyID: appleKeyId,
+      privateKeyString: privateKeyStringForStrategy,
+      callbackURL: appleCallbackUrl,
+      scope: ['name', 'email'],
+      passReqToCallback: false,
     });
+
+    this.logger.debug('AppleStrategy Initialized with configuration:');
+    this.logger.debug(`APPLE_CLIENT_ID: ${appleClientId}`);
+    this.logger.debug(`APPLE_TEAM_ID: ${appleTeamId}`);
+    this.logger.debug(`APPLE_KEY_ID: ${appleKeyId}`);
+    this.logger.debug(
+      `APPLE_PRIVATE_KEY (raw from env): '${applePrivateKeyRaw}'`,
+    );
+    this.logger.debug(
+      `privateKeyString for strategy (after replace): '${privateKeyStringForStrategy}'`,
+    );
+    this.logger.debug(`APPLE_CALLBACK_URL: ${appleCallbackUrl}`);
   }
 
   async validate(
