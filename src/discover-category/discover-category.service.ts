@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
 import { DiscoverCategory } from './entities/discover-category.entity';
@@ -96,8 +101,65 @@ export class DiscoverCategoryService {
    * 발견하기 카테고리 삭제 (실제 삭제)
    */
   async removeCategory(id: number): Promise<void> {
-    const category = await this.findCategoryById(id);
-    await this.discoverCategoryRepository.remove(category);
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      // 카테고리 존재 확인
+      const category = await queryRunner.manager.findOne(DiscoverCategory, {
+        where: { id },
+        relations: ['subCategories', 'books'],
+      });
+
+      if (!category) {
+        throw new NotFoundException(
+          `발견하기 카테고리 ID ${id}를 찾을 수 없습니다.`,
+        );
+      }
+
+      // 연결된 서브카테고리가 있는 경우 먼저 삭제
+      if (category.subCategories && category.subCategories.length > 0) {
+        for (const subCategory of category.subCategories) {
+          // 각 서브카테고리에 연결된 책이 있는지 확인하고 연결 해제
+          const subCategoryBooks = await queryRunner.manager.count('book', {
+            where: { discoverSubCategoryId: subCategory.id },
+          });
+
+          if (subCategoryBooks > 0) {
+            // 서브카테고리에 연결된 책들의 discoverSubCategoryId를 null로 설정
+            await queryRunner.manager.update(
+              'book',
+              { discoverSubCategoryId: subCategory.id },
+              { discoverSubCategoryId: null },
+            );
+          }
+
+          await queryRunner.manager.remove(DiscoverSubCategory, subCategory);
+        }
+      }
+
+      // 연결된 책이 있는 경우 카테고리 연결 해제
+      if (category.books && category.books.length > 0) {
+        // 카테고리에 연결된 책들의 discoverCategoryId를 null로 설정
+        await queryRunner.manager.update(
+          'book',
+          { discoverCategoryId: id },
+          { discoverCategoryId: null },
+        );
+      }
+
+      // 카테고리 삭제
+      await queryRunner.manager.remove(DiscoverCategory, category);
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   /**
@@ -151,8 +213,47 @@ export class DiscoverCategoryService {
    * 발견하기 서브카테고리 삭제 (실제 삭제)
    */
   async removeSubCategory(id: number): Promise<void> {
-    const subCategory = await this.findSubCategoryById(id);
-    await this.discoverSubCategoryRepository.remove(subCategory);
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      // 서브카테고리 존재 확인
+      const subCategory = await queryRunner.manager.findOne(
+        DiscoverSubCategory,
+        {
+          where: { id },
+          relations: ['books'],
+        },
+      );
+
+      if (!subCategory) {
+        throw new NotFoundException(
+          `발견하기 서브카테고리 ID ${id}를 찾을 수 없습니다.`,
+        );
+      }
+
+      // 연결된 책이 있는 경우 연결 해제
+      if (subCategory.books && subCategory.books.length > 0) {
+        // 서브카테고리에 연결된 책들의 discoverSubCategoryId를 null로 설정
+        await queryRunner.manager.update(
+          'book',
+          { discoverSubCategoryId: id },
+          { discoverSubCategoryId: null },
+        );
+      }
+
+      // 서브카테고리 삭제
+      await queryRunner.manager.remove(DiscoverSubCategory, subCategory);
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   /**
