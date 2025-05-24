@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.16.0](https://github.com/SamikBeach/backend_v2/compare/1.15.1...1.16.0) (2025-05-24)
+
+
+### Features
+
+* User, Review, Comment 엔티티에 soft delete 적용 ([a938858](https://github.com/SamikBeach/backend_v2/commit/a9388586fac3b8e85bf639eb84bfdc1afcd45936))
+
 ## [1.15.1](https://github.com/SamikBeach/backend_v2/compare/1.15.0...1.15.1) (2025-05-23)
 
 
