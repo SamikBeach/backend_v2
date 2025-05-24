@@ -1,5 +1,17 @@
 # 🚦 CHANGELOG
 
+# [1.17.0](https://github.com/SamikBeach/backend_v2/compare/1.16.0...1.17.0) (2025-05-24)
+
+
+### Features
+
+* discover 카테고리 관리 기능 개선 및 순서 변경 API 추가 ([a42cc3f](https://github.com/SamikBeach/backend_v2/commit/a42cc3f10df156ae5b25e92387ce0814773909ea))
+
+
+### BREAKING CHANGES
+
+* 카테고리 조회 API가 이제 비활성 카테고리도 포함하여 반환
+
 # [1.16.0](https://github.com/SamikBeach/backend_v2/compare/1.15.1...1.16.0) (2025-05-24)
 
 
