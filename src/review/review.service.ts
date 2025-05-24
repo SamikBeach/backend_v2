@@ -521,14 +521,14 @@ export class ReviewService {
         throw new ForbiddenException('자신의 리뷰만 삭제할 수 있습니다.');
       }
 
-      // 이미지 파일 삭제
-      for (const image of review.images) {
-        try {
-          await this.fileService.deleteFile(image.url);
-        } catch (error) {
-          this.logger.warn(`이미지 삭제 실패: ${image.url} - ${error.message}`);
-        }
-      }
+      // 이미지 파일은 유지 (복구 가능성을 위해)
+      // for (const image of review.images) {
+      //   try {
+      //     await this.fileService.deleteFile(image.url);
+      //   } catch (error) {
+      //     this.logger.warn(`이미지 삭제 실패: ${image.url} - ${error.message}`);
+      //   }
+      // }
 
       // 연결된 책들의 리뷰 수 감소
       if (review.books && review.books.length > 0) {
@@ -544,12 +544,13 @@ export class ReviewService {
         }
       }
 
-      // review-book 관계 명시적 삭제
-      await this.reviewBookRepository.delete({ reviewId: id });
-      this.logger.log(`리뷰 ID ${id}와 연결된 책 관계 삭제 완료`);
+      // review-book 관계는 유지 (soft delete된 리뷰와의 관계 추적을 위해)
+      // await this.reviewBookRepository.delete({ reviewId: id });
+      // this.logger.log(`리뷰 ID ${id}와 연결된 책 관계 삭제 완료`);
 
-      // 리뷰 삭제
-      await this.reviewRepository.remove(review);
+      // 리뷰 soft delete
+      await this.reviewRepository.softRemove(review);
+      this.logger.log(`리뷰 ID ${id} soft delete 완료`);
     } catch (error) {
       this.logger.error(`리뷰 삭제 중 오류: ${error.message}`);
       throw error;
