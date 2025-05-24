@@ -2116,16 +2116,16 @@ export class UserService {
     }
 
     try {
-      // 사용자 프로필 이미지 삭제
-      if (user.profileImage) {
-        await this.fileService.deleteFile(user.profileImage);
-      }
+      // 사용자 프로필 이미지는 유지 (복구 가능성을 위해)
+      // if (user.profileImage) {
+      //   await this.fileService.deleteFile(user.profileImage);
+      // }
 
-      // 사용자 계정 삭제
-      await this.userRepository.remove(user);
+      // 사용자 계정 soft delete
+      await this.userRepository.softRemove(user);
 
       this.logger.log(
-        `사용자 계정 삭제 완료: ID=${userId}, 이메일=${user.email}`,
+        `사용자 계정 soft delete 완료: ID=${userId}, 이메일=${user.email}`,
       );
     } catch (error) {
       this.logger.error(
