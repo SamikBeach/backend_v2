@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   ParseIntPipe,
+  Put,
 } from '@nestjs/common';
 import { DiscoverCategoryService } from './discover-category.service';
 import { CreateDiscoverCategoryDto } from './dto/create-discover-category.dto';
@@ -16,6 +17,10 @@ import {
   UpdateDiscoverSubCategoryDto,
   DiscoverSubCategoryResponseDto,
 } from './dto/discover-subcategory.dto';
+import {
+  ReorderCategoriesDto,
+  ReorderSubCategoriesDto,
+} from './dto/reorder-categories.dto';
 import { DiscoverCategory } from './entities/discover-category.entity';
 import { DiscoverSubCategory } from './entities/discover-subcategory.entity';
 import { IsPublic } from '../auth/decorators/is-public.decorator';
@@ -80,6 +85,16 @@ export class DiscoverCategoryController {
     return this.discoverCategoryService.removeCategory(id);
   }
 
+  // ======= 카테고리 순서 변경 엔드포인트 =======
+
+  @Put('reorder')
+  async reorderCategories(
+    @Body() reorderCategoriesDto: ReorderCategoriesDto,
+  ): Promise<{ message: string }> {
+    await this.discoverCategoryService.reorderCategories(reorderCategoriesDto);
+    return { message: '카테고리 순서가 성공적으로 변경되었습니다.' };
+  }
+
   // ======= 서브카테고리 관련 엔드포인트 =======
 
   @IsPublic()
@@ -123,6 +138,18 @@ export class DiscoverCategoryController {
     @Param('id', ParseIntPipe) id: number,
   ): Promise<void> {
     return this.discoverCategoryService.removeSubCategory(id);
+  }
+
+  // ======= 서브카테고리 순서 변경 엔드포인트 =======
+
+  @Put('subcategories/reorder')
+  async reorderSubCategories(
+    @Body() reorderSubCategoriesDto: ReorderSubCategoriesDto,
+  ): Promise<{ message: string }> {
+    await this.discoverCategoryService.reorderSubCategories(
+      reorderSubCategoriesDto,
+    );
+    return { message: '서브카테고리 순서가 성공적으로 변경되었습니다.' };
   }
 
   // ======= 통합 데이터 조회 API =======

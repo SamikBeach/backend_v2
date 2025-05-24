@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsNotEmpty, IsInt, Min } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNotEmpty,
+  IsInt,
+  Min,
+  IsBoolean,
+} from 'class-validator';
 
 export class CreateDiscoverSubCategoryDto {
   @IsString()
@@ -37,6 +44,10 @@ export class UpdateDiscoverSubCategoryDto {
   @IsInt()
   @Min(1)
   discoverCategoryId?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
 }
 
 export class DiscoverSubCategoryResponseDto {
