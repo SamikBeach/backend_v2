@@ -1,6 +1,11 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { DiscoverCategory } from './entities/discover-category.entity';
 import { DiscoverSubCategory } from './entities/discover-subcategory.entity';
 import { CreateDiscoverCategoryDto } from './dto/create-discover-category.dto';
@@ -10,6 +15,10 @@ import {
   UpdateDiscoverSubCategoryDto,
   DiscoverSubCategoryResponseDto,
 } from './dto/discover-subcategory.dto';
+import {
+  ReorderCategoriesDto,
+  ReorderSubCategoriesDto,
+} from './dto/reorder-categories.dto';
 
 // DiscoverCategoryResponseDto 타입 정의
 interface DiscoverCategoryResponseDto {
@@ -33,25 +42,25 @@ export class DiscoverCategoryService {
     private readonly discoverCategoryRepository: Repository<DiscoverCategory>,
     @InjectRepository(DiscoverSubCategory)
     private readonly discoverSubCategoryRepository: Repository<DiscoverSubCategory>,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
-   * 모든 발견하기 카테고리 조회
+   * 모든 발견하기 카테고리 조회 (활성/비활성 모두 포함)
    */
   async findAllCategories(): Promise<DiscoverCategory[]> {
     return this.discoverCategoryRepository.find({
-      where: { isActive: true },
       order: { displayOrder: 'ASC', id: 'ASC' },
       relations: ['subCategories'],
     });
   }
 
   /**
-   * 특정 발견하기 카테고리 조회
+   * 특정 발견하기 카테고리 조회 (활성/비활성 모두 포함)
    */
   async findCategoryById(id: number): Promise<DiscoverCategory> {
     const category = await this.discoverCategoryRepository.findOne({
-      where: { id, isActive: true },
+      where: { id },
       relations: ['subCategories'],
     });
 
@@ -89,12 +98,68 @@ export class DiscoverCategoryService {
   }
 
   /**
-   * 발견하기 카테고리 삭제 (실제 삭제 대신 isActive = false로 변경)
+   * 발견하기 카테고리 삭제 (실제 삭제)
    */
   async removeCategory(id: number): Promise<void> {
-    const category = await this.findCategoryById(id);
-    category.isActive = false;
-    await this.discoverCategoryRepository.save(category);
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      // 카테고리 존재 확인
+      const category = await queryRunner.manager.findOne(DiscoverCategory, {
+        where: { id },
+        relations: ['subCategories', 'books'],
+      });
+
+      if (!category) {
+        throw new NotFoundException(
+          `발견하기 카테고리 ID ${id}를 찾을 수 없습니다.`,
+        );
+      }
+
+      // 연결된 서브카테고리가 있는 경우 먼저 삭제
+      if (category.subCategories && category.subCategories.length > 0) {
+        for (const subCategory of category.subCategories) {
+          // 각 서브카테고리에 연결된 책이 있는지 확인하고 연결 해제
+          const subCategoryBooks = await queryRunner.manager.count('book', {
+            where: { discoverSubCategoryId: subCategory.id },
+          });
+
+          if (subCategoryBooks > 0) {
+            // 서브카테고리에 연결된 책들의 discoverSubCategoryId를 null로 설정
+            await queryRunner.manager.update(
+              'book',
+              { discoverSubCategoryId: subCategory.id },
+              { discoverSubCategoryId: null },
+            );
+          }
+
+          await queryRunner.manager.remove(DiscoverSubCategory, subCategory);
+        }
+      }
+
+      // 연결된 책이 있는 경우 카테고리 연결 해제
+      if (category.books && category.books.length > 0) {
+        // 카테고리에 연결된 책들의 discoverCategoryId를 null로 설정
+        await queryRunner.manager.update(
+          'book',
+          { discoverCategoryId: id },
+          { discoverCategoryId: null },
+        );
+      }
+
+      // 카테고리 삭제
+      await queryRunner.manager.remove(DiscoverCategory, category);
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   /**
@@ -145,20 +210,58 @@ export class DiscoverCategoryService {
   }
 
   /**
-   * 발견하기 서브카테고리 삭제 (실제 삭제 대신 isActive = false로 변경)
+   * 발견하기 서브카테고리 삭제 (실제 삭제)
    */
   async removeSubCategory(id: number): Promise<void> {
-    const subCategory = await this.findSubCategoryById(id);
-    subCategory.isActive = false;
-    await this.discoverSubCategoryRepository.save(subCategory);
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      // 서브카테고리 존재 확인
+      const subCategory = await queryRunner.manager.findOne(
+        DiscoverSubCategory,
+        {
+          where: { id },
+          relations: ['books'],
+        },
+      );
+
+      if (!subCategory) {
+        throw new NotFoundException(
+          `발견하기 서브카테고리 ID ${id}를 찾을 수 없습니다.`,
+        );
+      }
+
+      // 연결된 책이 있는 경우 연결 해제
+      if (subCategory.books && subCategory.books.length > 0) {
+        // 서브카테고리에 연결된 책들의 discoverSubCategoryId를 null로 설정
+        await queryRunner.manager.update(
+          'book',
+          { discoverSubCategoryId: id },
+          { discoverSubCategoryId: null },
+        );
+      }
+
+      // 서브카테고리 삭제
+      await queryRunner.manager.remove(DiscoverSubCategory, subCategory);
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   /**
-   * 특정 발견하기 서브카테고리 조회
+   * 특정 발견하기 서브카테고리 조회 (활성/비활성 모두 포함)
    */
   async findSubCategoryById(id: number): Promise<DiscoverSubCategory> {
     const subCategory = await this.discoverSubCategoryRepository.findOne({
-      where: { id, isActive: true },
+      where: { id },
       relations: ['discoverCategory'],
     });
 
@@ -172,7 +275,7 @@ export class DiscoverCategoryService {
   }
 
   /**
-   * 카테고리별 서브카테고리 조회
+   * 카테고리별 서브카테고리 조회 (활성/비활성 모두 포함)
    */
   async findSubCategoriesByCategory(
     categoryId: number,
@@ -183,7 +286,6 @@ export class DiscoverCategoryService {
     return this.discoverSubCategoryRepository.find({
       where: {
         discoverCategoryId: categoryId,
-        isActive: true,
       },
       relations: ['discoverCategory'],
       order: { displayOrder: 'ASC', id: 'ASC' },
@@ -191,12 +293,11 @@ export class DiscoverCategoryService {
   }
 
   /**
-   * 모든 발견하기 데이터(카테고리와 서브카테고리)를 조회하고 연결된 책도 함께 가져옵니다.
+   * 모든 발견하기 데이터(카테고리와 서브카테고리)를 조회하고 연결된 책도 함께 가져옵니다. (활성/비활성 모두 포함)
    */
   async findAllDiscoverData(): Promise<DiscoverCategoryResponseDto[]> {
-    // 활성화된 모든 카테고리 조회
+    // 모든 카테고리 조회 (활성/비활성 모두)
     const categories = await this.discoverCategoryRepository.find({
-      where: { isActive: true },
       relations: ['subCategories', 'books'],
       order: { displayOrder: 'ASC', id: 'ASC' },
     });
@@ -204,7 +305,6 @@ export class DiscoverCategoryService {
     // 응답 형식에 맞게 변환
     return categories.map((category) => {
       const subCategories = category.subCategories
-        .filter((subCategory) => subCategory.isActive)
         .sort((a, b) => a.displayOrder - b.displayOrder)
         .map((subCategory) => {
           // 해당 서브카테고리에 속한 책 찾기
@@ -239,5 +339,125 @@ export class DiscoverCategoryService {
         bookCount: category.books.length,
       };
     });
+  }
+
+  /**
+   * 카테고리 순서 변경 (배치 업데이트로 성능 개선)
+   */
+  async reorderCategories(
+    reorderCategoriesDto: ReorderCategoriesDto,
+  ): Promise<void> {
+    const { categories } = reorderCategoriesDto;
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      // 모든 카테고리 ID 검증
+      const categoryIds = categories.map((c) => c.id);
+      const existingCategories = await queryRunner.manager.find(
+        DiscoverCategory,
+        {
+          where: { id: In(categoryIds) },
+          select: ['id'],
+        },
+      );
+
+      if (existingCategories.length !== categoryIds.length) {
+        const foundIds = existingCategories.map((c) => c.id);
+        const missingIds = categoryIds.filter((id) => !foundIds.includes(id));
+        throw new NotFoundException(
+          `다음 카테고리 ID들을 찾을 수 없습니다: ${missingIds.join(', ')}`,
+        );
+      }
+
+      // 배치 업데이트 실행
+      for (const categoryOrder of categories) {
+        await queryRunner.manager.update(
+          DiscoverCategory,
+          { id: categoryOrder.id },
+          { displayOrder: categoryOrder.displayOrder },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+      this.logger.log(`카테고리 순서 변경 완료: ${categories.length}개 항목`);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`카테고리 순서 변경 실패: ${error.message}`);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * 서브카테고리 순서 변경 (배치 업데이트로 성능 개선)
+   */
+  async reorderSubCategories(
+    reorderSubCategoriesDto: ReorderSubCategoriesDto,
+  ): Promise<void> {
+    const { categoryId, subCategories } = reorderSubCategoriesDto;
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    try {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      // 카테고리 존재 확인
+      const category = await queryRunner.manager.findOne(DiscoverCategory, {
+        where: { id: categoryId },
+      });
+
+      if (!category) {
+        throw new NotFoundException(
+          `카테고리 ID ${categoryId}를 찾을 수 없습니다.`,
+        );
+      }
+
+      // 모든 서브카테고리 ID 검증 및 카테고리 소속 확인
+      const subCategoryIds = subCategories.map((sc) => sc.id);
+      const existingSubCategories = await queryRunner.manager.find(
+        DiscoverSubCategory,
+        {
+          where: {
+            id: In(subCategoryIds),
+            discoverCategoryId: categoryId,
+          },
+          select: ['id', 'discoverCategoryId'],
+        },
+      );
+
+      if (existingSubCategories.length !== subCategoryIds.length) {
+        const foundIds = existingSubCategories.map((sc) => sc.id);
+        const missingIds = subCategoryIds.filter(
+          (id) => !foundIds.includes(id),
+        );
+        throw new NotFoundException(
+          `다음 서브카테고리 ID들을 카테고리 ${categoryId}에서 찾을 수 없습니다: ${missingIds.join(', ')}`,
+        );
+      }
+
+      // 배치 업데이트 실행
+      for (const subCategoryOrder of subCategories) {
+        await queryRunner.manager.update(
+          DiscoverSubCategory,
+          { id: subCategoryOrder.id, discoverCategoryId: categoryId },
+          { displayOrder: subCategoryOrder.displayOrder },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+      this.logger.log(
+        `서브카테고리 순서 변경 완료: 카테고리 ${categoryId}, ${subCategories.length}개 항목`,
+      );
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`서브카테고리 순서 변경 실패: ${error.message}`);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }

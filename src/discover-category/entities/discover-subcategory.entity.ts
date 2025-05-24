@@ -22,7 +22,7 @@ export class DiscoverSubCategory {
   description: string; // 서브카테고리 설명
 
   @Column({ default: 0 })
-  displayOrder: number; // 해당 카테고리 내에서의 표시 순서
+  displayOrder: number; // 해당 카테고리 내에서의 표시 순서 (0부터 시작, 작을수록 먼저 표시)
 
   @Column({ default: true })
   isActive: boolean; // 활성 상태 여부
