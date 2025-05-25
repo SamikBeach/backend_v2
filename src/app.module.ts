@@ -45,6 +45,7 @@ import { FeedbackModule } from './feedback/feedback.module';
 import { Feedback } from './feedback/entities/feedback.entity';
 import { CacheModule } from '@nestjs/cache-manager';
 import { CacheConfigService } from './common/services/cache-config.service';
+import { YouTubeModule } from './youtube/youtube.module';
 
 @Module({
   imports: [
@@ -114,6 +115,7 @@ import { CacheConfigService } from './common/services/cache-config.service';
     ReadingStatusModule,
     StatisticsModule,
     FeedbackModule,
+    YouTubeModule,
   ],
   providers: [CacheConfigService],
 })

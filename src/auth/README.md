@@ -14,6 +14,9 @@ NAVER_CALLBACK_URL=http://localhost:3000/api/auth/naver/callback
 KAKAO_CLIENT_ID=your_kakao_client_id
 KAKAO_CLIENT_SECRET=your_kakao_client_secret
 KAKAO_CALLBACK_URL=http://localhost:3000/api/auth/kakao/callback
+
+# YouTube API
+YOUTUBE_API_KEY=your_youtube_api_key
 ```
 
 ## 네이버 개발자 센터 설정
@@ -80,3 +83,35 @@ KAKAO_CALLBACK_URL=http://localhost:3000/api/auth/kakao/callback
 ```
 
 로그인 성공 시 `/auth/social-callback` 경로로 리다이렉트되며, 쿼리 파라미터로 액세스 토큰과 리프레시 토큰이 전달됩니다.
+
+## YouTube API 설정
+
+### Google Cloud Console 설정
+
+1. [Google Cloud Console](https://console.cloud.google.com/)에 접속합니다.
+2. 새 프로젝트를 생성하거나 기존 프로젝트를 선택합니다.
+3. API 및 서비스 > 라이브러리로 이동합니다.
+4. "YouTube Data API v3"를 검색하여 활성화합니다.
+5. API 및 서비스 > 사용자 인증 정보로 이동합니다.
+6. "사용자 인증 정보 만들기" > "API 키"를 선택합니다.
+7. 생성된 API 키를 복사하여 환경 변수 `YOUTUBE_API_KEY`에 설정합니다.
+
+### API 키 제한 설정 (권장)
+
+보안을 위해 API 키에 제한을 설정하는 것이 좋습니다:
+
+1. 생성된 API 키를 클릭하여 편집 페이지로 이동합니다.
+2. "API 제한사항"에서 "키 제한"을 선택합니다.
+3. "YouTube Data API v3"만 선택합니다.
+4. 필요에 따라 IP 주소나 HTTP 리퍼러 제한을 설정합니다.
+
+### 사용 가능한 엔드포인트
+
+YouTube API가 설정되면 다음 엔드포인트를 사용할 수 있습니다:
+
+- `GET /api/book/:id/videos` - 책 ID로 관련 YouTube 영상 조회
+- `GET /api/book/isbn/:isbn/videos` - ISBN으로 관련 YouTube 영상 조회
+
+### 할당량 관리
+
+YouTube Data API v3는 일일 할당량이 있습니다 (기본 10,000 단위/일). 할당량 초과 시 API 호출이 실패할 수 있으므로 캐시를 활용하여 API 호출을 최소화합니다.

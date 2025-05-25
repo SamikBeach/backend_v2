@@ -37,6 +37,7 @@
     "cache-manager": "^6.4.3",
     "cache-manager-redis-store": "^3.0.1",
     "date-fns": "^4.1.0",
+    "googleapis": "^149.0.0",
     "jsonwebtoken": "^9.0.2",
     "keyv": "^5.3.3",
     "lodash": "^4.17.21",
