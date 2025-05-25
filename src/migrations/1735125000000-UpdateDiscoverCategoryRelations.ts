@@ -132,6 +132,29 @@ export class UpdateDiscoverCategoryRelations1735125000000
         WHERE discover_category_id IS NOT NULL
       `);
 
+      // 외래 키 제약 조건 제거 (컬럼 삭제 전에 필요)
+      try {
+        const foreignKeys = await queryRunner.query(`
+          SELECT CONSTRAINT_NAME 
+          FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+          WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'book' 
+          AND COLUMN_NAME = 'discover_category_id' 
+          AND REFERENCED_TABLE_NAME IS NOT NULL
+        `);
+
+        for (const fk of foreignKeys) {
+          await queryRunner.query(
+            `ALTER TABLE book DROP FOREIGN KEY ${fk.CONSTRAINT_NAME}`,
+          );
+        }
+      } catch (error) {
+        console.log(
+          '외래 키 제약 조건 제거 중 오류 (무시 가능):',
+          error.message,
+        );
+      }
+
       // 기존 컬럼 삭제
       await queryRunner.dropColumn('book', 'discover_category_id');
     }
@@ -148,6 +171,29 @@ export class UpdateDiscoverCategoryRelations1735125000000
         SET bdc.discover_sub_category_id = b.discover_sub_category_id
         WHERE b.discover_sub_category_id IS NOT NULL
       `);
+
+      // 외래 키 제약 조건 제거 (컬럼 삭제 전에 필요)
+      try {
+        const foreignKeys = await queryRunner.query(`
+          SELECT CONSTRAINT_NAME 
+          FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+          WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'book' 
+          AND COLUMN_NAME = 'discover_sub_category_id' 
+          AND REFERENCED_TABLE_NAME IS NOT NULL
+        `);
+
+        for (const fk of foreignKeys) {
+          await queryRunner.query(
+            `ALTER TABLE book DROP FOREIGN KEY ${fk.CONSTRAINT_NAME}`,
+          );
+        }
+      } catch (error) {
+        console.log(
+          '외래 키 제약 조건 제거 중 오류 (무시 가능):',
+          error.message,
+        );
+      }
 
       // 기존 컬럼 삭제
       await queryRunner.dropColumn('book', 'discover_sub_category_id');
