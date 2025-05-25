@@ -9,9 +9,8 @@ import {
 } from 'typeorm';
 import { Category } from '../../category/entities/category.entity';
 import { SubCategory } from '../../category/entities/subcategory.entity';
-import { DiscoverCategory } from '../../discover-category/entities/discover-category.entity';
-import { DiscoverSubCategory } from '../../discover-category/entities/discover-subcategory.entity';
 import { ReadingStatus } from '../../reading-status/entities/reading-status.entity';
+import { BookDiscoverCategory } from './book-discover-category.entity';
 
 @Entity('book')
 export class Book {
@@ -72,27 +71,12 @@ export class Book {
   @ManyToOne(() => SubCategory, (subcategory) => subcategory.books)
   subcategory: SubCategory;
 
-  // Discover Category 관계
-  @ManyToOne(
-    () => DiscoverCategory,
-    (discoverCategory) => discoverCategory.books,
+  // Discover Category 관계 - 중간 테이블을 통한 다대다 관계
+  @OneToMany(
+    () => BookDiscoverCategory,
+    (bookDiscoverCategory) => bookDiscoverCategory.book,
   )
-  discoverCategory: DiscoverCategory;
-
-  // discoverCategoryId 컬럼 추가
-  @Column({ nullable: true })
-  discoverCategoryId: number;
-
-  // Discover SubCategory 관계
-  @ManyToOne(
-    () => DiscoverSubCategory,
-    (discoverSubCategory) => discoverSubCategory.books,
-  )
-  discoverSubCategory: DiscoverSubCategory;
-
-  // discoverSubCategoryId 컬럼 추가
-  @Column({ nullable: true })
-  discoverSubCategoryId: number;
+  bookDiscoverCategories: BookDiscoverCategory[];
 
   @Column({ default: false })
   isFeatured: boolean; // 추천 도서 여부

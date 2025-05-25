@@ -8,6 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Book } from './entities/book.entity';
+import { BookDiscoverCategory } from './entities/book-discover-category.entity';
 import {
   CreateBookDto,
   UpdateBookDto,
@@ -45,6 +46,8 @@ export class BookService {
   constructor(
     @InjectRepository(Book)
     private readonly bookRepository: Repository<Book>,
+    @InjectRepository(BookDiscoverCategory)
+    private readonly bookDiscoverCategoryRepository: Repository<BookDiscoverCategory>,
     private readonly aladinService: AladinService,
     private readonly categoryService: CategoryService,
     private readonly subCategoryService: SubCategoryService,
@@ -539,8 +542,18 @@ export class BookService {
       .createQueryBuilder('book')
       .leftJoinAndSelect('book.category', 'category')
       .leftJoinAndSelect('book.subcategory', 'subcategory')
-      .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
-      .leftJoinAndSelect('book.discoverSubCategory', 'discoverSubCategory')
+      .leftJoinAndSelect(
+        'book.bookDiscoverCategories',
+        'bookDiscoverCategories',
+      )
+      .leftJoinAndSelect(
+        'bookDiscoverCategories.discoverCategory',
+        'discoverCategory',
+      )
+      .leftJoinAndSelect(
+        'bookDiscoverCategories.discoverSubCategory',
+        'discoverSubCategory',
+      )
       .where('book.isDiscovered = :isDiscovered', { isDiscovered: true })
       .andWhere('discoverCategory.id = :discoverCategoryId', {
         discoverCategoryId,
@@ -648,8 +661,18 @@ export class BookService {
       .createQueryBuilder('book')
       .leftJoinAndSelect('book.category', 'category')
       .leftJoinAndSelect('book.subcategory', 'subcategory')
-      .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
-      .leftJoinAndSelect('book.discoverSubCategory', 'discoverSubCategory')
+      .leftJoinAndSelect(
+        'book.bookDiscoverCategories',
+        'bookDiscoverCategories',
+      )
+      .leftJoinAndSelect(
+        'bookDiscoverCategories.discoverCategory',
+        'discoverCategory',
+      )
+      .leftJoinAndSelect(
+        'bookDiscoverCategories.discoverSubCategory',
+        'discoverSubCategory',
+      )
       .where('book.isDiscovered = :isDiscovered', { isDiscovered: true })
       .andWhere('discoverSubCategory.id = :discoverSubCategoryId', {
         discoverSubCategoryId,
@@ -786,15 +809,38 @@ export class BookService {
       }
     }
 
-    // 도서 업데이트
-    book.discoverCategory = discoverCategory;
-    book.isDiscovered = true;
+    // 이미 같은 카테고리/서브카테고리 조합이 존재하는지 확인
+    const existingRelation = await this.bookDiscoverCategoryRepository.findOne({
+      where: {
+        bookId: book.id,
+        discoverCategoryId: discoverCategoryId,
+        discoverSubCategoryId: discoverSubCategoryId || null,
+      },
+    });
 
-    if (discoverSubCategory) {
-      book.discoverSubCategory = discoverSubCategory;
+    if (existingRelation) {
+      this.logger.log(
+        `책 ID ${book.id}는 이미 discover category ${discoverCategoryId}${
+          discoverSubCategoryId ? `, subcategory ${discoverSubCategoryId}` : ''
+        }에 속해있습니다.`,
+      );
+      return book;
     }
 
-    return this.bookRepository.save(book);
+    // 새로운 관계 생성
+    const bookDiscoverCategory = this.bookDiscoverCategoryRepository.create({
+      bookId: book.id,
+      discoverCategoryId: discoverCategoryId,
+      discoverSubCategoryId: discoverSubCategoryId || null,
+    });
+
+    await this.bookDiscoverCategoryRepository.save(bookDiscoverCategory);
+
+    // 도서를 discovered로 설정
+    book.isDiscovered = true;
+    await this.bookRepository.save(book);
+
+    return book;
   }
 
   /**
@@ -803,10 +849,10 @@ export class BookService {
   async removeBookFromDiscoverCategory(bookId: number): Promise<Book> {
     const book = await this.findById(bookId);
 
-    // 도서가 Discover에 속하지 않더라도 에러 발생하지 않음
-    // 이미 관련 필드가 null이거나 false일 수 있으나, 명시적으로 설정
-    book.discoverCategory = null;
-    book.discoverSubCategory = null;
+    // 해당 책의 모든 discover category 관계 제거
+    await this.bookDiscoverCategoryRepository.delete({ bookId: book.id });
+
+    // 도서의 discovered 상태를 false로 설정
     book.isDiscovered = false;
 
     return this.bookRepository.save(book);
@@ -826,8 +872,18 @@ export class BookService {
       .createQueryBuilder('book')
       .leftJoinAndSelect('book.category', 'category')
       .leftJoinAndSelect('book.subcategory', 'subcategory')
-      .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
-      .leftJoinAndSelect('book.discoverSubCategory', 'discoverSubCategory')
+      .leftJoinAndSelect(
+        'book.bookDiscoverCategories',
+        'bookDiscoverCategories',
+      )
+      .leftJoinAndSelect(
+        'bookDiscoverCategories.discoverCategory',
+        'discoverCategory',
+      )
+      .leftJoinAndSelect(
+        'bookDiscoverCategories.discoverSubCategory',
+        'discoverSubCategory',
+      )
       .where('book.isDiscovered = :isDiscovered', { isDiscovered: true });
 
     // 기간 필터링
@@ -1066,8 +1122,15 @@ export class BookService {
       .createQueryBuilder('book')
       .leftJoinAndSelect('book.category', 'category')
       .leftJoinAndSelect('book.subcategory', 'subcategory')
-      .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
-      .leftJoinAndSelect('book.discoverSubCategory', 'discoverSubCategory')
+      .leftJoinAndSelect('book.bookDiscoverCategories', 'bookDiscoverCategory')
+      .leftJoinAndSelect(
+        'bookDiscoverCategory.discoverCategory',
+        'discoverCategory',
+      )
+      .leftJoinAndSelect(
+        'bookDiscoverCategory.discoverSubCategory',
+        'discoverSubCategory',
+      )
       .where('book.isDiscovered = :isDiscovered', { isDiscovered: true })
       .orderBy('RAND()')
       .take(limit)
@@ -2336,8 +2399,18 @@ export class BookService {
       .createQueryBuilder('book')
       .leftJoinAndSelect('book.category', 'category')
       .leftJoinAndSelect('book.subcategory', 'subcategory')
-      .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
-      .leftJoinAndSelect('book.discoverSubCategory', 'discoverSubCategory')
+      .leftJoinAndSelect(
+        'book.bookDiscoverCategories',
+        'bookDiscoverCategories',
+      )
+      .leftJoinAndSelect(
+        'bookDiscoverCategories.discoverCategory',
+        'discoverCategory',
+      )
+      .leftJoinAndSelect(
+        'bookDiscoverCategories.discoverSubCategory',
+        'discoverSubCategory',
+      )
       .where('book.isDiscovered = :isDiscovered', { isDiscovered: true });
 
     let sortedBookIds: number[] = [];

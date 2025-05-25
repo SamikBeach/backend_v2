@@ -13,6 +13,7 @@ import { BookModule } from './book/book.module';
 import { Category } from './category/entities/category.entity';
 import { SubCategory } from './category/entities/subcategory.entity';
 import { Book } from './book/entities/book.entity';
+import { BookDiscoverCategory } from './book/entities/book-discover-category.entity';
 import { DiscoverCategoryModule } from './discover-category/discover-category.module';
 import { DiscoverCategory } from './discover-category/entities/discover-category.entity';
 import { DiscoverSubCategory } from './discover-category/entities/discover-subcategory.entity';
@@ -73,6 +74,7 @@ import { YouTubeModule } from './youtube/youtube.module';
           Category,
           SubCategory,
           Book,
+          BookDiscoverCategory,
           DiscoverCategory,
           DiscoverSubCategory,
           Library,
@@ -96,7 +98,7 @@ import { YouTubeModule } from './youtube/youtube.module';
           UserStatisticsSetting,
           Feedback,
         ],
-        synchronize: true,
+        synchronize: false,
         namingStrategy: new SnakeNamingStrategy(),
       }),
     }),

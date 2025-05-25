@@ -110,7 +110,7 @@ export class DiscoverCategoryService {
       // 카테고리 존재 확인
       const category = await queryRunner.manager.findOne(DiscoverCategory, {
         where: { id },
-        relations: ['subCategories', 'books'],
+        relations: ['subCategories', 'bookDiscoverCategories'],
       });
 
       if (!category) {
@@ -123,17 +123,18 @@ export class DiscoverCategoryService {
       if (category.subCategories && category.subCategories.length > 0) {
         for (const subCategory of category.subCategories) {
           // 각 서브카테고리에 연결된 책이 있는지 확인하고 연결 해제
-          const subCategoryBooks = await queryRunner.manager.count('book', {
-            where: { discoverSubCategoryId: subCategory.id },
-          });
+          const subCategoryBooks = await queryRunner.manager.count(
+            'book_discover_category',
+            {
+              where: { discoverSubCategoryId: subCategory.id },
+            },
+          );
 
           if (subCategoryBooks > 0) {
-            // 서브카테고리에 연결된 책들의 discoverSubCategoryId를 null로 설정
-            await queryRunner.manager.update(
-              'book',
-              { discoverSubCategoryId: subCategory.id },
-              { discoverSubCategoryId: null },
-            );
+            // 서브카테고리에 연결된 관계들 삭제
+            await queryRunner.manager.delete('book_discover_category', {
+              discoverSubCategoryId: subCategory.id,
+            });
           }
 
           await queryRunner.manager.remove(DiscoverSubCategory, subCategory);
@@ -141,13 +142,14 @@ export class DiscoverCategoryService {
       }
 
       // 연결된 책이 있는 경우 카테고리 연결 해제
-      if (category.books && category.books.length > 0) {
-        // 카테고리에 연결된 책들의 discoverCategoryId를 null로 설정
-        await queryRunner.manager.update(
-          'book',
-          { discoverCategoryId: id },
-          { discoverCategoryId: null },
-        );
+      if (
+        category.bookDiscoverCategories &&
+        category.bookDiscoverCategories.length > 0
+      ) {
+        // 카테고리에 연결된 관계들 삭제
+        await queryRunner.manager.delete('book_discover_category', {
+          discoverCategoryId: id,
+        });
       }
 
       // 카테고리 삭제
@@ -224,7 +226,6 @@ export class DiscoverCategoryService {
         DiscoverSubCategory,
         {
           where: { id },
-          relations: ['books'],
         },
       );
 
@@ -234,15 +235,10 @@ export class DiscoverCategoryService {
         );
       }
 
-      // 연결된 책이 있는 경우 연결 해제
-      if (subCategory.books && subCategory.books.length > 0) {
-        // 서브카테고리에 연결된 책들의 discoverSubCategoryId를 null로 설정
-        await queryRunner.manager.update(
-          'book',
-          { discoverSubCategoryId: id },
-          { discoverSubCategoryId: null },
-        );
-      }
+      // 연결된 책이 있는 경우 연결 해제 (관계 로딩 없이 직접 삭제)
+      await queryRunner.manager.delete('book_discover_category', {
+        discoverSubCategoryId: id,
+      });
 
       // 서브카테고리 삭제
       await queryRunner.manager.remove(DiscoverSubCategory, subCategory);
@@ -298,7 +294,7 @@ export class DiscoverCategoryService {
   async findAllDiscoverData(): Promise<DiscoverCategoryResponseDto[]> {
     // 모든 카테고리 조회 (활성/비활성 모두)
     const categories = await this.discoverCategoryRepository.find({
-      relations: ['subCategories', 'books'],
+      relations: ['subCategories', 'bookDiscoverCategories'],
       order: { displayOrder: 'ASC', id: 'ASC' },
     });
 
@@ -307,12 +303,11 @@ export class DiscoverCategoryService {
       const subCategories = category.subCategories
         .sort((a, b) => a.displayOrder - b.displayOrder)
         .map((subCategory) => {
-          // 해당 서브카테고리에 속한 책 찾기
-          const subCategoryBooks = category.books.filter(
-            (book) =>
-              book.discoverSubCategory &&
-              book.discoverSubCategory.id === subCategory.id,
-          );
+          // 해당 서브카테고리에 속한 책 개수 계산
+          const subCategoryBookCount = category.bookDiscoverCategories.filter(
+            (bookDiscoverCategory) =>
+              bookDiscoverCategory.discoverSubCategoryId === subCategory.id,
+          ).length;
 
           return {
             id: subCategory.id,
@@ -323,7 +318,7 @@ export class DiscoverCategoryService {
             createdAt: subCategory.createdAt,
             updatedAt: subCategory.updatedAt,
             discoverCategoryId: category.id,
-            bookCount: subCategoryBooks.length,
+            bookCount: subCategoryBookCount,
           };
         });
 
@@ -336,7 +331,7 @@ export class DiscoverCategoryService {
         createdAt: category.createdAt,
         updatedAt: category.updatedAt,
         subCategories,
-        bookCount: category.books.length,
+        bookCount: category.bookDiscoverCategories.length,
       };
     });
   }
