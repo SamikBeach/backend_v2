@@ -8,7 +8,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { DiscoverCategory } from './discover-category.entity';
-import { Book } from '../../book/entities/book.entity';
+import { BookDiscoverCategory } from '../../book/entities/book-discover-category.entity';
 
 @Entity('discover_subcategory')
 export class DiscoverSubCategory {
@@ -39,6 +39,9 @@ export class DiscoverSubCategory {
   @Column()
   discoverCategoryId: number;
 
-  @OneToMany(() => Book, (book) => book.discoverSubCategory)
-  books: Book[];
+  @OneToMany(
+    () => BookDiscoverCategory,
+    (bookDiscoverCategory) => bookDiscoverCategory.discoverSubCategory,
+  )
+  bookDiscoverCategories: BookDiscoverCategory[];
 }

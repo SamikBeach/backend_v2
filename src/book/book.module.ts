@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Book } from './entities/book.entity';
+import { BookDiscoverCategory } from './entities/book-discover-category.entity';
 import { BookService } from './book.service';
 import { BookController } from './book.controller';
 import { CommonModule } from '../common/common.module';
@@ -14,7 +15,7 @@ import { ReviewModule } from '../review/review.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Book]),
+    TypeOrmModule.forFeature([Book, BookDiscoverCategory]),
     CommonModule,
     CategoryModule,
     DiscoverCategoryModule,

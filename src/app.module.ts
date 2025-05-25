@@ -13,6 +13,7 @@ import { BookModule } from './book/book.module';
 import { Category } from './category/entities/category.entity';
 import { SubCategory } from './category/entities/subcategory.entity';
 import { Book } from './book/entities/book.entity';
+import { BookDiscoverCategory } from './book/entities/book-discover-category.entity';
 import { DiscoverCategoryModule } from './discover-category/discover-category.module';
 import { DiscoverCategory } from './discover-category/entities/discover-category.entity';
 import { DiscoverSubCategory } from './discover-category/entities/discover-subcategory.entity';
@@ -45,6 +46,7 @@ import { FeedbackModule } from './feedback/feedback.module';
 import { Feedback } from './feedback/entities/feedback.entity';
 import { CacheModule } from '@nestjs/cache-manager';
 import { CacheConfigService } from './common/services/cache-config.service';
+import { YouTubeModule } from './youtube/youtube.module';
 
 @Module({
   imports: [
@@ -72,6 +74,7 @@ import { CacheConfigService } from './common/services/cache-config.service';
           Category,
           SubCategory,
           Book,
+          BookDiscoverCategory,
           DiscoverCategory,
           DiscoverSubCategory,
           Library,
@@ -95,7 +98,7 @@ import { CacheConfigService } from './common/services/cache-config.service';
           UserStatisticsSetting,
           Feedback,
         ],
-        synchronize: true,
+        synchronize: false,
         namingStrategy: new SnakeNamingStrategy(),
       }),
     }),
@@ -114,6 +117,7 @@ import { CacheConfigService } from './common/services/cache-config.service';
     ReadingStatusModule,
     StatisticsModule,
     FeedbackModule,
+    YouTubeModule,
   ],
   providers: [CacheConfigService],
 })

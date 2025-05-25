@@ -275,10 +275,7 @@ export class SearchService {
           // 기본값 설정
           category: null,
           subcategory: null,
-          discoverCategory: null,
-          discoverSubCategory: null,
-          discoverCategoryId: null,
-          discoverSubCategoryId: null,
+          bookDiscoverCategories: [],
           rating: 0,
           reviews: 0,
           totalRatings: 0,
