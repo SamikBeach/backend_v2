@@ -90,9 +90,9 @@ export class YouTubeService {
         q: query,
         maxResults,
         type: ['video'],
-        relevanceLanguage: 'ko',
-        videoEmbeddable: 'true',
+        regionCode: 'KR',
         safeSearch: 'moderate',
+        order: 'relevance',
       });
 
       const response = await this.youtube.search.list({
@@ -100,9 +100,9 @@ export class YouTubeService {
         q: query,
         maxResults,
         type: ['video'],
-        relevanceLanguage: 'ko',
-        videoEmbeddable: 'true',
+        regionCode: 'KR',
         safeSearch: 'moderate',
+        order: 'relevance',
       });
 
       this.logger.log(`YouTube API 응답 상태: ${response.status}`);
@@ -146,11 +146,9 @@ export class YouTubeService {
         });
       }
 
-      // 결과를 캐시에 저장 (빈 결과는 저장하지 않음)
-      if (results.length > 0) {
-        await this.cacheManager.set(cacheKey, results, this.cacheTTL);
-        this.logger.log(`결과를 캐시에 저장: ${cacheKey}`);
-      }
+      // 결과를 캐시에 저장 (빈 결과도 저장하여 불필요한 API 호출 방지)
+      await this.cacheManager.set(cacheKey, results, this.cacheTTL);
+      this.logger.log(`결과를 캐시에 저장: ${cacheKey} (${results.length}개)`);
 
       return results;
     } catch (error) {
@@ -183,15 +181,20 @@ export class YouTubeService {
    *
    * @param {Object} options - 검색 옵션
    * @param {string} options.authorName - 작가 이름
-   * @param {number} [options.maxResults=5] - 최대 결과 수
+   * @param {number} [options.maxResults=15] - 최대 결과 수 (기본값 증가)
    * @returns {Promise<YouTubeVideoResult[]>} 검색 결과
    */
   async searchAuthorVideos(options: {
     authorName: string;
     maxResults?: number;
   }): Promise<YouTubeVideoResult[]> {
-    const { authorName, maxResults = 5 } = options;
-    const cacheKey = `youtube_author_${authorName}_${maxResults}`;
+    const { authorName, maxResults = 15 } = options; // 기본값을 15로 증가
+    const cleanAuthor = this.cleanSearchText(authorName);
+    const cacheKey = `youtube_author_${cleanAuthor}_${maxResults}`;
+
+    this.logger.log(
+      `작가 YouTube 검색 시작: "${authorName}" -> "${cleanAuthor}"`,
+    );
 
     // 캐시에서 데이터 확인
     const cachedData =
@@ -203,17 +206,90 @@ export class YouTubeService {
       return cachedData;
     }
 
-    // 캐시에 데이터가 없으면 검색 실행YouTube API 호출
-    this.logger.log(`작가 : ${authorName}`);
-    const query = `${authorName}`;
-    const results = await this.searchVideos(query, maxResults);
+    // 더 유연한 작가 검색어 조합 생성
+    const searchQueries = this.generateFlexibleAuthorSearchQueries(cleanAuthor);
+    this.logger.log(
+      `생성된 작가 검색어 조합 (${searchQueries.length}개):`,
+      searchQueries,
+    );
 
-    // 결과를 캐시에 저장 (빈 결과는 저장하지 않음)
-    if (results.length > 0) {
-      await this.cacheManager.set(cacheKey, results, this.cacheTTL);
+    let allResults: YouTubeVideoResult[] = [];
+    const seenVideoIds = new Set<string>();
+
+    // 각 검색어로 검색하여 결과 병합 (중복 제거)
+    for (
+      let i = 0;
+      i < searchQueries.length && allResults.length < maxResults;
+      i++
+    ) {
+      const query = searchQueries[i];
+      this.logger.log(
+        `작가 검색 시도 ${i + 1}/${searchQueries.length}: "${query}"`,
+      );
+
+      // 각 검색어마다 적은 수의 결과를 가져와서 다양성 확보
+      const searchLimit = Math.min(
+        8,
+        Math.ceil(maxResults / searchQueries.length) + 2,
+      );
+      const results = await this.searchVideos(query, searchLimit);
+
+      if (results.length > 0) {
+        this.logger.log(`작가 검색 성공: ${results.length}개 결과 발견`);
+
+        // 중복 제거하면서 결과 추가
+        for (const result of results) {
+          if (
+            result.id &&
+            !seenVideoIds.has(result.id) &&
+            allResults.length < maxResults
+          ) {
+            seenVideoIds.add(result.id);
+            allResults.push(result);
+          }
+        }
+      } else {
+        this.logger.log(`작가 검색 결과 없음`);
+      }
     }
 
-    return results;
+    this.logger.log(
+      `작가 검색 최종 결과: ${allResults.length}개 영상 (중복 제거됨)`,
+    );
+
+    // 결과를 캐시에 저장
+    await this.cacheManager.set(cacheKey, allResults, this.cacheTTL);
+    this.logger.log(
+      `작가 검색 결과를 캐시에 저장: ${cacheKey} (${allResults.length}개)`,
+    );
+
+    return allResults;
+  }
+
+  /**
+   * 더 유연한 작가 검색어 조합 생성 (단순하고 포괄적)
+   *
+   * @param {string} authorName - 정제된 작가명
+   * @returns {string[]} 검색어 배열 (우선순위 순)
+   */
+  private generateFlexibleAuthorSearchQueries(authorName: string): string[] {
+    const queries: string[] = [];
+
+    if (!authorName) return queries;
+
+    // 1순위: 작가명만 (가장 포괄적)
+    queries.push(authorName);
+
+    // 2순위: 작가명 + 간단한 키워드
+    queries.push(`${authorName} 작가`);
+    queries.push(`${authorName} 책`);
+
+    // 3순위: 작가명 + 기타 키워드
+    queries.push(`${authorName} 인터뷰`);
+    queries.push(`${authorName} 소설`);
+
+    // 중복 제거 및 빈 문자열 제거
+    return [...new Set(queries)].filter((q) => q.trim().length > 0);
   }
 
   /**
@@ -245,7 +321,7 @@ export class YouTubeService {
    *
    * @param {Object} options - 검색 옵션
    * @param {string} options.bookTitle - 책 제목
-   * @param {number} [options.maxResults=5] - 최대 결과 수
+   * @param {number} [options.maxResults=15] - 최대 결과 수 (기본값 더 증가)
    * @param {string} [options.authorName] - 작가 이름
    * @param {string} [options.publisher] - 출판사
    * @returns {Promise<YouTubeVideoResult[]>} 검색 결과
@@ -256,7 +332,7 @@ export class YouTubeService {
     authorName?: string;
     publisher?: string;
   }): Promise<YouTubeVideoResult[]> {
-    const { bookTitle, authorName, publisher, maxResults = 5 } = options;
+    const { bookTitle, authorName, publisher, maxResults = 15 } = options; // 기본값을 15로 더 증가
 
     // 검색어 정제
     const cleanTitle = this.cleanSearchText(bookTitle);
@@ -281,57 +357,111 @@ export class YouTubeService {
       return cachedData;
     }
 
-    // 캐시에 데이터가 없으면 검색 실행
-    this.logger.log(`책 YouTube API 호출: ${cleanTitle}`);
-    let query = cleanTitle;
-    if (cleanAuthor) {
-      query += ` ${cleanAuthor}`;
-    }
-    // 출판사는 검색 정확도를 떨어뜨릴 수 있으므로 제외
-    // if (cleanPublisher) {
-    //   query += ` ${cleanPublisher}`;
-    // }
+    // 더 유연한 검색어 조합 생성
+    const searchQueries = this.generateFlexibleBookSearchQueries(
+      cleanTitle,
+      cleanAuthor,
+    );
 
-    this.logger.log(`최종 검색 쿼리: "${query}"`);
+    this.logger.log(
+      `생성된 검색어 조합 (${searchQueries.length}개):`,
+      searchQueries,
+    );
 
-    const results = await this.searchVideos(query, maxResults);
+    let allResults: YouTubeVideoResult[] = [];
+    const seenVideoIds = new Set<string>();
 
-    this.logger.log(`검색 결과: ${results.length}개 영상`);
+    // 각 검색어로 검색하여 결과 병합 (중복 제거)
+    for (
+      let i = 0;
+      i < searchQueries.length && allResults.length < maxResults;
+      i++
+    ) {
+      const query = searchQueries[i];
+      this.logger.log(`검색 시도 ${i + 1}/${searchQueries.length}: "${query}"`);
 
-    // 검색 결과가 없으면 대체 검색어로 재시도
-    let finalResults = results;
-    if (results.length === 0) {
-      this.logger.log('검색 결과가 없어 대체 검색어로 재시도합니다.');
-      
-      // 1차 대체: 제목만으로 검색
-      if (cleanTitle) {
-        this.logger.log(`대체 검색 1차: 제목만 - "${cleanTitle}"`);
-        finalResults = await this.searchVideos(cleanTitle, maxResults);
+      // 각 검색어마다 적은 수의 결과를 가져와서 다양성 확보
+      const searchLimit = Math.min(
+        8,
+        Math.ceil(maxResults / searchQueries.length) + 2,
+      );
+      const results = await this.searchVideos(query, searchLimit);
+
+      if (results.length > 0) {
+        this.logger.log(`검색 성공: ${results.length}개 결과 발견`);
+
+        // 중복 제거하면서 결과 추가
+        for (const result of results) {
+          if (
+            result.id &&
+            !seenVideoIds.has(result.id) &&
+            allResults.length < maxResults
+          ) {
+            seenVideoIds.add(result.id);
+            allResults.push(result);
+          }
+        }
+      } else {
+        this.logger.log(`검색 결과 없음`);
       }
-      
-      // 2차 대체: 작가명만으로 검색 (제목 검색도 실패한 경우)
-      if (finalResults.length === 0 && cleanAuthor) {
-        this.logger.log(`대체 검색 2차: 작가명만 - "${cleanAuthor}"`);
-        finalResults = await this.searchVideos(cleanAuthor, maxResults);
-      }
-      
-      // 3차 대체: 장르 관련 검색 (만화, 웹툰 등)
-      if (finalResults.length === 0) {
-        this.logger.log('대체 검색 3차: 장르 관련 검색 - "웹툰 리뷰"');
-        finalResults = await this.searchVideos('웹툰 리뷰', maxResults);
-      }
-      
-      this.logger.log(`대체 검색 최종 결과: ${finalResults.length}개 영상`);
-    }
-
-    // 결과를 캐시에 저장 (빈 결과는 저장하지 않음)
-    if (finalResults.length > 0) {
-      await this.cacheManager.set(cacheKey, finalResults, this.cacheTTL);
-      this.logger.log(`검색 결과를 캐시에 저장: ${cacheKey}`);
-    } else {
-      this.logger.warn(`검색 결과가 없어 캐시에 저장하지 않음`);
     }
 
-    return finalResults;
+    this.logger.log(
+      `최종 검색 결과: ${allResults.length}개 영상 (중복 제거됨)`,
+    );
+
+    // 결과를 캐시에 저장
+    await this.cacheManager.set(cacheKey, allResults, this.cacheTTL);
+    this.logger.log(
+      `검색 결과를 캐시에 저장: ${cacheKey} (${allResults.length}개)`,
+    );
+
+    return allResults;
+  }
+
+  /**
+   * 더 유연한 책 검색어 조합 생성 (단순하고 포괄적)
+   *
+   * @param {string} title - 정제된 책 제목
+   * @param {string} author - 정제된 작가명
+   * @returns {string[]} 검색어 배열 (우선순위 순)
+   */
+  private generateFlexibleBookSearchQueries(
+    title: string,
+    author: string,
+  ): string[] {
+    const queries: string[] = [];
+
+    if (!title) return queries;
+
+    // 1순위: 제목만 (가장 포괄적)
+    queries.push(title);
+
+    // 2순위: 제목 + 간단한 키워드
+    queries.push(`${title} 책`);
+    queries.push(`${title} 리뷰`);
+
+    // 3순위: 작가가 있는 경우
+    if (author) {
+      queries.push(`${title} ${author}`);
+      queries.push(`${author} ${title}`);
+      queries.push(author);
+    }
+
+    // 4순위: 제목의 일부분 (긴 제목의 경우)
+    if (title.length > 8) {
+      const titleParts = title.split(' ');
+      if (titleParts.length > 1) {
+        // 첫 번째 단어만
+        queries.push(titleParts[0]);
+        // 처음 두 단어 (두 단어 이상인 경우)
+        if (titleParts.length > 2) {
+          queries.push(`${titleParts[0]} ${titleParts[1]}`);
+        }
+      }
+    }
+
+    // 중복 제거 및 빈 문자열 제거
+    return [...new Set(queries)].filter((q) => q.trim().length > 0);
   }
 }
