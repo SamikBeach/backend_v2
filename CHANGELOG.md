@@ -1,5 +1,18 @@
 # 🚦 CHANGELOG
 
+# [1.18.0](https://github.com/SamikBeach/backend_v2/compare/1.17.0...1.18.0) (2025-05-25)
+
+
+### Bug Fixes
+
+* YouTube 검색어 정제 및 대체 검색 로직 추가 ([1f98acf](https://github.com/SamikBeach/backend_v2/commit/1f98acf90e6c1f5a7fc4a5bcb375e82a9d54d2f2))
+
+
+### Features
+
+* Book과 DiscoverCategory 간 다대다 관계 구현 및 마이그레이션 설정 ([101e198](https://github.com/SamikBeach/backend_v2/commit/101e19813258441dbc3faea8adad114a75bd8bcc))
+* YouTube 검색 성능 및 결과 수 대폭 개선 ([111e4db](https://github.com/SamikBeach/backend_v2/commit/111e4dba004f37897b43c52d43c64365dc93a5dd))
+
 # [1.17.0](https://github.com/SamikBeach/backend_v2/compare/1.16.0...1.17.0) (2025-05-24)
 
 
