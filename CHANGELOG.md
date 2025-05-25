@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+## [1.18.1](https://github.com/SamikBeach/backend_v2/compare/1.18.0...1.18.1) (2025-05-25)
+
+
+### Bug Fixes
+
+* update migrations ([2971a7f](https://github.com/SamikBeach/backend_v2/commit/2971a7f277179d15105380d3a4450ac9522d784b))
+
 # [1.18.0](https://github.com/SamikBeach/backend_v2/compare/1.17.0...1.18.0) (2025-05-25)
 
 
