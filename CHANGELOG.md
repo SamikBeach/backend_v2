@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.19.0](https://github.com/SamikBeach/backend_v2/compare/1.18.1...1.19.0) (2025-05-26)
+
+
+### Features
+
+* ReviewBook 엔티티에 soft delete 기능 추가 및 리뷰 삭제 에러 수정 ([22472b7](https://github.com/SamikBeach/backend_v2/commit/22472b704915ad99bde6b1f407483f5721863d4d))
+
 ## [1.18.1](https://github.com/SamikBeach/backend_v2/compare/1.18.0...1.18.1) (2025-05-25)
 
 
