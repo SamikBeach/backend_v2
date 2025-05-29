@@ -1,5 +1,7 @@
 # 🚦 CHANGELOG
 
+## [1.19.1](https://github.com/SamikBeach/backend_v2/compare/1.19.0...1.19.1) (2025-05-29)
+
 # [1.19.0](https://github.com/SamikBeach/backend_v2/compare/1.18.1...1.19.0) (2025-05-26)
 
 
