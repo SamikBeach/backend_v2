@@ -934,7 +934,13 @@ export class UserService {
     status: ReadingStatusType,
     page: number = 1,
     limit: number = 10,
-  ): Promise<{ items: ExtendedReadingStatusResponseDto[]; total: number }> {
+  ): Promise<{
+    items: ExtendedReadingStatusResponseDto[];
+    total: number;
+    page: number;
+    totalPages: number;
+    hasNextPage: boolean;
+  }> {
     try {
       // 사용자 존재 여부 확인
       await this.findOne(userId);
@@ -963,7 +969,13 @@ export class UserService {
 
       // 책 정보가 없으면 빈 배열 반환
       if (statuses.length === 0) {
-        return { items: [], total };
+        return {
+          items: [],
+          total,
+          page,
+          totalPages: Math.ceil(total / limit),
+          hasNextPage: page < Math.ceil(total / limit),
+        };
       }
 
       // bookId를 이용해 book 정보 별도 조회
@@ -1028,9 +1040,14 @@ export class UserService {
         })
         .filter((dto) => dto !== null);
 
+      const totalPages = Math.ceil(total / limit);
+
       return {
         items: responseDtos,
         total,
+        page,
+        totalPages,
+        hasNextPage: page < totalPages,
       };
     } catch (error) {
       throw error;
