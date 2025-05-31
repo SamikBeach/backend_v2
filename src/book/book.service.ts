@@ -2391,6 +2391,34 @@ export class BookService {
     userId?: number,
   ): Promise<BookSearchResponse> {
     this.logger.log(
+      `발견하기 도서 조회 요청: 카테고리=${discoverCategoryId}, 서브카테고리=${discoverSubCategoryId}, 정렬=${sort}`,
+    );
+
+    // 기간 필터 처리
+    let startDate: Date | null = null;
+    if (timeRange !== 'all') {
+      const now = new Date();
+      switch (timeRange) {
+        case 'today':
+          startDate = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+          );
+          break;
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case 'year':
+          startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+      }
+    }
+
+    this.logger.log(
       `발견하기 도서 조회 요청: 카테고리=${discoverCategoryId}, 서브카테고리=${discoverSubCategoryId}, 정렬=${sort}, 기간=${timeRange}`,
     );
 
@@ -2399,208 +2427,78 @@ export class BookService {
       .createQueryBuilder('book')
       .leftJoinAndSelect('book.category', 'category')
       .leftJoinAndSelect('book.subcategory', 'subcategory')
+      .leftJoinAndSelect('book.bookDiscoverCategories', 'bookDiscoverCategory')
       .leftJoinAndSelect(
-        'book.bookDiscoverCategories',
-        'bookDiscoverCategories',
-      )
-      .leftJoinAndSelect(
-        'bookDiscoverCategories.discoverCategory',
+        'bookDiscoverCategory.discoverCategory',
         'discoverCategory',
       )
       .leftJoinAndSelect(
-        'bookDiscoverCategories.discoverSubCategory',
+        'bookDiscoverCategory.discoverSubCategory',
         'discoverSubCategory',
       )
       .where('book.isDiscovered = :isDiscovered', { isDiscovered: true });
 
-    let sortedBookIds: number[] = [];
-
-    // 카테고리 필터링 (있는 경우)
+    // 카테고리 필터 적용
     if (discoverCategoryId) {
       queryBuilder.andWhere('discoverCategory.id = :discoverCategoryId', {
         discoverCategoryId,
       });
 
-      // 서브카테고리 필터링 (있고 카테고리가 지정된 경우에만)
       if (discoverSubCategoryId) {
         queryBuilder.andWhere(
+          'discoverSubCategory.id = :discoverSubCategoryId',
+          { discoverSubCategoryId },
+        );
+      }
+    } else if (discoverSubCategoryId) {
+      queryBuilder.andWhere('discoverSubCategory.id = :discoverSubCategoryId', {
+        discoverSubCategoryId,
+      });
+    }
+
+    // 서재에 담긴순 정렬의 경우 특별 처리
+    if (sort === 'library-desc') {
+      let filteredBookIds: number[] = [];
+      let sortedBookIds: number[] = [];
+
+      // 발견하기 도서 중에서 카테고리 필터 적용 (카테고리가 없으면 모든 발견하기 도서)
+      const queryBuilderForIds = this.bookRepository
+        .createQueryBuilder('book')
+        .leftJoin('book.bookDiscoverCategories', 'bookDiscoverCategory')
+        .leftJoin('bookDiscoverCategory.discoverCategory', 'discoverCategory')
+        .leftJoin(
+          'bookDiscoverCategory.discoverSubCategory',
+          'discoverSubCategory',
+        )
+        .where('book.isDiscovered = :isDiscovered', { isDiscovered: true })
+        .select('book.id');
+
+      if (discoverCategoryId) {
+        queryBuilderForIds.andWhere(
+          'discoverCategory.id = :discoverCategoryId',
+          { discoverCategoryId },
+        );
+
+        if (discoverSubCategoryId) {
+          queryBuilderForIds.andWhere(
+            'discoverSubCategory.id = :discoverSubCategoryId',
+            {
+              discoverSubCategoryId,
+            },
+          );
+        }
+      } else if (discoverSubCategoryId) {
+        queryBuilderForIds.andWhere(
           'discoverSubCategory.id = :discoverSubCategoryId',
           {
             discoverSubCategoryId,
           },
         );
       }
-    } else if (discoverSubCategoryId) {
-      // 카테고리 없이 서브카테고리만 지정된 경우
-      queryBuilder.andWhere('discoverSubCategory.id = :discoverSubCategoryId', {
-        discoverSubCategoryId,
-      });
-    }
 
-    // 기간 필터링 설정
-    let startDate: Date | null = null;
-
-    if (timeRange !== 'all') {
-      const now = new Date();
-
-      if (timeRange === 'today') {
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      } else if (timeRange === 'week') {
-        // 이번 주의 시작일(월요일)을 계산
-        const dayOfWeek = now.getDay(); // 0: 일요일, 1: 월요일, ..., 6: 토요일
-        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 일요일이면 6, 아니면 현재 요일 - 1
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - diff);
-        startDate.setHours(0, 0, 0, 0);
-      } else if (timeRange === 'month') {
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      } else if (timeRange === 'year') {
-        startDate = new Date(now.getFullYear(), 0, 1);
-      }
-
-      this.logger.log(
-        `기간 필터 적용: ${timeRange}, 시작일: ${startDate?.toISOString()}`,
-      );
-    }
-
-    // 서재에 담긴 순 정렬인 경우
-    if (sort === 'library-desc') {
-      // 기간 필터링 설정
-      let filteredBookIds: number[] = [];
-
-      // 기간 필터가 있는 경우, 먼저 기간 필터를 적용
-      if (timeRange !== 'all' && startDate) {
-        this.logger.log(
-          `기간 필터 적용: ${timeRange} (${startDate.toISOString()}부터)`,
-        );
-
-        // 1. 해당 기간 동안 서재에 담긴 책 ID
-        const libraryBookIds =
-          await this.libraryService.getBookIdsAddedInPeriod(startDate);
-        this.logger.log(`서재에 담긴 책: ${libraryBookIds.length}개`);
-
-        // 2. 해당 기간 동안 평점이 등록된 책 ID
-        const ratingBookIds =
-          await this.ratingService.getBookIdsRatedInPeriod(startDate);
-        this.logger.log(`평점이 등록된 책: ${ratingBookIds.length}개`);
-
-        // 3. 해당 기간 동안 독서 상태가 변경된 책 ID
-        const readingStatusBookIds =
-          await this.readingStatusService.getBookIdsStatusChangedInPeriod(
-            startDate,
-          );
-        this.logger.log(
-          `읽기 상태가 변경된 책: ${readingStatusBookIds.length}개`,
-        );
-
-        // 4. 해당 기간 동안 리뷰가 작성된 책 ID
-        const reviewBookIds =
-          await this.reviewService.getBookIdsReviewedInPeriod(startDate);
-        this.logger.log(`리뷰가 작성된 책: ${reviewBookIds.length}개`);
-
-        // 모든 ID를 합치고 중복 제거
-        filteredBookIds = [
-          ...new Set([
-            ...libraryBookIds,
-            ...ratingBookIds,
-            ...readingStatusBookIds,
-            ...reviewBookIds,
-          ]),
-        ];
-
-        this.logger.log(
-          `기간 필터 적용 시 활동이 있는 책 총 개수: ${filteredBookIds.length}개`,
-        );
-
-        if (filteredBookIds.length === 0) {
-          // 활동이 없는 경우 빈 결과 반환
-          this.logger.log('기간 내 활동이 있는 책이 없습니다.');
-          return {
-            books: [],
-            total: 0,
-            page,
-            totalPages: 0,
-          };
-        }
-
-        // 발견하기 카테고리/서브카테고리 필터링도 적용
-        const queryBuilderForIds = this.bookRepository
-          .createQueryBuilder('book')
-          .leftJoin('book.discoverCategory', 'discoverCategory')
-          .leftJoin('book.discoverSubCategory', 'discoverSubCategory')
-          .where('book.isDiscovered = :isDiscovered', { isDiscovered: true })
-          .select('book.id');
-
-        if (discoverCategoryId) {
-          queryBuilderForIds.andWhere(
-            'discoverCategory.id = :discoverCategoryId',
-            { discoverCategoryId },
-          );
-
-          if (discoverSubCategoryId) {
-            queryBuilderForIds.andWhere(
-              'discoverSubCategory.id = :discoverSubCategoryId',
-              {
-                discoverSubCategoryId,
-              },
-            );
-          }
-        } else if (discoverSubCategoryId) {
-          queryBuilderForIds.andWhere(
-            'discoverSubCategory.id = :discoverSubCategoryId',
-            {
-              discoverSubCategoryId,
-            },
-          );
-        }
-
-        const discoverBooks = await queryBuilderForIds.getMany();
-        const discoverBookIds = discoverBooks.map((book) => book.id);
-
-        // 활동이 있는 책들 중 발견하기 카테고리에 속하는 책들만 필터링
-        filteredBookIds = filteredBookIds.filter((id) =>
-          discoverBookIds.includes(id),
-        );
-
-        this.logger.log(
-          `발견하기 카테고리/서브카테고리 필터 적용 후 책 개수: ${filteredBookIds.length}개`,
-        );
-      } else {
-        // 기간 필터가 없는 경우, 발견하기 카테고리/서브카테고리 필터만 적용
-        const queryBuilderForIds = this.bookRepository
-          .createQueryBuilder('book')
-          .leftJoin('book.discoverCategory', 'discoverCategory')
-          .leftJoin('book.discoverSubCategory', 'discoverSubCategory')
-          .where('book.isDiscovered = :isDiscovered', { isDiscovered: true })
-          .select('book.id');
-
-        if (discoverCategoryId) {
-          queryBuilderForIds.andWhere(
-            'discoverCategory.id = :discoverCategoryId',
-            { discoverCategoryId },
-          );
-
-          if (discoverSubCategoryId) {
-            queryBuilderForIds.andWhere(
-              'discoverSubCategory.id = :discoverSubCategoryId',
-              {
-                discoverSubCategoryId,
-              },
-            );
-          }
-        } else if (discoverSubCategoryId) {
-          queryBuilderForIds.andWhere(
-            'discoverSubCategory.id = :discoverSubCategoryId',
-            {
-              discoverSubCategoryId,
-            },
-          );
-        }
-
-        const allBooks = await queryBuilderForIds.getMany();
-        filteredBookIds = allBooks.map((book) => book.id);
-        this.logger.log(`필터 적용 전 책 총 ${filteredBookIds.length}개`);
-      }
+      const allBooks = await queryBuilderForIds.getMany();
+      filteredBookIds = allBooks.map((book) => book.id);
+      this.logger.log(`필터 적용 후 책 총 ${filteredBookIds.length}개`);
 
       // 서재에 담긴 수 가져오기 및 정렬
       if (filteredBookIds.length > 0) {
@@ -2674,9 +2572,16 @@ export class BookService {
               .createQueryBuilder('book')
               .leftJoinAndSelect('book.category', 'category')
               .leftJoinAndSelect('book.subcategory', 'subcategory')
-              .leftJoinAndSelect('book.discoverCategory', 'discoverCategory')
               .leftJoinAndSelect(
-                'book.discoverSubCategory',
+                'book.bookDiscoverCategories',
+                'bookDiscoverCategory',
+              )
+              .leftJoinAndSelect(
+                'bookDiscoverCategory.discoverCategory',
+                'discoverCategory',
+              )
+              .leftJoinAndSelect(
+                'bookDiscoverCategory.discoverSubCategory',
                 'discoverSubCategory',
               )
               .where('book.id IN (:...ids)', { ids: pagedBookIds })
@@ -2767,30 +2672,80 @@ export class BookService {
       // 정렬 적용
       switch (sort) {
         case 'rating-desc':
-          queryBuilder.orderBy('book.rating', 'DESC');
+          queryBuilder
+            .orderBy('book.rating', 'DESC')
+            .addOrderBy('book.totalRatings', 'DESC');
           break;
         case 'reviews-desc':
-          queryBuilder.orderBy('book.reviews', 'DESC');
+          queryBuilder
+            .orderBy('book.reviews', 'DESC')
+            .addOrderBy('book.rating', 'DESC');
           break;
         case 'publishDate-desc':
-          queryBuilder.orderBy('book.publishDate', 'DESC');
+          queryBuilder
+            .orderBy('book.publishDate', 'DESC')
+            .addOrderBy('book.rating', 'DESC');
           break;
         case 'title-asc':
           queryBuilder.orderBy('book.title', 'ASC');
           break;
         default:
-          queryBuilder.orderBy('book.rating', 'DESC');
+          queryBuilder
+            .orderBy('book.rating', 'DESC')
+            .addOrderBy('book.totalRatings', 'DESC');
       }
 
-      // 전체 결과 수 조회
+      // 페이징 적용
       const total = await queryBuilder.getCount();
+      const books = await queryBuilder
+        .skip((page - 1) * limit)
+        .take(limit)
+        .getMany();
+
+      // 사용자별 데이터로 책 정보 보강
+      const enrichedBooks = await Promise.all(
+        books.map((book) => this.enrichBookWithUserData(book, userId)),
+      );
+
+      return {
+        books: enrichedBooks,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+      };
+    } else {
+      // 기간 필터가 없는 경우 일반 정렬
+      switch (sort) {
+        case 'rating-desc':
+          queryBuilder
+            .orderBy('book.rating', 'DESC')
+            .addOrderBy('book.totalRatings', 'DESC');
+          break;
+        case 'reviews-desc':
+          queryBuilder
+            .orderBy('book.reviews', 'DESC')
+            .addOrderBy('book.rating', 'DESC');
+          break;
+        case 'publishDate-desc':
+          queryBuilder
+            .orderBy('book.publishDate', 'DESC')
+            .addOrderBy('book.rating', 'DESC');
+          break;
+        case 'title-asc':
+          queryBuilder.orderBy('book.title', 'ASC');
+          break;
+        default:
+          queryBuilder
+            .orderBy('book.rating', 'DESC')
+            .addOrderBy('book.totalRatings', 'DESC');
+      }
 
       // 페이징 적용
-      const skip = (page - 1) * limit;
-      queryBuilder.skip(skip).take(limit);
-
-      // 결과 가져오기
-      const books = await queryBuilder.getMany();
+      const total = await queryBuilder.getCount();
+      const books = await queryBuilder
+        .skip((page - 1) * limit)
+        .take(limit)
+        .getMany();
 
       // 사용자별 데이터로 책 정보 보강
       const enrichedBooks = await Promise.all(
@@ -2804,46 +2759,6 @@ export class BookService {
         totalPages: Math.ceil(total / limit),
       };
     }
-
-    // 일반 정렬 적용 (기간 필터 없는 경우)
-    switch (sort) {
-      case 'rating-desc':
-        queryBuilder.orderBy('book.rating', 'DESC');
-        break;
-      case 'reviews-desc':
-        queryBuilder.orderBy('book.reviews', 'DESC');
-        break;
-      case 'publishDate-desc':
-        queryBuilder.orderBy('book.publishDate', 'DESC');
-        break;
-      case 'title-asc':
-        queryBuilder.orderBy('book.title', 'ASC');
-        break;
-      default:
-        queryBuilder.orderBy('book.rating', 'DESC');
-    }
-
-    // 전체 결과 수 조회
-    const total = await queryBuilder.getCount();
-
-    // 페이징 적용
-    const skip = (page - 1) * limit;
-    queryBuilder.skip(skip).take(limit);
-
-    // 결과 가져오기
-    const books = await queryBuilder.getMany();
-
-    // 사용자별 데이터로 책 정보 보강
-    const enrichedBooks = await Promise.all(
-      books.map((book) => this.enrichBookWithUserData(book, userId)),
-    );
-
-    return {
-      books: enrichedBooks,
-      total,
-      page,
-      totalPages: Math.ceil(total / limit),
-    };
   }
 
   /**
