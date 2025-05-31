@@ -441,7 +441,7 @@ export class CommentService {
         // 이미 완전한 URL인 경우 그대로 사용, 아닌 경우 baseUrl 추가
         profileImageUrl = author.profileImage.startsWith('http')
           ? author.profileImage
-          : `${baseUrl}${author.profileImage}`;
+          : `${baseUrl}/api/v2${author.profileImage}`;
       }
 
       return {

@@ -17,12 +17,49 @@ export class CategoryService {
   ) {}
 
   /**
-   * 모든 카테고리 조회
+   * 모든 카테고리 조회 (책 개수 포함, 책 많은 순으로 정렬)
    */
   async findAll(): Promise<Category[]> {
-    return await this.categoryRepository.find({
-      relations: ['subCategories'],
-    });
+    // 카테고리별 책 개수와 함께 조회
+    const categories = await this.categoryRepository
+      .createQueryBuilder('category')
+      .leftJoinAndSelect('category.subCategories', 'subCategory')
+      .leftJoin('category.books', 'categoryBooks')
+      .leftJoin('subCategory.books', 'subCategoryBooks')
+      .addSelect('COUNT(DISTINCT categoryBooks.id)', 'bookCount')
+      .groupBy('category.id')
+      .addGroupBy('subCategory.id')
+      .orderBy('COUNT(DISTINCT categoryBooks.id)', 'DESC')
+      .getMany();
+
+    // 각 카테고리의 서브카테고리를 책 개수 순으로 정렬
+    for (const category of categories) {
+      if (category.subCategories && category.subCategories.length > 0) {
+        // 서브카테고리별 책 개수 조회
+        const subCategoriesWithCount = await Promise.all(
+          category.subCategories.map(async (subCategory) => {
+            const bookCount = await this.subCategoryRepository
+              .createQueryBuilder('subCategory')
+              .leftJoin('subCategory.books', 'books')
+              .where('subCategory.id = :id', { id: subCategory.id })
+              .select('COUNT(books.id)', 'count')
+              .getRawOne();
+
+            return {
+              ...subCategory,
+              bookCount: parseInt(bookCount.count) || 0,
+            };
+          }),
+        );
+
+        // 책 개수 순으로 정렬 (많은 순)
+        category.subCategories = subCategoriesWithCount.sort(
+          (a, b) => b.bookCount - a.bookCount,
+        );
+      }
+    }
+
+    return categories;
   }
 
   /**

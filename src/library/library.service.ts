@@ -542,7 +542,7 @@ export class LibraryService {
         profileImage: library.owner.profileImage?.startsWith('http')
           ? library.owner.profileImage
           : library.owner.profileImage
-            ? `${baseUrl}${library.owner.profileImage}`
+            ? `${baseUrl}/api/v2${library.owner.profileImage}`
             : null,
         isFollowing: isFollowingOwner,
       },
@@ -559,7 +559,7 @@ export class LibraryService {
               'http',
             )
               ? subscription.subscriber.profileImage
-              : `${baseUrl}${subscription.subscriber.profileImage}`;
+              : `${baseUrl}/api/v2${subscription.subscriber.profileImage}`;
           }
 
           return {
@@ -1272,14 +1272,14 @@ export class LibraryService {
     const baseUrl = process.env.BASE_URL || 'http://localhost:3005';
 
     return library.subscriptions.map((subscription) => {
-      // 구독자 프로필 이미지 URL 생성
+      // 구독자의 프로필 이미지 URL 생성
       let profileImageUrl = null;
       if (subscription.subscriber.profileImage) {
         profileImageUrl = subscription.subscriber.profileImage.startsWith(
           'http',
         )
           ? subscription.subscriber.profileImage
-          : `${baseUrl}${subscription.subscriber.profileImage}`;
+          : `${baseUrl}/api/v2${subscription.subscriber.profileImage}`;
       }
 
       return {
@@ -1435,7 +1435,7 @@ export class LibraryService {
       // 이미 완전한 URL인 경우 그대로 사용, 아닌 경우 baseUrl 추가
       profileImageUrl = library.owner.profileImage.startsWith('http')
         ? library.owner.profileImage
-        : `${baseUrl}${library.owner.profileImage}`;
+        : `${baseUrl}/api/v2${library.owner.profileImage}`;
     }
 
     return {
@@ -1739,7 +1739,7 @@ export class LibraryService {
       // 이미 완전한 URL인 경우 그대로 사용, 아닌 경우 baseUrl 추가
       profileImageUrl = library.owner.profileImage.startsWith('http')
         ? library.owner.profileImage
-        : `${baseUrl}${library.owner.profileImage}`;
+        : `${baseUrl}/api/v2${library.owner.profileImage}`;
     }
 
     return {
