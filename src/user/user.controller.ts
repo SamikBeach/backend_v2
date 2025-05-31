@@ -194,8 +194,17 @@ export class UserController {
     @Query('status') status: ReadingStatusType,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 12,
+    @Query('sort') sort: string = 'createdAt-desc',
+    @Query('timeRange') timeRange: string = 'all',
   ) {
-    return this.userService.getUserBooks(id, status, page, limit);
+    return this.userService.getUserBooks(
+      id,
+      status,
+      page,
+      limit,
+      sort,
+      timeRange,
+    );
   }
 
   @Get(':id/reading-status-counts')
