@@ -6,6 +6,25 @@ import { BookInfoDto } from '../../reading-status/dto/reading-status.dto';
 import { ReviewType } from '../../review/entities/review.entity';
 import { User } from '../../user/entities/user.entity';
 
+// 사용자 도서 목록 정렬 옵션
+export enum UserBooksSortOptions {
+  RATING_DESC = 'rating-desc',
+  REVIEWS_DESC = 'reviews-desc',
+  LIBRARY_COUNT_DESC = 'library-desc',
+  PUBLISH_DATE_DESC = 'publishDate-desc',
+  TITLE_ASC = 'title-asc',
+  CREATED_AT_DESC = 'createdAt-desc', // 등록 최신순
+}
+
+// 기간 필터 옵션
+export enum TimeRangeOptions {
+  ALL = 'all',
+  TODAY = 'today',
+  WEEK = 'week',
+  MONTH = 'month',
+  YEAR = 'year',
+}
+
 export class UpdateUserDto {
   @IsString({ message: '사용자명은 문자열이어야 합니다.' })
   @Length(2, 30, { message: '사용자명은 2-30자 사이여야 합니다.' })

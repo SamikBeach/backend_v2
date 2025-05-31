@@ -934,6 +934,8 @@ export class UserService {
     status: ReadingStatusType,
     page: number = 1,
     limit: number = 10,
+    sort: string = 'createdAt-desc',
+    timeRange: string = 'all',
   ): Promise<{
     items: ExtendedReadingStatusResponseDto[];
     total: number;
@@ -948,7 +950,6 @@ export class UserService {
       // Repository 가져오기
       const readingStatusRepo =
         this.userRepository.manager.getRepository(ReadingStatus);
-      const bookRepo = this.userRepository.manager.getRepository(Book);
 
       // 조건 설정
       const where: FindOptionsWhere<ReadingStatus> = { userId };
@@ -956,91 +957,304 @@ export class UserService {
         where.status = status;
       }
 
-      // 페이징 설정
-      const skip = (page - 1) * limit;
+      // 기본 쿼리 빌더 생성
+      let queryBuilder = readingStatusRepo
+        .createQueryBuilder('readingStatus')
+        .leftJoinAndSelect('readingStatus.book', 'book')
+        .leftJoinAndSelect('book.category', 'category')
+        .leftJoinAndSelect('book.subcategory', 'subcategory')
+        .where('readingStatus.userId = :userId', { userId });
 
-      // 데이터 조회
-      const [statuses, total] = await readingStatusRepo.findAndCount({
-        where,
-        order: { updatedAt: 'DESC' },
-        skip,
-        take: limit,
-      });
+      if (status) {
+        queryBuilder.andWhere('readingStatus.status = :status', { status });
+      }
 
-      // 책 정보가 없으면 빈 배열 반환
-      if (statuses.length === 0) {
+      // 기간 필터링 적용
+      if (timeRange !== 'all') {
+        const now = new Date();
+        let startDate: Date | null = null;
+
+        if (timeRange === 'today') {
+          startDate = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+            0,
+            0,
+            0,
+          );
+        } else if (timeRange === 'week') {
+          // 이번 주의 시작일(월요일)을 계산
+          const dayOfWeek = now.getDay(); // 0: 일요일, 1: 월요일, ..., 6: 토요일
+          const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 일요일이면 6, 아니면 현재 요일 - 1
+          startDate = new Date(now);
+          startDate.setDate(now.getDate() - diff);
+          startDate.setHours(0, 0, 0, 0);
+        } else if (timeRange === 'month') {
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        } else if (timeRange === 'year') {
+          startDate = new Date(now.getFullYear(), 0, 1);
+        }
+
+        if (startDate) {
+          queryBuilder.andWhere('readingStatus.createdAt >= :startDate', {
+            startDate,
+          });
+        }
+      }
+
+      // 서재에 담긴 순 정렬인 경우 특별 처리
+      if (sort === 'library-desc') {
+        // 먼저 조건에 맞는 모든 readingStatus를 가져옴
+        const allReadingStatuses = await queryBuilder.getMany();
+        const bookIds = allReadingStatuses.map((rs) => rs.bookId);
+
+        if (bookIds.length === 0) {
+          return {
+            items: [],
+            total: 0,
+            page,
+            totalPages: 0,
+            hasNextPage: false,
+          };
+        }
+
+        // 서재에 담긴 수 가져오기
+        const libraryCountResult = await this.userRepository.manager
+          .getRepository(LibraryBook)
+          .createQueryBuilder('lb')
+          .select('lb.bookId', 'bookId')
+          .addSelect('COUNT(lb.id)', 'libraryCount')
+          .where('lb.bookId IN (:...bookIds)', { bookIds })
+          .groupBy('lb.bookId')
+          .orderBy('libraryCount', 'DESC')
+          .getRawMany();
+
+        // 서재에 담긴 순으로 정렬된 bookId 배열 생성
+        const sortedBookIds = libraryCountResult.map((result) => result.bookId);
+
+        // 서재에 담기지 않은 책들도 추가 (평점 순으로)
+        const booksNotInLibrary = bookIds.filter(
+          (id) => !sortedBookIds.includes(id),
+        );
+        if (booksNotInLibrary.length > 0) {
+          const additionalBooks = await this.userRepository.manager
+            .getRepository(Book)
+            .createQueryBuilder('book')
+            .where('book.id IN (:...ids)', { ids: booksNotInLibrary })
+            .orderBy('book.rating', 'DESC')
+            .getMany();
+
+          sortedBookIds.push(...additionalBooks.map((book) => book.id));
+        }
+
+        // 페이징 적용
+        const total = sortedBookIds.length;
+        const totalPages = Math.ceil(total / limit);
+        const skip = (page - 1) * limit;
+        const pagedBookIds = sortedBookIds.slice(skip, skip + limit);
+
+        // 페이징된 ID에 해당하는 readingStatus 조회
+        const pagedReadingStatuses = pagedBookIds
+          .map((bookId) =>
+            allReadingStatuses.find((rs) => rs.bookId === bookId),
+          )
+          .filter(Boolean) as ReadingStatus[];
+
+        // book 정보를 별도로 조회
+        const books = await this.userRepository.manager
+          .getRepository(Book)
+          .createQueryBuilder('book')
+          .leftJoinAndSelect('book.category', 'category')
+          .leftJoinAndSelect('book.subcategory', 'subcategory')
+          .where('book.id IN (:...bookIds)', { bookIds: pagedBookIds })
+          .getMany();
+
+        // book 정보를 매핑
+        const bookMap = new Map(books.map((book) => [book.id, book]));
+
+        // 응답 DTO 생성
+        const responseDtos = pagedReadingStatuses
+          .map((status) => {
+            const book = bookMap.get(status.bookId);
+
+            // book이 null인 경우 처리
+            if (!book) {
+              this.logger.warn(
+                `Book not found for reading status ${status.id}, bookId: ${status.bookId}`,
+              );
+              return null;
+            }
+
+            const bookInfo: ExtendedBookInfoDto = {
+              id: book.id,
+              title: book.title,
+              author: book.author,
+              coverImage: book.coverImage,
+              isbn: book.isbn,
+              publisher: book.publisher,
+              isbn13: book.isbn13,
+              translator: book.translator,
+              pageCount: book.pageCount,
+              publishDate: book.publishDate,
+              rating: book.rating,
+              reviews: book.reviews,
+              totalRatings: book.totalRatings,
+              description: book.description,
+              tags: book.tags,
+              categoryId: book.category?.id || null,
+              subcategoryId: book.subcategory?.id || null,
+              priceSales: book.priceSales,
+              priceStandard: book.priceStandard,
+              isFeatured: book.isFeatured,
+              isDiscovered: book.isDiscovered,
+            };
+
+            return {
+              id: status.id,
+              status: status.status,
+              currentPage: status.currentPage,
+              startDate: status.startDate,
+              finishDate: status.finishDate,
+              readingMemo: status.readingMemo,
+              createdAt: status.createdAt,
+              updatedAt: status.updatedAt,
+              book: bookInfo,
+            } as ExtendedReadingStatusResponseDto;
+          })
+          .filter(Boolean) as ExtendedReadingStatusResponseDto[];
+
         return {
-          items: [],
+          items: responseDtos,
           total,
           page,
-          totalPages: Math.ceil(total / limit),
-          hasNextPage: page < Math.ceil(total / limit),
+          totalPages,
+          hasNextPage: page < totalPages,
         };
       }
 
-      // bookId를 이용해 book 정보 별도 조회
-      const bookIds = statuses.map((status) => status.bookId);
+      // 일반 정렬의 경우 - 먼저 모든 데이터를 가져온 후 메모리에서 정렬
+      const allStatuses = await queryBuilder.getMany();
 
-      // 책 정보 한번에 조회
-      const books = await bookRepo.find({
-        where: { id: In(bookIds) },
-      });
+      if (allStatuses.length === 0) {
+        return {
+          items: [],
+          total: 0,
+          page,
+          totalPages: 0,
+          hasNextPage: false,
+        };
+      }
 
-      // bookId를 키로 하는 맵 생성
-      const bookMap = new Map<number, Book>();
-      books.forEach((book) => {
-        bookMap.set(book.id, book);
-      });
+      // book 정보를 별도로 조회
+      const bookIds = allStatuses.map((status) => status.bookId);
+      const books = await this.userRepository.manager
+        .getRepository(Book)
+        .createQueryBuilder('book')
+        .leftJoinAndSelect('book.category', 'category')
+        .leftJoinAndSelect('book.subcategory', 'subcategory')
+        .where('book.id IN (:...bookIds)', { bookIds })
+        .getMany();
 
-      // 응답 DTO 생성
-      const responseDtos = statuses
+      // book 정보를 매핑
+      const bookMap = new Map(books.map((book) => [book.id, book]));
+
+      // status와 book을 결합한 데이터 생성
+      const statusWithBooks = allStatuses
         .map((status) => {
           const book = bookMap.get(status.bookId);
-
           if (!book) {
+            this.logger.warn(
+              `Book not found for reading status ${status.id}, bookId: ${status.bookId}`,
+            );
             return null;
           }
-
-          // 응답 객체 생성
-          const bookInfo: ExtendedBookInfoDto = {
-            id: book.id,
-            title: book.title,
-            author: book.author,
-            coverImage: book.coverImage,
-            isbn: book.isbn,
-            publisher: book.publisher,
-            isbn13: book.isbn13,
-            translator: book.translator,
-            pageCount: book.pageCount,
-            publishDate: book.publishDate,
-            rating: book.rating,
-            reviews: book.reviews,
-            totalRatings: book.totalRatings,
-            description: book.description,
-            tags: book.tags,
-            categoryId: book.category?.id,
-            subcategoryId: book.subcategory?.id,
-            priceSales: book.priceSales,
-            priceStandard: book.priceStandard,
-            isFeatured: book.isFeatured,
-            isDiscovered: book.isDiscovered,
-          };
-
-          return {
-            id: status.id,
-            status: status.status,
-            currentPage: status.currentPage,
-            startDate: status.startDate,
-            finishDate: status.finishDate,
-            readingMemo: status.readingMemo,
-            createdAt: status.createdAt,
-            updatedAt: status.updatedAt,
-            book: bookInfo,
-          } as ExtendedReadingStatusResponseDto;
+          return { status, book };
         })
-        .filter((dto) => dto !== null);
+        .filter(Boolean) as { status: ReadingStatus; book: Book }[];
 
+      // 정렬 적용
+      switch (sort) {
+        case 'rating-desc':
+          statusWithBooks.sort(
+            (a, b) => (b.book.rating || 0) - (a.book.rating || 0),
+          );
+          break;
+        case 'reviews-desc':
+          statusWithBooks.sort(
+            (a, b) => (b.book.reviews || 0) - (a.book.reviews || 0),
+          );
+          break;
+        case 'publishDate-desc':
+          statusWithBooks.sort((a, b) => {
+            const dateA = a.book.publishDate
+              ? new Date(a.book.publishDate).getTime()
+              : 0;
+            const dateB = b.book.publishDate
+              ? new Date(b.book.publishDate).getTime()
+              : 0;
+            return dateB - dateA;
+          });
+          break;
+        case 'title-asc':
+          statusWithBooks.sort((a, b) =>
+            (a.book.title || '').localeCompare(b.book.title || ''),
+          );
+          break;
+        case 'createdAt-desc':
+        default:
+          statusWithBooks.sort(
+            (a, b) =>
+              new Date(b.status.createdAt).getTime() -
+              new Date(a.status.createdAt).getTime(),
+          );
+          break;
+      }
+
+      // 페이징 적용
+      const total = statusWithBooks.length;
       const totalPages = Math.ceil(total / limit);
+      const skip = (page - 1) * limit;
+      const pagedStatusWithBooks = statusWithBooks.slice(skip, skip + limit);
+
+      // 응답 DTO 생성
+      const responseDtos = pagedStatusWithBooks.map(({ status, book }) => {
+        const bookInfo: ExtendedBookInfoDto = {
+          id: book.id,
+          title: book.title,
+          author: book.author,
+          coverImage: book.coverImage,
+          isbn: book.isbn,
+          publisher: book.publisher,
+          isbn13: book.isbn13,
+          translator: book.translator,
+          pageCount: book.pageCount,
+          publishDate: book.publishDate,
+          rating: book.rating,
+          reviews: book.reviews,
+          totalRatings: book.totalRatings,
+          description: book.description,
+          tags: book.tags,
+          categoryId: book.category?.id || null,
+          subcategoryId: book.subcategory?.id || null,
+          priceSales: book.priceSales,
+          priceStandard: book.priceStandard,
+          isFeatured: book.isFeatured,
+          isDiscovered: book.isDiscovered,
+        };
+
+        return {
+          id: status.id,
+          status: status.status,
+          currentPage: status.currentPage,
+          startDate: status.startDate,
+          finishDate: status.finishDate,
+          readingMemo: status.readingMemo,
+          createdAt: status.createdAt,
+          updatedAt: status.updatedAt,
+          book: bookInfo,
+        } as ExtendedReadingStatusResponseDto;
+      });
 
       return {
         items: responseDtos,
