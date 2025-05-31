@@ -24,7 +24,7 @@ async function bootstrap() {
 
   // 정적 파일 서빙 설정 (업로드된 이미지)
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
-    prefix: '/uploads/',
+    prefix: '/api/v2/uploads/',
   });
 
   // Set global prefix

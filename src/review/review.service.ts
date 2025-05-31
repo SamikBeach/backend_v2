@@ -1308,9 +1308,9 @@ export class ReviewService {
 
     // 상대 경로인 경우 서버 URL 추가
     if (imageUrl.startsWith('/uploads/')) {
-      return `${this.serverUrl}${imageUrl}`;
+      return `${this.serverUrl}/api/v2${imageUrl}`;
     } else if (imageUrl.startsWith('uploads/')) {
-      return `${this.serverUrl}/${imageUrl}`;
+      return `${this.serverUrl}/api/v2/${imageUrl}`;
     }
 
     return imageUrl;
