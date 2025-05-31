@@ -1,5 +1,17 @@
 # 🚦 CHANGELOG
 
+# [1.21.0](https://github.com/SamikBeach/backend_v2/compare/1.20.0...1.21.0) (2025-05-31)
+
+
+### Bug Fixes
+
+* 프로덕션 환경 이미지 파일 접근 경로 수정 ([f9a7a0f](https://github.com/SamikBeach/backend_v2/commit/f9a7a0fd41ad7c0a53690adb41608d4be2cd4ae3))
+
+
+### Features
+
+* 카테고리 API에 책 개수 기반 정렬 기능 추가 ([0dc77b0](https://github.com/SamikBeach/backend_v2/commit/0dc77b0f1fc37d006605d26338e8d5d07e790eec))
+
 # [1.20.0](https://github.com/SamikBeach/backend_v2/compare/1.19.2...1.20.0) (2025-05-31)
 
 
