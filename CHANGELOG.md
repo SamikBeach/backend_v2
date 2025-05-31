@@ -1,5 +1,18 @@
 # 🚦 CHANGELOG
 
+# [1.20.0](https://github.com/SamikBeach/backend_v2/compare/1.19.2...1.20.0) (2025-05-31)
+
+
+### Bug Fixes
+
+* 발견하기 도서 API의 관계 조인 오류 및 서재 담긴순 정렬 로직 수정 ([3e19abd](https://github.com/SamikBeach/backend_v2/commit/3e19abd2f98632e8fc937dfc087216df5f288936))
+
+
+### Features
+
+* 사용자 도서 목록 API 페이지네이션 정보 추가 ([f8fade0](https://github.com/SamikBeach/backend_v2/commit/f8fade025c3e2ab0ba07d37e7ab0b8ca9d12ac3e))
+* 사용자 도서 목록 API에 정렬 및 기간 필터 기능 추가 ([9f48b30](https://github.com/SamikBeach/backend_v2/commit/9f48b302ef9b17b581cf7c859949dc4b9f10dde8))
+
 ## [1.19.2](https://github.com/SamikBeach/backend_v2/compare/1.19.1...1.19.2) (2025-05-29)
 
 ## [1.19.1](https://github.com/SamikBeach/backend_v2/compare/1.19.0...1.19.1) (2025-05-29)
