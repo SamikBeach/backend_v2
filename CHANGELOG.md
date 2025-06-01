@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.22.0](https://github.com/SamikBeach/backend_v2/compare/1.21.0...1.22.0) (2025-06-01)
+
+
+### Features
+
+* Book 엔티티에 커버 이미지 크기 정보 필드 추가 ([ccf53a0](https://github.com/SamikBeach/backend_v2/commit/ccf53a03a9ac96d9c1d8e8a51e9870694eddaafe))
+
 # [1.21.0](https://github.com/SamikBeach/backend_v2/compare/1.20.0...1.21.0) (2025-05-31)
 
 
