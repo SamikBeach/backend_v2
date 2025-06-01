@@ -38,6 +38,7 @@ import { Category } from '../category/entities/category.entity';
 import { SubCategory } from '../category/entities/subcategory.entity';
 import { ReviewService } from '../review/review.service';
 import { Cache, CACHE_MANAGER } from '@nestjs/cache-manager';
+import { ImageAnalyzerService } from './image-analyzer.service';
 
 @Injectable()
 export class BookService {
@@ -64,6 +65,7 @@ export class BookService {
     private readonly reviewService: ReviewService,
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
+    private readonly imageAnalyzerService: ImageAnalyzerService,
   ) {}
 
   /**

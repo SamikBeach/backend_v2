@@ -26,6 +26,7 @@
     "seed:reading-status": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/reading-status.seed.ts",
     "seed:library-tag": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/library-tag.seed.ts",
     "seed:aladin-library": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/aladin-library.seed.ts",
+    "seed:book-cover-dimensions": "NODE_ENV=development ts-node -r tsconfig-paths/register src/seeds/book-cover-image-dimensions.seed.ts",
     "seed:all": "yarn seed:categories && yarn seed:books && yarn seed:discover-category && yarn seed:user && yarn seed:library && yarn seed:review && yarn seed:search && yarn seed:notification && yarn seed:reading-status && yarn seed:library-tag",
     "seed:run-all": "NODE_ENV=development ts-node src/seeds/seed-all.ts",
     "seed:category": "ts-node -r tsconfig-paths/register src/seeds/category.seed.ts"
@@ -48,6 +49,7 @@
     "date-fns": "^4.1.0",
     "dotenv": "^16.5.0",
     "googleapis": "^149.0.0",
+    "image-size": "^2.0.2",
     "jsonwebtoken": "^9.0.2",
     "keyv": "^5.3.3",
     "lodash": "^4.17.21",

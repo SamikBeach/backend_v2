@@ -4,6 +4,7 @@ import { Book } from './entities/book.entity';
 import { BookDiscoverCategory } from './entities/book-discover-category.entity';
 import { BookService } from './book.service';
 import { BookController } from './book.controller';
+import { ImageAnalyzerService } from './image-analyzer.service';
 import { CommonModule } from '../common/common.module';
 import { CategoryModule } from '../category/category.module';
 import { DiscoverCategoryModule } from '../discover-category/discover-category.module';
@@ -26,7 +27,7 @@ import { ReviewModule } from '../review/review.module';
     forwardRef(() => ReviewModule),
   ],
   controllers: [BookController],
-  providers: [BookService],
-  exports: [BookService],
+  providers: [BookService, ImageAnalyzerService],
+  exports: [BookService, ImageAnalyzerService],
 })
 export class BookModule {}
