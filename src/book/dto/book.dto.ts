@@ -1,11 +1,3 @@
-import {
-  IsString,
-  IsNumber,
-  IsOptional,
-  IsBoolean,
-  IsDate,
-  IsDateString,
-} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Book } from '../entities/book.entity';
 
@@ -146,6 +138,12 @@ export class BookResponseDto {
 
   @ApiProperty({ description: '표지 이미지 URL' })
   coverImage: string;
+
+  @ApiProperty({ description: '표지 이미지 가로 크기', required: false })
+  coverImageWidth?: number;
+
+  @ApiProperty({ description: '표지 이미지 세로 크기', required: false })
+  coverImageHeight?: number;
 
   @ApiProperty({ description: '카테고리 정보', required: false })
   category?: any;

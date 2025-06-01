@@ -268,6 +268,8 @@ export class SearchService {
           title: item.title || item.term, // 책 제목이 없으면 검색어를 사용
           author: item.author || '',
           coverImage: item.coverImage || '',
+          coverImageWidth: null,
+          coverImageHeight: null,
           publisher: item.publisher || '',
           isbn: item.isbn || '',
           isbn13: item.isbn13 || '',
@@ -332,6 +334,8 @@ export class SearchService {
             author: bookInfo.author,
             translator: bookInfo.translator,
             coverImage: bookInfo.coverImage,
+            coverImageWidth: bookInfo.coverImageWidth,
+            coverImageHeight: bookInfo.coverImageHeight,
             publisher: bookInfo.publisher,
             publishDate: bookInfo.publishDate,
             description: bookInfo.description,

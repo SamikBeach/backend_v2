@@ -26,6 +26,13 @@ export class Book {
   @Column({ nullable: true })
   coverImage: string;
 
+  // 이미지 크기 정보 (레이아웃 쉬프트 방지용)
+  @Column({ nullable: true, type: 'int' })
+  coverImageWidth: number;
+
+  @Column({ nullable: true, type: 'int' })
+  coverImageHeight: number;
+
   @Column()
   isbn: string;
 
