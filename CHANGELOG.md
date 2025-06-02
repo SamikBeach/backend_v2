@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.23.0](https://github.com/SamikBeach/backend_v2/compare/1.22.0...1.23.0) (2025-06-02)
+
+
+### Features
+
+* search API 응답에 커버 이미지 크기 정보 추가 ([c729572](https://github.com/SamikBeach/backend_v2/commit/c7295721d9c819f95554270e45c8a67babca6c09))
+
 # [1.22.0](https://github.com/SamikBeach/backend_v2/compare/1.21.0...1.22.0) (2025-06-01)
 
 
