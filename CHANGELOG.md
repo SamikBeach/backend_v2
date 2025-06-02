@@ -1,5 +1,17 @@
 # 🚦 CHANGELOG
 
+# [1.24.0](https://github.com/SamikBeach/backend_v2/compare/1.23.0...1.24.0) (2025-06-02)
+
+
+### Bug Fixes
+
+* Book 엔티티 description 컬럼을 TEXT 타입으로 변경하여 긴 설명 저장 지원 ([40edb3d](https://github.com/SamikBeach/backend_v2/commit/40edb3d7b3ed8caa45dd085fe06d9652f7a9e729))
+
+
+### Features
+
+* Book 엔티티 description 컬럼을 TEXT 타입으로 변경하는 마이그레이션 추가 ([c6c2a35](https://github.com/SamikBeach/backend_v2/commit/c6c2a35f2b65ed702d65fb21d8bf40f200145921))
+
 # [1.23.0](https://github.com/SamikBeach/backend_v2/compare/1.22.0...1.23.0) (2025-06-02)
 
 
