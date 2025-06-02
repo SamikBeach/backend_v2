@@ -63,7 +63,7 @@ export class Book {
   @Column('simple-array', { nullable: true })
   tags: string[];
 
-  @Column()
+  @Column({ type: 'text' })
   description: string;
 
   @Column({ nullable: true, type: 'int' })
