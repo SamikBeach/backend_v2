@@ -52,7 +52,7 @@ import { RatingModule } from '../rating/rating.module';
             },
           }),
           limits: {
-            fileSize: 5 * 1024 * 1024, // 5MB
+            fileSize: 20 * 1024 * 1024, // 20MB
           },
           fileFilter: (req, file, callback) => {
             // 이미지 파일만 허용
