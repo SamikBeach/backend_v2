@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+# [1.25.0](https://github.com/SamikBeach/backend_v2/compare/1.24.0...1.25.0) (2025-06-03)
+
+
+### Features
+
+* 이미지 파일 업로드 크기 제한을 20MB로 증가 ([dde1691](https://github.com/SamikBeach/backend_v2/commit/dde1691ecf3bf06ce35a8fda84cc931d6d7465f5))
+
 # [1.24.0](https://github.com/SamikBeach/backend_v2/compare/1.23.0...1.24.0) (2025-06-02)
 
 
