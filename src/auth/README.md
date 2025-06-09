@@ -17,6 +17,10 @@ KAKAO_CALLBACK_URL=http://localhost:3000/api/auth/kakao/callback
 
 # YouTube API
 YOUTUBE_API_KEY=your_youtube_api_key
+
+# 모바일 Deep Link (새로 추가)
+MOBILE_DEEP_LINK_SCHEME=miyuk-books
+MOBILE_AUTH_CALLBACK=miyuk-books://auth/callback
 ```
 
 ## 네이버 개발자 센터 설정
@@ -73,16 +77,121 @@ YOUTUBE_API_KEY=your_youtube_api_key
 6. 제품 설정 > 카카오 로그인 > 동의항목에서 필요한 정보 동의항목을 설정합니다 (이메일 등).
 7. 앱 키 > REST API 키를 Client ID로, 보안 > Client Secret을 발급받아 환경 변수에 설정합니다.
 
-## 클라이언트 측 구현
+## 웹 클라이언트 구현
 
-클라이언트에서는 다음과 같은 링크를 통해 소셜 로그인을 시작할 수 있습니다:
+웹 클라이언트에서는 다음과 같은 링크를 통해 소셜 로그인을 시작할 수 있습니다:
 
 ```html
 <a href="/api/auth/naver">네이버로 로그인</a>
 <a href="/api/auth/kakao">카카오로 로그인</a>
+<a href="/api/auth/google">구글로 로그인</a>
+<a href="/api/auth/apple">애플로 로그인</a>
 ```
 
 로그인 성공 시 `/auth/social-callback` 경로로 리다이렉트되며, 쿼리 파라미터로 액세스 토큰과 리프레시 토큰이 전달됩니다.
+
+## 모바일 앱 OAuth 인증
+
+### 1. 모바일 앱 설정
+
+모바일 앱에서는 Deep Link를 통해 OAuth 콜백을 처리합니다.
+
+#### Deep Link 설정
+
+앱의 URL scheme을 `miyuk-books`로 설정하고, 다음과 같은 패턴을 등록합니다:
+
+```
+miyuk-books://auth/callback
+```
+
+#### React Native Expo 예시
+
+```javascript
+import * as Linking from 'expo-linking';
+
+// Deep Link 처리 훅
+const useDeepLink = () => {
+  useEffect(() => {
+    const handleDeepLink = (url) => {
+      if (url.startsWith('miyuk-books://auth/callback')) {
+        // OAuth 콜백 처리
+        const parsedUrl = new URL(url);
+        const token = parsedUrl.searchParams.get('token');
+        const refreshToken = parsedUrl.searchParams.get('refreshToken');
+        const user = parsedUrl.searchParams.get('user');
+
+        if (token && refreshToken) {
+          // 토큰 저장 및 사용자 정보 설정
+        }
+      }
+    };
+
+    const subscription = Linking.addEventListener('url', (event) => {
+      handleDeepLink(event.url);
+    });
+
+    return () => subscription?.remove();
+  }, []);
+};
+```
+
+### 2. OAuth 시작 URL
+
+모바일 앱에서 OAuth를 시작할 때는 `client_type=mobile` 파라미터를 추가해야 합니다:
+
+```javascript
+// Google OAuth
+const googleAuthUrl = `${API_BASE_URL}/auth/google?client_type=mobile`;
+
+// Naver OAuth
+const naverAuthUrl = `${API_BASE_URL}/auth/naver?client_type=mobile`;
+
+// Kakao OAuth
+const kakaoAuthUrl = `${API_BASE_URL}/auth/kakao?client_type=mobile`;
+
+// Apple OAuth
+const appleAuthUrl = `${API_BASE_URL}/auth/apple?client_type=mobile`;
+
+// 웹뷰 또는 시스템 브라우저로 열기
+WebBrowser.openBrowserAsync(googleAuthUrl);
+```
+
+### 3. 콜백 처리
+
+#### 성공 시 콜백
+
+```
+miyuk-books://auth/callback?token=<access_token>&refreshToken=<refresh_token>&user=<user_info_json>
+```
+
+#### 에러 시 콜백
+
+```
+miyuk-books://auth/callback?error=<error_message>
+```
+
+### 4. 클라이언트 타입 감지
+
+백엔드는 다음 순서로 클라이언트 타입을 감지합니다:
+
+1. **Query Parameter**: `client_type=mobile` 파라미터
+2. **Request 저장값**: OAuth 시작 시 저장된 값
+3. **User-Agent**: `Mobile` 또는 `Expo` 포함 여부
+
+### 5. 전체 플로우
+
+1. **모바일 앱**: OAuth URL에 `client_type=mobile` 추가하여 시스템 브라우저로 열기
+2. **사용자**: 브라우저에서 소셜 로그인 진행
+3. **백엔드**: 클라이언트 타입 감지 후 적절한 콜백 URL로 리다이렉트
+   - **웹**: `http://frontend-url/auth/social-callback`
+   - **모바일**: `miyuk-books://auth/callback`
+4. **모바일 앱**: Deep Link로 앱이 다시 활성화되며 토큰 처리
+
+### 6. 보안 고려사항
+
+- Deep Link는 앱이 설치된 경우에만 동작합니다
+- 토큰이 URL에 노출되므로 즉시 안전한 저장소(Keychain, Secure Storage)에 저장해야 합니다
+- 사용자 정보는 URL encode되어 전달되므로 적절히 decode해야 합니다
 
 ## YouTube API 설정
 
