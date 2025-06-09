@@ -7,8 +7,10 @@ import {
   Res,
   Logger,
   BadRequestException,
+  Query,
+  Req,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { SocialLoginDto } from './dto/social-login.dto';
@@ -43,6 +45,24 @@ export class AuthController {
     private readonly userService: UserService,
     private readonly configService: ConfigService,
   ) {}
+
+  // 클라이언트 타입 감지 헬퍼 메서드
+  private detectClientType(req: any, query?: any): 'web' | 'mobile' {
+    // 1. Query parameter에서 확인
+    if (query?.client_type)
+      return query.client_type === 'mobile' ? 'mobile' : 'web';
+
+    // 2. Request에 저장된 값 확인 (OAuth 시작 시 저장)
+    if (req.clientType) return req.clientType === 'mobile' ? 'mobile' : 'web';
+
+    // 3. User-Agent 기반 감지
+    const userAgent = req.headers['user-agent'];
+    if (userAgent?.includes('Mobile') || userAgent?.includes('Expo')) {
+      return 'mobile';
+    }
+
+    return 'web';
+  }
 
   @Post('login')
   @IsPublic()
@@ -162,75 +182,162 @@ export class AuthController {
   @Get('google')
   @IsPublic()
   @UseGuards(AuthGuard('google'))
-  googleAuth() {
+  googleAuth(@Req() req: any, @Query('client_type') clientType?: string) {
+    // 클라이언트 타입을 request에 저장하여 콜백에서 사용
+    req.clientType = clientType;
     // Google 인증 페이지로 리다이렉트 (Passport가 처리)
   }
 
   @Get('google/callback')
   @IsPublic()
   @UseGuards(AuthGuard('google'))
-  async googleAuthCallback(@GetUser() user: User, @Res() res: Response) {
-    const result = await this.authService.socialLogin({
-      provider: AuthProvider.GOOGLE,
-      user,
-    });
+  async googleAuthCallback(
+    @GetUser() user: User,
+    @Res() res: Response,
+    @Req() req: any,
+    @Query() query: any,
+  ) {
+    try {
+      const result = await this.authService.socialLogin({
+        provider: AuthProvider.GOOGLE,
+        user,
+      });
 
-    // 프론트엔드로 리다이렉트 (토큰과 함께)
-    const frontendUrl = this.configService.get<string>('SERVICE_URL');
-    res.redirect(
-      `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
-    );
+      const clientType = this.detectClientType(req, query);
+
+      if (clientType === 'mobile') {
+        // 모바일: Deep Link로 리다이렉트
+        const deepLinkUrl = `miyuk-books://auth/callback?token=${result.accessToken}&refreshToken=${result.refreshToken}&user=${encodeURIComponent(JSON.stringify(result.user))}`;
+        res.redirect(deepLinkUrl);
+      } else {
+        // 웹: 기존 방식 유지
+        const frontendUrl = this.configService.get<string>('SERVICE_URL');
+        res.redirect(
+          `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error('Google callback error:', error);
+      const clientType = this.detectClientType(req, query);
+
+      if (clientType === 'mobile') {
+        const deepLinkUrl = `miyuk-books://auth/callback?error=${encodeURIComponent(error.message)}`;
+        res.redirect(deepLinkUrl);
+      } else {
+        const frontendUrl = this.configService.get<string>('SERVICE_URL');
+        res.redirect(
+          `${frontendUrl}/auth/social-callback?error=${encodeURIComponent(error.message)}`,
+        );
+      }
+    }
   }
 
   @Get('naver')
   @IsPublic()
   @UseGuards(AuthGuard('naver'))
-  naverAuth() {
+  naverAuth(@Req() req: any, @Query('client_type') clientType?: string) {
+    req.clientType = clientType;
     // Naver 인증 페이지로 리다이렉트 (Passport가 처리)
   }
 
   @Get('naver/callback')
   @IsPublic()
   @UseGuards(AuthGuard('naver'))
-  async naverAuthCallback(@GetUser() user: User, @Res() res: Response) {
-    const result = await this.authService.socialLogin({
-      provider: AuthProvider.NAVER,
-      user,
-    });
+  async naverAuthCallback(
+    @GetUser() user: User,
+    @Res() res: Response,
+    @Req() req: any,
+    @Query() query: any,
+  ) {
+    try {
+      const result = await this.authService.socialLogin({
+        provider: AuthProvider.NAVER,
+        user,
+      });
 
-    // 프론트엔드로 리다이렉트 (토큰과 함께)
-    const frontendUrl = this.configService.get<string>('SERVICE_URL');
-    res.redirect(
-      `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
-    );
+      const clientType = this.detectClientType(req, query);
+
+      if (clientType === 'mobile') {
+        const deepLinkUrl = `miyuk-books://auth/callback?token=${result.accessToken}&refreshToken=${result.refreshToken}&user=${encodeURIComponent(JSON.stringify(result.user))}`;
+        res.redirect(deepLinkUrl);
+      } else {
+        const frontendUrl = this.configService.get<string>('SERVICE_URL');
+        res.redirect(
+          `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error('Naver callback error:', error);
+      const clientType = this.detectClientType(req, query);
+
+      if (clientType === 'mobile') {
+        const deepLinkUrl = `miyuk-books://auth/callback?error=${encodeURIComponent(error.message)}`;
+        res.redirect(deepLinkUrl);
+      } else {
+        const frontendUrl = this.configService.get<string>('SERVICE_URL');
+        res.redirect(
+          `${frontendUrl}/auth/social-callback?error=${encodeURIComponent(error.message)}`,
+        );
+      }
+    }
   }
 
   @Get('kakao')
   @IsPublic()
   @UseGuards(AuthGuard('kakao'))
-  kakaoAuth() {
+  kakaoAuth(@Req() req: any, @Query('client_type') clientType?: string) {
+    req.clientType = clientType;
     // 카카오 인증 페이지로 리다이렉트 (Passport가 처리)
   }
 
   @Get('kakao/callback')
   @IsPublic()
   @UseGuards(AuthGuard('kakao'))
-  async kakaoAuthCallback(@GetUser() user: User, @Res() res: Response) {
-    const result = await this.authService.socialLogin({
-      provider: AuthProvider.KAKAO,
-      user,
-    });
+  async kakaoAuthCallback(
+    @GetUser() user: User,
+    @Res() res: Response,
+    @Req() req: any,
+    @Query() query: any,
+  ) {
+    try {
+      const result = await this.authService.socialLogin({
+        provider: AuthProvider.KAKAO,
+        user,
+      });
 
-    // 프론트엔드로 리다이렉트 (토큰과 함께)
-    const frontendUrl = this.configService.get<string>('SERVICE_URL');
-    res.redirect(
-      `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
-    );
+      const clientType = this.detectClientType(req, query);
+
+      if (clientType === 'mobile') {
+        const deepLinkUrl = `miyuk-books://auth/callback?token=${result.accessToken}&refreshToken=${result.refreshToken}&user=${encodeURIComponent(JSON.stringify(result.user))}`;
+        res.redirect(deepLinkUrl);
+      } else {
+        const frontendUrl = this.configService.get<string>('SERVICE_URL');
+        res.redirect(
+          `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error('Kakao callback error:', error);
+      const clientType = this.detectClientType(req, query);
+
+      if (clientType === 'mobile') {
+        const deepLinkUrl = `miyuk-books://auth/callback?error=${encodeURIComponent(error.message)}`;
+        res.redirect(deepLinkUrl);
+      } else {
+        const frontendUrl = this.configService.get<string>('SERVICE_URL');
+        res.redirect(
+          `${frontendUrl}/auth/social-callback?error=${encodeURIComponent(error.message)}`,
+        );
+      }
+    }
   }
 
   @Get('apple')
   @IsPublic()
-  async appleAuth(@Res() res: Response) {
+  async appleAuth(
+    @Res() res: Response,
+    @Query('client_type') clientType?: string,
+  ) {
     try {
       const clientId = this.configService.get<string>('APPLE_CLIENT_ID');
       const callbackUrl = this.configService.get<string>('APPLE_CALLBACK_URL');
@@ -241,21 +348,21 @@ export class AuthController {
 
       // Apple 인증 URL 생성
       const state = Math.random().toString(36).substring(2, 15);
-      const appleAuthUrl = new URL('https://appleid.apple.com/auth/authorize');
+      // 클라이언트 타입도 state에 포함
+      const stateWithClientType = `${state}_${clientType || 'web'}`;
 
+      const appleAuthUrl = new URL('https://appleid.apple.com/auth/authorize');
       appleAuthUrl.searchParams.append('client_id', clientId);
       appleAuthUrl.searchParams.append('redirect_uri', callbackUrl);
       appleAuthUrl.searchParams.append('response_type', 'code');
       appleAuthUrl.searchParams.append('scope', 'name email');
       appleAuthUrl.searchParams.append('response_mode', 'form_post');
-      appleAuthUrl.searchParams.append('state', state);
+      appleAuthUrl.searchParams.append('state', stateWithClientType);
 
       this.logger.log(
         'Redirecting to Apple auth URL:',
         appleAuthUrl.toString(),
       );
-
-      // Apple 인증 페이지로 리다이렉트
       res.redirect(appleAuthUrl.toString());
     } catch (error) {
       this.logger.error('Apple auth redirect error:', error);
@@ -276,6 +383,9 @@ export class AuthController {
 
       const { code, id_token, user, state } = body;
 
+      // state에서 클라이언트 타입 추출
+      const clientType = state?.includes('_mobile') ? 'mobile' : 'web';
+
       // Apple에서 전달받은 모든 데이터 로깅
       this.logger.log('Apple callback data:', {
         hasCode: !!code,
@@ -284,6 +394,7 @@ export class AuthController {
         state: state,
         userType: typeof user,
         userContent: user,
+        clientType: clientType,
       });
 
       if (!code && !id_token) {
@@ -326,18 +437,32 @@ export class AuthController {
 
       this.logger.log('Apple login successful, redirecting to frontend');
 
-      // 프론트엔드로 리다이렉트 (토큰과 함께)
-      const frontendUrl = this.configService.get<string>('SERVICE_URL');
-      res.redirect(
-        `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
-      );
+      if (clientType === 'mobile') {
+        // 모바일: Deep Link로 리다이렉트
+        const deepLinkUrl = `miyuk-books://auth/callback?token=${result.accessToken}&refreshToken=${result.refreshToken}&user=${encodeURIComponent(JSON.stringify(result.user))}`;
+        res.redirect(deepLinkUrl);
+      } else {
+        // 웹: 기존 방식 유지
+        const frontendUrl = this.configService.get<string>('SERVICE_URL');
+        res.redirect(
+          `${frontendUrl}/auth/social-callback?token=${result.accessToken}&refreshToken=${result.refreshToken}`,
+        );
+      }
     } catch (error) {
       this.logger.error('Apple callback error:', error.message);
       this.logger.error('Error stack:', error.stack);
-      const frontendUrl = this.configService.get<string>('SERVICE_URL');
-      res.redirect(
-        `${frontendUrl}/auth/social-callback?error=${encodeURIComponent(error.message)}`,
-      );
+
+      const clientType = body?.state?.includes('_mobile') ? 'mobile' : 'web';
+
+      if (clientType === 'mobile') {
+        const deepLinkUrl = `miyuk-books://auth/callback?error=${encodeURIComponent(error.message)}`;
+        res.redirect(deepLinkUrl);
+      } else {
+        const frontendUrl = this.configService.get<string>('SERVICE_URL');
+        res.redirect(
+          `${frontendUrl}/auth/social-callback?error=${encodeURIComponent(error.message)}`,
+        );
+      }
     }
   }
 
