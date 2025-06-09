@@ -130,7 +130,7 @@ export class CommentService {
       const comments = await this.commentRepository.find({
         where: { reviewId, parentCommentId: null },
         relations: ['author'],
-        order: { createdAt: 'DESC' },
+        order: { createdAt: 'ASC' },
       });
 
       // 각 최상위 댓글의 대댓글 조회
