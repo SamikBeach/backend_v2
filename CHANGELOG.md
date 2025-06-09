@@ -1,5 +1,17 @@
 # 🚦 CHANGELOG
 
+# [1.26.0](https://github.com/SamikBeach/backend_v2/compare/1.25.0...1.26.0) (2025-06-09)
+
+
+### Bug Fixes
+
+* 리뷰 댓글 정렬을 오래된 순서로 변경 ([e105032](https://github.com/SamikBeach/backend_v2/commit/e10503234d9a6835d259e5d9e4e76ce16464562f))
+
+
+### Features
+
+* 모바일 OAuth 인증 지원 및 Deep Link 리다이렉트 구현 ([c4fcb4b](https://github.com/SamikBeach/backend_v2/commit/c4fcb4ba777c9d6016391dec5623e015e968318e))
+
 # [1.25.0](https://github.com/SamikBeach/backend_v2/compare/1.24.0...1.25.0) (2025-06-03)
 
 
