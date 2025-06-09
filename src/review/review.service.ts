@@ -888,13 +888,7 @@ export class ReviewService {
     }
 
     // 프로필 이미지 URL 생성
-    let profileImageUrl = null;
-    if (review.author.profileImage) {
-      // 이미 완전한 URL인 경우 그대로 사용, 아닌 경우 baseUrl 추가
-      profileImageUrl = review.author.profileImage.startsWith('http')
-        ? review.author.profileImage
-        : `${this.serverUrl}${review.author.profileImage}`;
-    }
+    const profileImageUrl = this.ensureFullImageUrl(review.author.profileImage);
 
     return {
       id: review.id,
