@@ -1,5 +1,68 @@
 # 🚦 CHANGELOG
 
+# [1.26.0](https://github.com/SamikBeach/backend_v2/compare/1.25.0...1.26.0) (2025-06-09)
+
+### Bug Fixes
+
+- 리뷰 댓글 정렬을 오래된 순서로 변경 ([e105032](https://github.com/SamikBeach/backend_v2/commit/e10503234d9a6835d259e5d9e4e76ce16464562f))
+
+### Features
+
+- 모바일 OAuth 인증 지원 및 Deep Link 리다이렉트 구현 ([c4fcb4b](https://github.com/SamikBeach/backend_v2/commit/c4fcb4ba777c9d6016391dec5623e015e968318e))
+
+# [1.25.0](https://github.com/SamikBeach/backend_v2/compare/1.24.0...1.25.0) (2025-06-03)
+
+### Features
+
+- 이미지 파일 업로드 크기 제한을 20MB로 증가 ([dde1691](https://github.com/SamikBeach/backend_v2/commit/dde1691ecf3bf06ce35a8fda84cc931d6d7465f5))
+
+# [1.24.0](https://github.com/SamikBeach/backend_v2/compare/1.23.0...1.24.0) (2025-06-02)
+
+### Bug Fixes
+
+- Book 엔티티 description 컬럼을 TEXT 타입으로 변경하여 긴 설명 저장 지원 ([40edb3d](https://github.com/SamikBeach/backend_v2/commit/40edb3d7b3ed8caa45dd085fe06d9652f7a9e729))
+
+### Features
+
+- Book 엔티티 description 컬럼을 TEXT 타입으로 변경하는 마이그레이션 추가 ([c6c2a35](https://github.com/SamikBeach/backend_v2/commit/c6c2a35f2b65ed702d65fb21d8bf40f200145921))
+
+# [1.23.0](https://github.com/SamikBeach/backend_v2/compare/1.22.0...1.23.0) (2025-06-02)
+
+### Features
+
+- search API 응답에 커버 이미지 크기 정보 추가 ([c729572](https://github.com/SamikBeach/backend_v2/commit/c7295721d9c819f95554270e45c8a67babca6c09))
+
+# [1.22.0](https://github.com/SamikBeach/backend_v2/compare/1.21.0...1.22.0) (2025-06-01)
+
+### Features
+
+- Book 엔티티에 커버 이미지 크기 정보 필드 추가 ([ccf53a0](https://github.com/SamikBeach/backend_v2/commit/ccf53a03a9ac96d9c1d8e8a51e9870694eddaafe))
+
+# [1.21.0](https://github.com/SamikBeach/backend_v2/compare/1.20.0...1.21.0) (2025-05-31)
+
+### Bug Fixes
+
+- 프로덕션 환경 이미지 파일 접근 경로 수정 ([f9a7a0f](https://github.com/SamikBeach/backend_v2/commit/f9a7a0fd41ad7c0a53690adb41608d4be2cd4ae3))
+
+### Features
+
+- 카테고리 API에 책 개수 기반 정렬 기능 추가 ([0dc77b0](https://github.com/SamikBeach/backend_v2/commit/0dc77b0f1fc37d006605d26338e8d5d07e790eec))
+
+# [1.20.0](https://github.com/SamikBeach/backend_v2/compare/1.19.2...1.20.0) (2025-05-31)
+
+### Bug Fixes
+
+- 발견하기 도서 API의 관계 조인 오류 및 서재 담긴순 정렬 로직 수정 ([3e19abd](https://github.com/SamikBeach/backend_v2/commit/3e19abd2f98632e8fc937dfc087216df5f288936))
+
+### Features
+
+- 사용자 도서 목록 API 페이지네이션 정보 추가 ([f8fade0](https://github.com/SamikBeach/backend_v2/commit/f8fade025c3e2ab0ba07d37e7ab0b8ca9d12ac3e))
+- 사용자 도서 목록 API에 정렬 및 기간 필터 기능 추가 ([9f48b30](https://github.com/SamikBeach/backend_v2/commit/9f48b302ef9b17b581cf7c859949dc4b9f10dde8))
+
+## [1.19.2](https://github.com/SamikBeach/backend_v2/compare/1.19.1...1.19.2) (2025-05-29)
+
+## [1.19.1](https://github.com/SamikBeach/backend_v2/compare/1.19.0...1.19.1) (2025-05-29)
+
 # [1.19.0](https://github.com/SamikBeach/backend_v2/compare/1.18.1...1.19.0) (2025-05-26)
 
 ### Features
