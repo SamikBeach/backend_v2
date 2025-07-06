@@ -432,16 +432,21 @@ export class CommentService {
         ? await this.isCommentLikedByUser(comment.id, userId)
         : false;
 
-      // BASE_URL 환경변수 가져오기
-      const baseUrl = process.env.BASE_URL || 'http://localhost:3005';
-
-      // 프로필 이미지 URL 생성
+      // 프로필 이미지 URL 생성 (UserService와 동일한 로직 사용)
       let profileImageUrl = null;
       if (author.profileImage) {
-        // 이미 완전한 URL인 경우 그대로 사용, 아닌 경우 baseUrl 추가
-        profileImageUrl = author.profileImage.startsWith('http')
-          ? author.profileImage
-          : `${baseUrl}/api/v2${author.profileImage}`;
+        if (author.profileImage.startsWith('http')) {
+          profileImageUrl = author.profileImage;
+        } else {
+          const baseUrl = process.env.BASE_URL || 'http://localhost:3005';
+          if (author.profileImage.startsWith('/uploads/')) {
+            profileImageUrl = `${baseUrl}/api/v2${author.profileImage}`;
+          } else if (author.profileImage.startsWith('uploads/')) {
+            profileImageUrl = `${baseUrl}/api/v2/${author.profileImage}`;
+          } else {
+            profileImageUrl = `${baseUrl}/api/v2/${author.profileImage}`;
+          }
+        }
       }
 
       return {

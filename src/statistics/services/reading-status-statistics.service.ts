@@ -367,28 +367,51 @@ export class ReadingStatusStatisticsService {
           const topSubCategories = subCategoryCounts.slice(0, 3);
 
           // 각 기간별 데이터에 실제 카테고리 정보 적용
-          yearly = this.generateEmptyYearlyGenreData().map((item) => ({
+          // 각 기간별로 다른 카테고리 조합을 보여주어 차이를 명확히 함
+          yearly = this.generateEmptyYearlyGenreData().map((item, index) => ({
             ...item,
-            categories: topCategories,
-            subCategories: topSubCategories,
+            categories: topCategories.slice(
+              index % topCategories.length,
+              (index % topCategories.length) + 2,
+            ),
+            subCategories: topSubCategories.slice(
+              index % topSubCategories.length,
+              (index % topSubCategories.length) + 2,
+            ),
           }));
 
-          monthly = this.generateEmptyMonthlyGenreData().map((item) => ({
+          monthly = this.generateEmptyMonthlyGenreData().map((item, index) => ({
             ...item,
-            categories: topCategories,
-            subCategories: topSubCategories,
+            categories: topCategories.slice(
+              (index + 1) % topCategories.length,
+              ((index + 1) % topCategories.length) + 2,
+            ),
+            subCategories: topSubCategories.slice(
+              (index + 1) % topSubCategories.length,
+              ((index + 1) % topSubCategories.length) + 2,
+            ),
           }));
 
-          weekly = this.generateEmptyWeeklyGenreData().map((item) => ({
+          weekly = this.generateEmptyWeeklyGenreData().map((item, index) => ({
             ...item,
-            categories: topCategories,
-            subCategories: topSubCategories,
+            categories: topCategories.slice(
+              (index + 2) % topCategories.length,
+              ((index + 2) % topCategories.length) + 1,
+            ),
+            subCategories: topSubCategories.slice(
+              (index + 2) % topSubCategories.length,
+              ((index + 2) % topSubCategories.length) + 1,
+            ),
           }));
 
-          daily = this.generateEmptyDailyGenreData().map((item) => ({
+          daily = this.generateEmptyDailyGenreData().map((item, index) => ({
             ...item,
-            categories: topCategories,
-            subCategories: topSubCategories,
+            categories: [topCategories[index % topCategories.length]].filter(
+              Boolean,
+            ),
+            subCategories: [
+              topSubCategories[index % topSubCategories.length],
+            ].filter(Boolean),
           }));
         }
       }
