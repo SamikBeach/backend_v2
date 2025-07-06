@@ -1,5 +1,13 @@
 # 🚦 CHANGELOG
 
+## [1.26.1](https://github.com/SamikBeach/backend_v2/compare/1.26.0...1.26.1) (2025-07-06)
+
+
+### Bug Fixes
+
+* 리뷰 및 댓글 응답에서 author profileImage URL 경로 수정 ([a06bc83](https://github.com/SamikBeach/backend_v2/commit/a06bc83a482c1cb0f37030e75e6c7328f261b705))
+* 장르 api 수정 ([24b487f](https://github.com/SamikBeach/backend_v2/commit/24b487f0c3db27c2de1f22feafd2de8d521ef193))
+
 # [1.26.0](https://github.com/SamikBeach/backend_v2/compare/1.25.0...1.26.0) (2025-06-09)
 
 
