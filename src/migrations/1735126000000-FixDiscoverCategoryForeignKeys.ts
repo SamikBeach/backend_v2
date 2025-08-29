@@ -39,13 +39,13 @@ export class FixDiscoverCategoryForeignKeys1735126000000
         `);
 
         for (const fk of foreignKeys) {
-          console.log(`외래 키 제약 조건 제거: ${fk.CONSTRAINT_NAME}`);
+          // 외래 키 제약 조건 제거: ${fk.CONSTRAINT_NAME}
           await queryRunner.query(
             `ALTER TABLE book DROP FOREIGN KEY ${fk.CONSTRAINT_NAME}`,
           );
         }
       } catch (error) {
-        console.log('외래 키 제약 조건 제거 중 오류:', error.message);
+        // 외래 키 제약 조건 제거 중 오류 (무시 가능)
       }
 
       // 인덱스 제거 (있다면)
@@ -54,12 +54,12 @@ export class FixDiscoverCategoryForeignKeys1735126000000
           `ALTER TABLE book DROP INDEX IDX_book_discover_category_id`,
         );
       } catch (error) {
-        console.log('인덱스 제거 중 오류 (무시 가능):', error.message);
+        // 인덱스 제거 중 오류 (무시 가능)
       }
 
       // 컬럼 삭제
       await queryRunner.dropColumn('book', 'discover_category_id');
-      console.log('discover_category_id 컬럼 삭제 완료');
+      // discover_category_id 컬럼 삭제 완료
     }
 
     // 2. discover_sub_category_id 컬럼 처리
@@ -90,13 +90,13 @@ export class FixDiscoverCategoryForeignKeys1735126000000
         `);
 
         for (const fk of foreignKeys) {
-          console.log(`외래 키 제약 조건 제거: ${fk.CONSTRAINT_NAME}`);
+          // 외래 키 제약 조건 제거: ${fk.CONSTRAINT_NAME}
           await queryRunner.query(
             `ALTER TABLE book DROP FOREIGN KEY ${fk.CONSTRAINT_NAME}`,
           );
         }
       } catch (error) {
-        console.log('외래 키 제약 조건 제거 중 오류:', error.message);
+        // 외래 키 제약 조건 제거 중 오류 (무시 가능)
       }
 
       // 인덱스 제거 (있다면)
@@ -105,12 +105,12 @@ export class FixDiscoverCategoryForeignKeys1735126000000
           `ALTER TABLE book DROP INDEX IDX_book_discover_sub_category_id`,
         );
       } catch (error) {
-        console.log('인덱스 제거 중 오류 (무시 가능):', error.message);
+        // 인덱스 제거 중 오류 (무시 가능)
       }
 
       // 컬럼 삭제
       await queryRunner.dropColumn('book', 'discover_sub_category_id');
-      console.log('discover_sub_category_id 컬럼 삭제 완료');
+      // discover_sub_category_id 컬럼 삭제 완료
     }
   }
 
