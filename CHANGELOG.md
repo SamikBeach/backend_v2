@@ -1,5 +1,12 @@
 # 🚦 CHANGELOG
 
+## [1.26.2](https://github.com/SamikBeach/backend_v2/compare/1.26.1...1.26.2) (2025-08-29)
+
+
+### Reverts
+
+* 마이그레이션 파일의 console.log 원복 ([194d8e1](https://github.com/SamikBeach/backend_v2/commit/194d8e19dfd76b5cd22a51872d58322858b7b80d))
+
 ## [1.26.1](https://github.com/SamikBeach/backend_v2/compare/1.26.0...1.26.1) (2025-07-06)
 
 
